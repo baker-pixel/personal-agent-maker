@@ -23,6 +23,8 @@ const Index = () => {
         return <ProjectsDashboard />;
       case "delegation":
         return <DelegationPanel />;
+      case "chat":
+        return <AgentChat />;
       case "settings":
         return <AgentSettings />;
     }
