@@ -5,10 +5,11 @@ import { ProjectsDashboard } from "@/components/ProjectsDashboard";
 import { AgentSettings } from "@/components/AgentSettings";
 import { DelegationPanel } from "@/components/DelegationPanel";
 import { AgentChat } from "@/components/AgentChat";
+import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { useAgent } from "@/contexts/AgentContext";
-import { Menu, X } from "lucide-react";
+import { Menu } from "lucide-react";
 
-type View = "inbox" | "projects" | "delegation" | "chat" | "settings";
+type View = "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<View>("inbox");
@@ -25,11 +26,12 @@ const Index = () => {
         return <DelegationPanel />;
       case "chat":
         return <AgentChat />;
+      case "integrations":
+        return <IntegrationsSetup />;
       case "settings":
         return <AgentSettings />;
     }
   };
-
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Mobile overlay */}

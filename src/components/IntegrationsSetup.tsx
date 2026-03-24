@@ -1,0 +1,213 @@
+import { useState } from "react";
+import { useAgent } from "@/contexts/AgentContext";
+import { useIntegrations, Integration } from "@/contexts/IntegrationsContext";
+import {
+  Mail,
+  Calendar,
+  MessageSquare,
+  Check,
+  ChevronRight,
+  ExternalLink,
+  Unplug,
+  Shield,
+  Zap,
+} from "lucide-react";
+
+const iconMap: Record<string, React.ElementType> = {
+  mail: Mail,
+  calendar: Calendar,
+  message: MessageSquare,
+};
+
+export const IntegrationsSetup = () => {
+  const { agentName } = useAgent();
+  const { integrations, toggleConnection } = useIntegrations();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
+
+  const connectedCount = integrations.filter((i) => i.connected).length;
+
+  const handleConnect = async (id: string) => {
+    setConnectingId(id);
+    // Simulate OAuth flow delay
+    await new Promise((r) => setTimeout(r, 1500));
+    toggleConnection(id);
+    setConnectingId(null);
+  };
+
+  const handleDisconnect = (id: string) => {
+    toggleConnection(id);
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      <div className="mb-8">
+        <h1 className="font-display text-3xl text-foreground mb-2">Integrations</h1>
+        <p className="text-muted-foreground">
+          Connect your accounts so {agentName} can manage your inbox, calendar, and communications.
+        </p>
+      </div>
+
+      {/* Status banner */}
+      {connectedCount > 0 && (
+        <div
+          className="glass-card rounded-2xl p-4 mb-6 flex items-center gap-3"
+          style={{ animation: "fade-up 0.3s ease-out both" }}
+        >
+          <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
+            <Zap className="w-4 h-4 text-success" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground">
+              {connectedCount} integration{connectedCount !== 1 ? "s" : ""} active
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {agentName} is monitoring your connected accounts
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* How it works */}
+      <div className="glass-card rounded-2xl p-6 mb-6" style={{ animation: "fade-up 0.3s ease-out 0.05s both" }}>
+        <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+          <Shield className="w-4 h-4 text-accent" />
+          How setup works
+        </h2>
+        <div className="grid gap-3 md:grid-cols-3">
+          {[
+            { step: "1", title: "Connect accounts", desc: "Sign in with OAuth — your credentials are never stored directly." },
+            { step: "2", title: "Set preferences", desc: "Choose what to monitor, VIP senders, working hours, and priority rules." },
+            { step: "3", title: "Review & approve", desc: `${agentName} proposes actions in your Approval Inbox. You stay in control.` },
+          ].map((s) => (
+            <div key={s.step} className="flex gap-3">
+              <span className="w-6 h-6 rounded-full bg-accent text-accent-foreground text-xs font-bold flex items-center justify-center shrink-0">
+                {s.step}
+              </span>
+              <div>
+                <p className="text-sm font-medium text-foreground">{s.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{s.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Integration cards */}
+      <div className="space-y-3">
+        {integrations.map((integration, index) => {
+          const Icon = iconMap[integration.icon] || Mail;
+          const isExpanded = expandedId === integration.id;
+          const isConnecting = connectingId === integration.id;
+
+          return (
+            <div
+              key={integration.id}
+              className={`glass-card rounded-2xl overflow-hidden transition-all duration-300 ${
+                integration.connected ? "ring-1 ring-success/30" : ""
+              }`}
+              style={{ animation: `fade-up 0.4s ease-out ${(index + 1) * 0.08}s both` }}
+            >
+              {/* Header */}
+              <button
+                onClick={() => setExpandedId(isExpanded ? null : integration.id)}
+                className="w-full flex items-center gap-4 p-5 text-left hover:bg-muted/30 transition-colors"
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  integration.connected ? "bg-success/10" : "bg-muted"
+                }`}>
+                  <Icon className={`w-5 h-5 ${integration.connected ? "text-success" : "text-muted-foreground"}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-foreground">{integration.name}</h3>
+                    {integration.connected && (
+                      <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-success/10 text-success">
+                        Connected
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground truncate">{integration.description}</p>
+                  {integration.connected && integration.accountLabel && (
+                    <p className="text-xs text-success mt-0.5">{integration.accountLabel}</p>
+                  )}
+                </div>
+                <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+              </button>
+
+              {/* Expanded details */}
+              {isExpanded && (
+                <div className="px-5 pb-5 border-t border-border/50">
+                  <div className="grid gap-6 md:grid-cols-2 mt-4">
+                    {/* Capabilities */}
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-3 tracking-wider">
+                        What {agentName} can do
+                      </h4>
+                      <div className="space-y-2">
+                        {integration.capabilities.map((cap, i) => (
+                          <div key={i} className="flex items-start gap-2 text-sm text-foreground">
+                            <Check className="w-3.5 h-3.5 text-accent mt-0.5 shrink-0" />
+                            {cap}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Setup steps */}
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-3 tracking-wider">
+                        Setup steps
+                      </h4>
+                      <div className="space-y-2">
+                        {integration.setupSteps.map((step, i) => (
+                          <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                            <span className="w-5 h-5 rounded-full bg-muted text-muted-foreground text-xs font-semibold flex items-center justify-center shrink-0 mt-0.5">
+                              {i + 1}
+                            </span>
+                            {step}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 mt-5">
+                    {integration.connected ? (
+                      <button
+                        onClick={() => handleDisconnect(integration.id)}
+                        className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-muted text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      >
+                        <Unplug className="w-4 h-4" />
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleConnect(integration.id)}
+                        disabled={isConnecting}
+                        className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-60"
+                      >
+                        {isConnecting ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          <>
+                            <ExternalLink className="w-4 h-4" />
+                            Connect {integration.name}
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};

@@ -6,9 +6,10 @@ import {
   Settings,
   Zap,
   MessageSquare,
+  Plug,
 } from "lucide-react";
 
-type View = "inbox" | "projects" | "delegation" | "chat" | "settings";
+type View = "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
 
 interface AppSidebarProps {
   currentView: View;
@@ -20,6 +21,7 @@ const navItems: { id: View; label: string; icon: React.ElementType }[] = [
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "projects", label: "Projects", icon: FolderKanban },
   { id: "delegation", label: "Delegation", icon: Shield },
+  { id: "integrations", label: "Integrations", icon: Plug },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
