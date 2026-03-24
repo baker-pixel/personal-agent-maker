@@ -1,16 +1,76 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import { AppSidebar } from "@/components/AppSidebar";
+import { ApprovalInbox } from "@/components/ApprovalInbox";
+import { ProjectsDashboard } from "@/components/ProjectsDashboard";
+import { AgentSettings } from "@/components/AgentSettings";
+import { DelegationPanel } from "@/components/DelegationPanel";
+import { useAgent } from "@/contexts/AgentContext";
+import { Menu, X } from "lucide-react";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+type View = "inbox" | "projects" | "delegation" | "settings";
+
+const Index = () => {
+  const [currentView, setCurrentView] = useState<View>("inbox");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { agentName } = useAgent();
+
+  const renderView = () => {
+    switch (currentView) {
+      case "inbox":
+        return <ApprovalInbox />;
+      case "projects":
+        return <ProjectsDashboard />;
+      case "delegation":
+        return <DelegationPanel />;
+      case "settings":
+        return <AgentSettings />;
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="flex h-screen overflow-hidden">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div
+        className={`fixed lg:static inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
+        <AppSidebar
+          currentView={currentView}
+          onNavigate={(view) => {
+            setCurrentView(view);
+            setSidebarOpen(false);
+          }}
+        />
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile header */}
+        <div className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 rounded-lg hover:bg-muted transition-colors"
+          >
+            <Menu className="w-5 h-5 text-foreground" />
+          </button>
+          <h1 className="font-display text-lg text-foreground">{agentName}</h1>
+        </div>
+
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          {renderView()}
+        </main>
+      </div>
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
