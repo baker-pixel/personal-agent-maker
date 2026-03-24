@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAgent } from "@/contexts/AgentContext";
-import { useIntegrations, Integration } from "@/contexts/IntegrationsContext";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Mail,
   Calendar,
@@ -11,6 +12,7 @@ import {
   Unplug,
   Shield,
   Zap,
+  LogOut,
 } from "lucide-react";
 
 const iconMap: Record<string, React.ElementType> = {
@@ -18,6 +20,8 @@ const iconMap: Record<string, React.ElementType> = {
   calendar: Calendar,
   message: MessageSquare,
 };
+
+const GOOGLE_PROVIDERS = ["gmail", "google-calendar"];
 
 export const IntegrationsSetup = () => {
   const { agentName } = useAgent();
@@ -28,8 +32,33 @@ export const IntegrationsSetup = () => {
   const connectedCount = integrations.filter((i) => i.connected).length;
 
   const handleConnect = async (id: string) => {
+    if (GOOGLE_PROVIDERS.includes(id)) {
+      setConnectingId(id);
+      try {
+        const { data, error } = await supabase.functions.invoke("google-auth", {
+          body: {
+            provider: id,
+            redirectUrl: window.location.origin,
+          },
+        });
+
+        if (error || data?.error) {
+          console.error("OAuth error:", data?.error || error?.message);
+          setConnectingId(null);
+          return;
+        }
+
+        // Redirect to Google OAuth
+        window.location.href = data.authUrl;
+      } catch (err) {
+        console.error("Failed to start OAuth:", err);
+        setConnectingId(null);
+      }
+      return;
+    }
+
+    // Non-Google: keep mock behavior
     setConnectingId(id);
-    // Simulate OAuth flow delay
     await new Promise((r) => setTimeout(r, 1500));
     toggleConnection(id);
     setConnectingId(null);
@@ -39,16 +68,28 @@ export const IntegrationsSetup = () => {
     toggleConnection(id);
   };
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
+
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="mb-8">
-        <h1 className="font-display text-3xl text-foreground mb-2">Integrations</h1>
-        <p className="text-muted-foreground">
-          Connect your accounts so {agentName} can manage your inbox, calendar, and communications.
-        </p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="font-display text-3xl text-foreground mb-2">Integrations</h1>
+          <p className="text-muted-foreground">
+            Connect your accounts so {agentName} can manage your inbox, calendar, and communications.
+          </p>
+        </div>
+        <button
+          onClick={handleSignOut}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-muted text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign out
+        </button>
       </div>
 
-      {/* Status banner */}
       {connectedCount > 0 && (
         <div
           className="glass-card rounded-2xl p-4 mb-6 flex items-center gap-3"
@@ -68,7 +109,6 @@ export const IntegrationsSetup = () => {
         </div>
       )}
 
-      {/* How it works */}
       <div className="glass-card rounded-2xl p-6 mb-6" style={{ animation: "fade-up 0.3s ease-out 0.05s both" }}>
         <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">
           <Shield className="w-4 h-4 text-accent" />
@@ -93,7 +133,6 @@ export const IntegrationsSetup = () => {
         </div>
       </div>
 
-      {/* Integration cards */}
       <div className="space-y-3">
         {integrations.map((integration, index) => {
           const Icon = iconMap[integration.icon] || Mail;
@@ -108,7 +147,6 @@ export const IntegrationsSetup = () => {
               }`}
               style={{ animation: `fade-up 0.4s ease-out ${(index + 1) * 0.08}s both` }}
             >
-              {/* Header */}
               <button
                 onClick={() => setExpandedId(isExpanded ? null : integration.id)}
                 className="w-full flex items-center gap-4 p-5 text-left hover:bg-muted/30 transition-colors"
@@ -135,11 +173,9 @@ export const IntegrationsSetup = () => {
                 <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
               </button>
 
-              {/* Expanded details */}
               {isExpanded && (
                 <div className="px-5 pb-5 border-t border-border/50">
                   <div className="grid gap-6 md:grid-cols-2 mt-4">
-                    {/* Capabilities */}
                     <div>
                       <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-3 tracking-wider">
                         What {agentName} can do
@@ -153,8 +189,6 @@ export const IntegrationsSetup = () => {
                         ))}
                       </div>
                     </div>
-
-                    {/* Setup steps */}
                     <div>
                       <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-3 tracking-wider">
                         Setup steps
@@ -172,7 +206,6 @@ export const IntegrationsSetup = () => {
                     </div>
                   </div>
 
-                  {/* Action buttons */}
                   <div className="flex gap-2 mt-5">
                     {integration.connected ? (
                       <button
