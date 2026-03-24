@@ -6,9 +6,10 @@ import {
   Settings,
   Zap,
   MessageSquare,
+  Plug,
 } from "lucide-react";
 
-type View = "inbox" | "projects" | "delegation" | "chat" | "settings";
+type View = "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
 
 interface AppSidebarProps {
   currentView: View;
