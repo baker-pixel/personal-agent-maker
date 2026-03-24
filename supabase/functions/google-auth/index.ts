@@ -53,7 +53,8 @@ Deno.serve(async (req) => {
       response_type: "code",
       scope: providerScopes.join(" "),
       access_type: "offline",
-      prompt: "consent",
+      include_granted_scopes: "true",
+      prompt: "select_account consent",
       state: provider,
     });
 
