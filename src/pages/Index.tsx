@@ -8,7 +8,7 @@ import { AgentChat } from "@/components/AgentChat";
 import { useAgent } from "@/contexts/AgentContext";
 import { Menu, X } from "lucide-react";
 
-type View = "inbox" | "projects" | "delegation" | "settings";
+type View = "inbox" | "projects" | "delegation" | "chat" | "settings";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<View>("inbox");
