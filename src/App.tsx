@@ -11,6 +11,8 @@ import type { Session } from "@supabase/supabase-js";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import GoogleCallback from "./pages/GoogleCallback.tsx";
+import PrivacyPolicy from "./pages/PrivacyPolicy.tsx";
+import TermsOfService from "./pages/TermsOfService.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
