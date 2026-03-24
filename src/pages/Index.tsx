@@ -4,6 +4,7 @@ import { ApprovalInbox } from "@/components/ApprovalInbox";
 import { ProjectsDashboard } from "@/components/ProjectsDashboard";
 import { AgentSettings } from "@/components/AgentSettings";
 import { DelegationPanel } from "@/components/DelegationPanel";
+import { AgentChat } from "@/components/AgentChat";
 import { useAgent } from "@/contexts/AgentContext";
 import { Menu, X } from "lucide-react";
 
