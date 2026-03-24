@@ -24,16 +24,17 @@ Deno.serve(async (req) => {
 
     // Define scopes based on provider
     const scopes: Record<string, string[]> = {
+      // Keep scopes minimal (read-only) to avoid Google restricted-scope blocking
+      // before full app verification is completed.
       gmail: [
         "https://www.googleapis.com/auth/gmail.readonly",
-        "https://www.googleapis.com/auth/gmail.compose",
-        "https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/userinfo.email",
+        "openid",
       ],
       "google-calendar": [
         "https://www.googleapis.com/auth/calendar.readonly",
-        "https://www.googleapis.com/auth/calendar.events",
         "https://www.googleapis.com/auth/userinfo.email",
+        "openid",
       ],
     };
 
