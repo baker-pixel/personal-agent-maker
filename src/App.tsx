@@ -63,6 +63,8 @@ const App = () => {
                   element={!session ? <Auth /> : <Navigate to="/" replace />}
                 />
                 <Route path="/auth/google/callback" element={<GoogleCallback />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<TermsOfService />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
