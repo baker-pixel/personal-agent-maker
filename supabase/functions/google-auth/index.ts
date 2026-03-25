@@ -1,71 +1,49 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { provider, redirectUrl } = await req.json();
-
     const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
-    if (!clientId) {
-      return new Response(
-        JSON.stringify({ error: "Google Client ID not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const redirectUri = Deno.env.get("GOOGLE_REDIRECT_URI");
+
+    if (!clientId || !redirectUri) {
+      throw new Error("Missing GOOGLE_CLIENT_ID or GOOGLE_REDIRECT_URI environment variables");
     }
 
-    // Define scopes based on provider
-    const scopes: Record<string, string[]> = {
-      // Keep scopes minimal (read-only) to avoid Google restricted-scope blocking
-      // before full app verification is completed.
-      gmail: [
-        "https://www.googleapis.com/auth/gmail.readonly",
-        "https://www.googleapis.com/auth/userinfo.email",
-        "openid",
-      ],
-      "google-calendar": [
-        "https://www.googleapis.com/auth/calendar.readonly",
-        "https://www.googleapis.com/auth/userinfo.email",
-        "openid",
-      ],
-    };
+    const { service } = await req.json();
 
-    const providerScopes = scopes[provider];
-    if (!providerScopes) {
-      return new Response(
-        JSON.stringify({ error: "Invalid provider" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const scopes = [
+      "openid",
+      "email",
+      "profile",
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/calendar",
+    ].join(" ");
 
-    const callbackUrl = `${redirectUrl}/auth/google/callback`;
+    const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("scope", scopes);
+    authUrl.searchParams.set("access_type", "offline");
+    authUrl.searchParams.set("prompt", "consent");
+    authUrl.searchParams.set("state", service ?? "gmail");
 
-    const params = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: callbackUrl,
-      response_type: "code",
-      scope: providerScopes.join(" "),
-      access_type: "offline",
-      include_granted_scopes: "true",
-      prompt: "select_account consent",
-      state: provider,
-    });
-
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    console.log("Generated auth URL:", authUrl.toString());
 
     return new Response(
-      JSON.stringify({ authUrl }),
+      JSON.stringify({ url: authUrl.toString() }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    console.error("google-auth error:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
