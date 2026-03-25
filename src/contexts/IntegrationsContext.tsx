@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface Integration {
   id: string;
@@ -106,50 +107,44 @@ const IntegrationsContext = createContext<IntegrationsContextType>({
 export const useIntegrations = () => useContext(IntegrationsContext);
 
 export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [integrations, setIntegrations] = useState<Integration[]>(() => {
-    const saved = localStorage.getItem("integrations-state");
-    if (saved) {
-      try {
-        const connectedIds: string[] = JSON.parse(saved);
-        return defaultIntegrations.map((i) => ({
-          ...i,
-          connected: connectedIds.includes(i.id),
-          accountLabel: connectedIds.includes(i.id)
-            ? i.id === "gmail" || i.id === "google-calendar"
-              ? "user@example.com"
-              : i.id === "outlook"
-              ? "user@company.com"
-              : "My Workspace"
-            : undefined,
-        }));
-      } catch {
-        return defaultIntegrations;
+  const [integrations, setIntegrations] = useState<Integration[]>(defaultIntegrations);
+
+  // Fetch connected integrations from the database on mount
+  useEffect(() => {
+    const fetchConnected = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data: tokens } = await supabase
+        .from("google_oauth_tokens")
+        .select("provider, email");
+
+      if (tokens && tokens.length > 0) {
+        const tokenMap = new Map(tokens.map((t) => [t.provider, t.email]));
+        setIntegrations((prev) =>
+          prev.map((i) => ({
+            ...i,
+            connected: tokenMap.has(i.id) || i.connected,
+            accountLabel: tokenMap.get(i.id) ?? i.accountLabel,
+          }))
+        );
       }
-    }
-    return defaultIntegrations;
-  });
+    };
+    fetchConnected();
+  }, []);
 
   const toggleConnection = useCallback((id: string) => {
-    setIntegrations((prev) => {
-      const updated = prev.map((i) => {
+    setIntegrations((prev) =>
+      prev.map((i) => {
         if (i.id !== id) return i;
         const nowConnected = !i.connected;
         return {
           ...i,
           connected: nowConnected,
-          accountLabel: nowConnected
-            ? i.id === "gmail" || i.id === "google-calendar"
-              ? "user@example.com"
-              : i.id === "outlook"
-              ? "user@company.com"
-              : "My Workspace"
-            : undefined,
+          accountLabel: nowConnected ? i.accountLabel : undefined,
         };
-      });
-      const connectedIds = updated.filter((i) => i.connected).map((i) => i.id);
-      localStorage.setItem("integrations-state", JSON.stringify(connectedIds));
-      return updated;
-    });
+      })
+    );
   }, []);
 
   const isConnected = useCallback(
