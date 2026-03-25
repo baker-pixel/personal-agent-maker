@@ -36,34 +36,23 @@ export const IntegrationsSetup = () => {
   const handleConnect = async (id: string) => {
     if (GOOGLE_PROVIDERS.includes(id)) {
       setConnectingId(id);
-
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-      console.log("VITE_GOOGLE_CLIENT_ID:", clientId);
-
-      if (!clientId) {
-        console.error("VITE_GOOGLE_CLIENT_ID is undefined — cannot start OAuth.");
+      try {
+        const response = await supabase.functions.invoke("google-auth", {
+          body: { service: id },
+        });
+        if (response.error) throw response.error;
+        const { url } = response.data;
+        if (!url) throw new Error("No auth URL returned");
+        window.location.href = url;
+      } catch (error: any) {
+        console.error("Google connect error:", error);
+        toast({
+          title: "Connection failed",
+          description: error.message || "Could not start Google sign-in",
+          variant: "destructive",
+        });
         setConnectingId(null);
-        return;
       }
-
-      const redirectUri = `${window.location.origin}/auth/google/callback`;
-      const oauthScope =
-        "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar openid email profile";
-
-      const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-      authUrl.searchParams.set("client_id", clientId);
-      authUrl.searchParams.set("redirect_uri", redirectUri);
-      authUrl.searchParams.set("response_type", "code");
-      authUrl.searchParams.set("scope", oauthScope);
-      authUrl.searchParams.set("access_type", "offline");
-      authUrl.searchParams.set("prompt", "consent");
-      authUrl.searchParams.set("state", id);
-
-      const finalUrl = authUrl.toString();
-      console.log("OAuth URL:", finalUrl);
-      console.log("redirect_uri:", redirectUri);
-
-      window.location.href = finalUrl;
       return;
     }
 
