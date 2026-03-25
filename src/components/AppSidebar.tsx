@@ -10,9 +10,10 @@ import {
   Sun,
   MailSearch,
   Clock,
+  CalendarClock,
 } from "lucide-react";
 
-type View = "briefing" | "triage" | "followups" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
+type View = "briefing" | "triage" | "followups" | "meetings" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
 
 interface AppSidebarProps {
   currentView: View;
