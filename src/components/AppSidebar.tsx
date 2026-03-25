@@ -10,9 +10,10 @@ import {
   Sun,
   MailSearch,
   Clock,
+  CalendarClock,
 } from "lucide-react";
 
-type View = "briefing" | "triage" | "followups" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
+type View = "briefing" | "triage" | "followups" | "meetings" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
 
 interface AppSidebarProps {
   currentView: View;
@@ -23,6 +24,7 @@ const navItems: { id: View; label: string; icon: React.ElementType }[] = [
   { id: "briefing", label: "Morning Briefing", icon: Sun },
   { id: "triage", label: "Email Triage", icon: MailSearch },
   { id: "followups", label: "Follow-Ups", icon: Clock },
+  { id: "meetings", label: "Meeting Prep", icon: CalendarClock },
   { id: "inbox", label: "Approval Inbox", icon: Inbox },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "projects", label: "Projects", icon: FolderKanban },
