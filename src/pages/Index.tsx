@@ -36,4 +36,46 @@ const Index = () => {
     }
   };
 
+  return (
+    <div className="flex h-screen overflow-hidden">
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <div
+        className={`fixed lg:static inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
+        <AppSidebar
+          currentView={currentView}
+          onNavigate={(view) => {
+            setCurrentView(view);
+            setSidebarOpen(false);
+          }}
+        />
+      </div>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 rounded-lg hover:bg-muted transition-colors"
+          >
+            <Menu className="w-5 h-5 text-foreground" />
+          </button>
+          <h1 className="font-display text-lg text-foreground">{agentName}</h1>
+        </div>
+
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          {renderView()}
+        </main>
+      </div>
+    </div>
+  );
+};
+
 export default Index;
