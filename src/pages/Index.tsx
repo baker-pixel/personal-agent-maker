@@ -22,6 +22,8 @@ const Index = () => {
     switch (currentView) {
       case "briefing":
         return <MorningBriefing />;
+      case "triage":
+        return <EmailTriage />;
       case "inbox":
         return <ApprovalInbox />;
       case "projects":
