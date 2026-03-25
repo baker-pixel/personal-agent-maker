@@ -8,10 +8,11 @@ import { AgentChat } from "@/components/AgentChat";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { MorningBriefing } from "@/components/MorningBriefing";
 import { EmailTriage } from "@/components/EmailTriage";
+import { FollowUpTracker } from "@/components/FollowUpTracker";
 import { useAgent } from "@/contexts/AgentContext";
 import { Menu } from "lucide-react";
 
-type View = "briefing" | "triage" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
+type View = "briefing" | "triage" | "followups" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<View>("briefing");
@@ -24,6 +25,8 @@ const Index = () => {
         return <MorningBriefing />;
       case "triage":
         return <EmailTriage />;
+      case "followups":
+        return <FollowUpTracker />;
       case "inbox":
         return <ApprovalInbox />;
       case "projects":
