@@ -9,10 +9,11 @@ import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { MorningBriefing } from "@/components/MorningBriefing";
 import { EmailTriage } from "@/components/EmailTriage";
 import { FollowUpTracker } from "@/components/FollowUpTracker";
+import { MeetingPrep } from "@/components/MeetingPrep";
 import { useAgent } from "@/contexts/AgentContext";
 import { Menu } from "lucide-react";
 
-type View = "briefing" | "triage" | "followups" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
+type View = "briefing" | "triage" | "followups" | "meetings" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<View>("briefing");
