@@ -18,6 +18,7 @@ interface AppSidebarProps {
 }
 
 const navItems: { id: View; label: string; icon: React.ElementType }[] = [
+  { id: "briefing", label: "Morning Briefing", icon: Sun },
   { id: "inbox", label: "Approval Inbox", icon: Inbox },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "projects", label: "Projects", icon: FolderKanban },
