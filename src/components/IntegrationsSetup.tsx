@@ -45,17 +45,14 @@ export const IntegrationsSetup = () => {
       }
 
       const redirectUri = `${window.location.origin}/auth/google/callback`;
-
-      const scopes: Record<string, string> = {
-        gmail: "openid email profile https://www.googleapis.com/auth/gmail.modify",
-        "google-calendar": "openid email profile https://www.googleapis.com/auth/calendar",
-      };
+      const oauthScope =
+        "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar openid email profile";
 
       const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
       authUrl.searchParams.set("client_id", clientId);
       authUrl.searchParams.set("redirect_uri", redirectUri);
       authUrl.searchParams.set("response_type", "code");
-      authUrl.searchParams.set("scope", scopes[id] || scopes.gmail);
+      authUrl.searchParams.set("scope", oauthScope);
       authUrl.searchParams.set("access_type", "offline");
       authUrl.searchParams.set("prompt", "consent");
       authUrl.searchParams.set("state", id);
