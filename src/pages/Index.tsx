@@ -7,10 +7,11 @@ import { DelegationPanel } from "@/components/DelegationPanel";
 import { AgentChat } from "@/components/AgentChat";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { MorningBriefing } from "@/components/MorningBriefing";
+import { EmailTriage } from "@/components/EmailTriage";
 import { useAgent } from "@/contexts/AgentContext";
 import { Menu } from "lucide-react";
 
-type View = "briefing" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
+type View = "briefing" | "triage" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<View>("briefing");
@@ -21,6 +22,8 @@ const Index = () => {
     switch (currentView) {
       case "briefing":
         return <MorningBriefing />;
+      case "triage":
+        return <EmailTriage />;
       case "inbox":
         return <ApprovalInbox />;
       case "projects":
