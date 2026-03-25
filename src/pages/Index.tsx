@@ -28,6 +28,8 @@ const Index = () => {
         return <EmailTriage />;
       case "followups":
         return <FollowUpTracker />;
+      case "meetings":
+        return <MeetingPrep />;
       case "inbox":
         return <ApprovalInbox />;
       case "projects":
