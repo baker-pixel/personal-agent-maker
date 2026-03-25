@@ -29,6 +29,7 @@ export const IntegrationsSetup = () => {
   const { integrations, toggleConnection } = useIntegrations();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const connectedCount = integrations.filter((i) => i.connected).length;
 
