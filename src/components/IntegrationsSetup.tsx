@@ -14,6 +14,7 @@ import {
   Zap,
   LogOut,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const iconMap: Record<string, React.ElementType> = {
   mail: Mail,
