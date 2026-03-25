@@ -8,9 +8,10 @@ import {
   MessageSquare,
   Plug,
   Sun,
+  MailSearch,
 } from "lucide-react";
 
-type View = "briefing" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
+type View = "briefing" | "triage" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
 
 interface AppSidebarProps {
   currentView: View;
