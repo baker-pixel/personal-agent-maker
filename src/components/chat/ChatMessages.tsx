@@ -1,4 +1,4 @@
-import { Loader2, Sparkles, Inbox, Check, Sun, MailSearch, Clock, CalendarClock, FileText, PenLine, CalendarSearch, FileBarChart } from "lucide-react";
+import { Loader2, Sparkles, Inbox, Check, Sun, MailSearch, Clock, CalendarClock, FileText, PenLine, CalendarSearch, FileBarChart, ChevronRight } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useState, useCallback, useMemo } from "react";
 import { useDraftActions } from "@/hooks/useDraftActions";
