@@ -10,11 +10,11 @@ import {
   Loader2,
   X,
   Bell,
-  User,
   Repeat,
+  Send,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format, parseISO, differenceInDays, addYears, isBefore } from "date-fns";
+import { format, parseISO, differenceInDays, addYears, isBefore, isToday as isTodayFn } from "date-fns";
 
 interface ContactReminder {
   id: string;
@@ -41,7 +41,7 @@ function getNextOccurrence(dateStr: string): Date {
   const d = parseISO(dateStr);
   const now = new Date();
   let next = new Date(now.getFullYear(), d.getMonth(), d.getDate());
-  if (isBefore(next, now)) next = addYears(next, 1);
+  if (isBefore(next, now) && !isTodayFn(next)) next = addYears(next, 1);
   return next;
 }
 
@@ -112,6 +112,42 @@ export const ContactReminders = () => {
     setReminders((prev) => prev.filter((r) => r.id !== id));
   };
 
+  const sendFollowUp = async (reminder: ContactReminder) => {
+    if (!reminder.contact_email) {
+      toast({ title: "No email address", description: "Add an email to this contact to send a follow-up", variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Drafting follow-up…", description: `${agentName} is writing to ${reminder.contact_name}` });
+
+    const { data, error } = await supabase.functions.invoke("draft-followup", {
+      body: {
+        type: "reminder_followup",
+        contactName: reminder.contact_name,
+        contactEmail: reminder.contact_email,
+        reminderType: reminder.reminder_type,
+        notes: reminder.notes,
+      },
+    });
+
+    if (error || data?.error) {
+      toast({ title: "Failed to draft", description: data?.error || "Something went wrong", variant: "destructive" });
+      return;
+    }
+
+    // Update last_action_at
+    await supabase
+      .from("contact_reminders")
+      .update({ last_action_at: new Date().toISOString(), updated_at: new Date().toISOString() } as any)
+      .eq("id", reminder.id);
+
+    setReminders((prev) =>
+      prev.map((r) => (r.id === reminder.id ? { ...r, last_action_at: new Date().toISOString() } : r))
+    );
+
+    toast({ title: "Draft created!", description: `Check your Inbox to review and send to ${reminder.contact_name}` });
+  };
+
   const upcoming = reminders.filter((r) => getDaysUntil(r.reminder_date) <= 30);
   const later = reminders.filter((r) => getDaysUntil(r.reminder_date) > 30);
 
@@ -156,7 +192,7 @@ export const ContactReminders = () => {
               <input
                 value={newReminder.contact_email}
                 onChange={(e) => setNewReminder({ ...newReminder, contact_email: e.target.value })}
-                placeholder="Optional"
+                placeholder="For sending follow-ups"
                 className="w-full bg-muted/30 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/30"
               />
             </div>
@@ -235,7 +271,7 @@ export const ContactReminders = () => {
                 Coming Up (next 30 days)
               </h2>
               <div className="space-y-2" style={{ animation: "fade-up 0.3s ease-out 0.05s both" }}>
-                {upcoming.map((r) => <ReminderCard key={r.id} reminder={r} onDelete={deleteReminder} />)}
+                {upcoming.map((r) => <ReminderCard key={r.id} reminder={r} onDelete={deleteReminder} onSendFollowUp={sendFollowUp} />)}
               </div>
             </div>
           )}
@@ -247,7 +283,7 @@ export const ContactReminders = () => {
                 Later
               </h2>
               <div className="space-y-2" style={{ animation: "fade-up 0.3s ease-out 0.1s both" }}>
-                {later.map((r) => <ReminderCard key={r.id} reminder={r} onDelete={deleteReminder} />)}
+                {later.map((r) => <ReminderCard key={r.id} reminder={r} onDelete={deleteReminder} onSendFollowUp={sendFollowUp} />)}
               </div>
             </div>
           )}
@@ -257,11 +293,26 @@ export const ContactReminders = () => {
   );
 };
 
-const ReminderCard = ({ reminder, onDelete }: { reminder: ContactReminder; onDelete: (id: string) => void }) => {
+const ReminderCard = ({
+  reminder,
+  onDelete,
+  onSendFollowUp,
+}: {
+  reminder: ContactReminder;
+  onDelete: (id: string) => void;
+  onSendFollowUp: (r: ContactReminder) => void;
+}) => {
+  const [sending, setSending] = useState(false);
   const days = getDaysUntil(reminder.reminder_date);
   const type = typeConfig[reminder.reminder_type as keyof typeof typeConfig] || typeConfig.check_in;
   const Icon = type.icon;
   const isUrgent = days <= 7;
+
+  const handleSend = async () => {
+    setSending(true);
+    await onSendFollowUp(reminder);
+    setSending(false);
+  };
 
   return (
     <div className={`glass-card rounded-xl p-4 transition-all ${isUrgent ? "ring-1 ring-primary/20" : ""}`}>
@@ -288,14 +339,29 @@ const ReminderCard = ({ reminder, onDelete }: { reminder: ContactReminder; onDel
             <span className={`text-xs font-medium ${isUrgent ? "text-primary" : "text-muted-foreground"}`}>
               {days === 0 ? "🎉 Today!" : days === 1 ? "Tomorrow" : `${days} days away`}
             </span>
+            {reminder.last_action_at && (
+              <span className="text-[10px] text-accent">✓ Follow-up sent</span>
+            )}
           </div>
           {reminder.notes && (
             <p className="text-xs text-muted-foreground/70 mt-2 bg-muted/30 rounded-lg px-3 py-2">{reminder.notes}</p>
           )}
         </div>
-        <button onClick={() => onDelete(reminder.id)} className="text-muted-foreground/30 hover:text-destructive transition-colors shrink-0">
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {reminder.contact_email && (
+            <button
+              onClick={handleSend}
+              disabled={sending}
+              className="p-2 rounded-lg text-accent hover:bg-accent/10 transition-colors disabled:opacity-40"
+              title="Draft follow-up email"
+            >
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </button>
+          )}
+          <button onClick={() => onDelete(reminder.id)} className="p-2 text-muted-foreground/30 hover:text-destructive transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
