@@ -303,10 +303,35 @@ Return a JSON response using the suggest_triage tool. Also extract any concrete 
     categories.urgent.sort((a: any, b: any) => b.priorityScore - a.priorityScore);
     categories.needs_reply.sort((a: any, b: any) => b.priorityScore - a.priorityScore);
 
+    // Save extracted action items to database
+    let actionItemsCreated = 0;
+    if (extractedActions.length > 0) {
+      const adminClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+
+      const rows = extractedActions.map((ai: any) => {
+        const sourceEmail = emails[ai.from_email_index];
+        return {
+          user_id: user.id,
+          title: ai.title,
+          priority: ai.priority || "medium",
+          due_date: ai.due_date || null,
+          source: "email_triage",
+          meeting_summary: sourceEmail ? `Email from ${sourceEmail.from}: ${sourceEmail.subject}` : null,
+        };
+      });
+
+      const { error: insertError } = await adminClient.from("action_items").insert(rows);
+      if (!insertError) actionItemsCreated = rows.length;
+    }
+
     return new Response(
       JSON.stringify({
         categories,
         totalProcessed: emails.length,
+        actionItemsCreated,
         stats: {
           urgent: categories.urgent.length,
           needs_reply: categories.needs_reply.length,
