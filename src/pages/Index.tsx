@@ -2,14 +2,15 @@ import { useState, useCallback, useRef } from "react";
 import { OrchestratorChat } from "@/components/OrchestratorChat";
 import { AgentSettings } from "@/components/AgentSettings";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
+import { ApprovalInbox } from "@/components/ApprovalInbox";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
-import { Settings, Plug, X, ArrowLeft, LogOut } from "lucide-react";
+import { Settings, Plug, X, ArrowLeft, LogOut, Inbox } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
-  const [panel, setPanel] = useState<"settings" | "integrations" | null>(null);
+  const [panel, setPanel] = useState<"settings" | "integrations" | "inbox" | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sendMessageRef = useRef<(msg: string) => void>();
   const {
@@ -64,6 +65,13 @@ const Index = () => {
           <div className="flex items-center gap-1">
             <NotificationCenter onSendMessage={handleNotificationAction} />
             <button
+              onClick={() => setPanel(panel === "inbox" ? null : "inbox")}
+              className={`p-2.5 rounded-xl transition-all duration-200 ${panel === "inbox" ? "bg-accent/10 text-accent" : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50"}`}
+              title="Approval Inbox"
+            >
+              <Inbox className="w-4 h-4" />
+            </button>
+            <button
               onClick={() => setPanel(panel === "integrations" ? null : "integrations")}
               className={`p-2.5 rounded-xl transition-all duration-200 ${panel === "integrations" ? "bg-accent/10 text-accent" : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50"}`}
               title="Integrations"
@@ -109,7 +117,7 @@ const Index = () => {
           <div className="fixed lg:static inset-y-0 right-0 z-40 w-full max-w-sm lg:w-80 bg-card border-l border-border/50 overflow-y-auto animate-slide-in-right shadow-elevated">
             <div className="flex items-center justify-between p-5 border-b border-border/50">
               <h2 className="font-display text-base text-foreground">
-                {panel === "settings" ? "Settings" : "Integrations"}
+                {panel === "settings" ? "Settings" : panel === "inbox" ? "Approval Inbox" : "Integrations"}
               </h2>
               <button
                 onClick={() => setPanel(null)}
@@ -118,8 +126,8 @@ const Index = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-5">
-              {panel === "settings" ? <AgentSettings /> : <IntegrationsSetup />}
+            <div className={panel === "inbox" ? "" : "p-5"}>
+              {panel === "settings" ? <AgentSettings /> : panel === "inbox" ? <ApprovalInbox /> : <IntegrationsSetup />}
             </div>
           </div>
         </>
