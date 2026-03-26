@@ -56,10 +56,10 @@ const Index = () => {
         <header className="flex items-center justify-between px-4 md:px-6 py-2.5">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 rounded-xl text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50 transition-all duration-200 lg:hidden"
+            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200 lg:hidden"
             title="Conversations"
           >
-            <MessageSquare className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-1">
             <NotificationCenter onSendMessage={handleNotificationAction} />
