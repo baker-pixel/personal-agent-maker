@@ -31,10 +31,14 @@ const statusConfig: Record<string, { icon: React.ElementType; label: string; cla
 export const ApprovalInbox = () => {
   const { agentName } = useAgent();
   const { isConnected } = useIntegrations();
-  const { drafts, sentDrafts, loading, loadingSent, approveDraft, rejectDraft, fetchSentDrafts } = useDraftActions();
+  const { drafts, sentDrafts, loading, loadingSent, approveDraft, rejectDraft, fetchSentDrafts, updateDraft } = useDraftActions();
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<Tab>("pending");
   const [hasFetchedHistory, setHasFetchedHistory] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editSubject, setEditSubject] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const gmailConnected = isConnected("gmail");
 
