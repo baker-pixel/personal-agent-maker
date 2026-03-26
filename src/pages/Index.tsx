@@ -14,13 +14,15 @@ import { useDraftActions } from "@/hooks/useDraftActions";
 import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft, ListTodo, Gift } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Tab = "home" | "chat" | "inbox" | "integrations" | "settings";
+type Tab = "home" | "chat" | "inbox" | "tasks" | "reminders" | "integrations" | "settings";
 
-const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+const tabs: { id: Tab; label: string; icon: React.ElementType; mobileHide?: boolean }[] = [
   { id: "home", label: "Home", icon: Home },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "inbox", label: "Inbox", icon: Inbox },
-  { id: "integrations", label: "Connect", icon: Plug },
+  { id: "tasks", label: "Tasks", icon: ListTodo },
+  { id: "reminders", label: "Reminders", icon: Gift, mobileHide: true },
+  { id: "integrations", label: "Connect", icon: Plug, mobileHide: true },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
