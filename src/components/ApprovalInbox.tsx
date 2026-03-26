@@ -22,7 +22,18 @@ import {
   Save,
 } from "lucide-react";
 
-type Tab = "pending" | "history";
+type Tab = "pending" | "sent" | "history";
+
+interface GmailSentEmail {
+  id: string;
+  threadId: string;
+  snippet: string;
+  from: string;
+  subject: string;
+  date: string;
+  labelIds: string[];
+  isUnread: boolean;
+}
 
 const statusConfig: Record<string, { icon: React.ElementType; label: string; className: string }> = {
   sent: { icon: CheckCircle2, label: "Sent", className: "text-success bg-success/10" },
