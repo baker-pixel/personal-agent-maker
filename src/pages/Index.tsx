@@ -5,7 +5,7 @@ import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
-import { Settings, Plug, X, MessageSquare, LogOut } from "lucide-react";
+import { Settings, Plug, X, ArrowLeft, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
@@ -56,10 +56,10 @@ const Index = () => {
         <header className="flex items-center justify-between px-4 md:px-6 py-2.5">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 rounded-xl text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50 transition-all duration-200 lg:hidden"
+            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200 lg:hidden"
             title="Conversations"
           >
-            <MessageSquare className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-1">
             <NotificationCenter onSendMessage={handleNotificationAction} />
