@@ -223,7 +223,7 @@ export const ApprovalInbox = () => {
                         ) : (
                           <>
                             <p className="text-xs font-medium text-foreground/80 mb-1">{draft.subject}</p>
-                            <p className="text-xs text-muted-foreground mb-3 line-clamp-3 whitespace-pre-wrap">
+                            <p className="text-xs text-muted-foreground mb-3 whitespace-pre-wrap">
                               {draft.body}
                             </p>
                           </>
