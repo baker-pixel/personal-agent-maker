@@ -193,6 +193,11 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("AI not configured");
 
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
     const meetingsWithPrep = await Promise.all(
       events.map(async (event: any) => {
         const relatedEmails = emailContextByMeeting[event.id] || [];
@@ -230,6 +235,38 @@ Keep it actionable and concise. Use markdown formatting.`;
                 { role: "system", content: "You are a sharp executive assistant. Be concise and actionable." },
                 { role: "user", content: prompt },
               ],
+              tools: [
+                {
+                  type: "function",
+                  function: {
+                    name: "meeting_prep_with_actions",
+                    description: "Return meeting prep content and extracted action items",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        prep_markdown: { type: "string", description: "Full meeting prep card in markdown" },
+                        action_items: {
+                          type: "array",
+                          description: "Concrete action items extracted from meeting context and emails",
+                          items: {
+                            type: "object",
+                            properties: {
+                              title: { type: "string", description: "Concise action item title" },
+                              assignee: { type: "string", description: "Person responsible, if identifiable" },
+                              priority: { type: "string", enum: ["high", "medium", "low"] },
+                            },
+                            required: ["title", "priority"],
+                            additionalProperties: false,
+                          },
+                        },
+                      },
+                      required: ["prep_markdown", "action_items"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+              ],
+              tool_choice: { type: "function", function: { name: "meeting_prep_with_actions" } },
             }),
           });
 
@@ -241,8 +278,39 @@ Keep it actionable and concise. Use markdown formatting.`;
           }
 
           const aiData = await aiRes.json();
-          const prep = aiData.choices?.[0]?.message?.content || "No prep generated.";
-          return { ...event, relatedEmails, prep, error: false };
+          const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
+
+          let prep = "No prep generated.";
+          let actionItems: any[] = [];
+
+          if (toolCall?.function?.arguments) {
+            try {
+              const parsed = JSON.parse(toolCall.function.arguments);
+              prep = parsed.prep_markdown || prep;
+              actionItems = parsed.action_items || [];
+            } catch {
+              // Fallback to plain content
+              prep = aiData.choices?.[0]?.message?.content || prep;
+            }
+          }
+
+          // Save extracted action items to database
+          if (actionItems.length > 0) {
+            const meetingDate = event.start;
+            const rows = actionItems.map((ai: any) => ({
+              user_id: user.id,
+              title: ai.title,
+              assignee: ai.assignee || null,
+              priority: ai.priority || "medium",
+              source: "meeting_prep",
+              meeting_summary: event.summary,
+              meeting_date: meetingDate,
+            }));
+
+            await adminClient.from("action_items").insert(rows);
+          }
+
+          return { ...event, relatedEmails, prep, error: false, actionItemsCreated: actionItems.length };
         } catch {
           return { ...event, relatedEmails, prep: "Failed to generate prep.", error: true };
         }

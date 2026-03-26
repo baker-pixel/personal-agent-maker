@@ -167,6 +167,12 @@ export const EmailTriage = () => {
       setCategories(data.categories);
       setStats(data.stats);
       setTotalProcessed(data.totalProcessed);
+      if (data.actionItemsCreated > 0) {
+        toast({
+          title: `${data.actionItemsCreated} action item${data.actionItemsCreated > 1 ? "s" : ""} created`,
+          description: `${agentName} extracted tasks from your emails`,
+        });
+      }
     } catch (err: any) {
       console.error("Triage error:", err);
       toast({

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,7 @@ export const MeetingPrep = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [emailsExpandedId, setEmailsExpandedId] = useState<string | null>(null);
   const [fetched, setFetched] = useState(false);
+  const { toast } = useToast();
 
   const fetchPrep = async () => {
     setLoading(true);
@@ -73,6 +75,13 @@ export const MeetingPrep = () => {
       setFetched(true);
       if (data.meetings?.length > 0) {
         setExpandedId(data.meetings[0].id);
+      }
+      const totalActions = (data.meetings || []).reduce((sum: number, m: any) => sum + (m.actionItemsCreated || 0), 0);
+      if (totalActions > 0) {
+        toast({
+          title: `${totalActions} action item${totalActions > 1 ? "s" : ""} created`,
+          description: "Extracted from your meeting prep",
+        });
       }
     } catch (err: any) {
       setError(err.message || "Failed to fetch meeting prep");
