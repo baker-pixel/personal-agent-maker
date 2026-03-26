@@ -92,7 +92,32 @@ export const MeetingPrep = () => {
     }
   };
 
-  const formatTime = (iso: string) => {
+  const emailSummary = async (meeting: Meeting) => {
+    setSendingId(meeting.id);
+    const attendeeEmails = meeting.attendees
+      .map((a) => a.email)
+      .filter((e) => e && !e.includes("calendar.google.com"))
+      .join(", ");
+
+    const { data, error: err } = await supabase.functions.invoke("draft-followup", {
+      body: {
+        type: "meeting_summary",
+        meetingSummary: meeting.summary,
+        meetingAttendees: attendeeEmails,
+      },
+    });
+
+    if (err || data?.error) {
+      toast({ title: "Failed to draft", description: data?.error || "Something went wrong", variant: "destructive" });
+    } else {
+      toast({
+        title: `${data.draftsCreated || 1} draft${(data.draftsCreated || 1) > 1 ? "s" : ""} created`,
+        description: "Check your Inbox to review and send",
+      });
+    }
+    setSendingId(null);
+  };
+
     try {
       return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     } catch {
