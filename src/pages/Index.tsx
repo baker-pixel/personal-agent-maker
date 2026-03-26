@@ -3,17 +3,19 @@ import { OrchestratorChat } from "@/components/OrchestratorChat";
 import { AgentSettings } from "@/components/AgentSettings";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { ApprovalInbox } from "@/components/ApprovalInbox";
+import { Dashboard } from "@/components/Dashboard";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
 import { useDraftActions } from "@/hooks/useDraftActions";
-import { MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft } from "lucide-react";
+import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Tab = "chat" | "inbox" | "integrations" | "settings";
+type Tab = "home" | "chat" | "inbox" | "integrations" | "settings";
 
 const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: "home", label: "Home", icon: Home },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "inbox", label: "Inbox", icon: Inbox },
   { id: "integrations", label: "Connect", icon: Plug },
@@ -21,7 +23,7 @@ const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
 ];
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState<Tab>("chat");
+  const [activeTab, setActiveTab] = useState<Tab>("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem("normy_onboarding_complete");
@@ -48,6 +50,13 @@ const Index = () => {
     startNew();
     setSidebarOpen(false);
   }, [startNew]);
+
+  const handleNavigateToChat = useCallback((prompt?: string) => {
+    setActiveTab("chat");
+    if (prompt) {
+      setTimeout(() => sendMessageRef.current?.(prompt), 100);
+    }
+  }, []);
 
   const handleNotificationAction = useCallback((message: string) => {
     setActiveTab("chat");
@@ -93,15 +102,15 @@ const Index = () => {
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
-            ) : (
+            ) : activeTab !== "home" ? (
               <button
-                onClick={() => setActiveTab("chat")}
+                onClick={() => setActiveTab("home")}
                 className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200"
-                title="Back to Chat"
+                title="Back to Home"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
-            )}
+            ) : null}
             <h1 className="font-display text-sm font-semibold text-foreground hidden md:block">
               {tabs.find((t) => t.id === activeTab)?.label}
             </h1>
@@ -148,6 +157,12 @@ const Index = () => {
 
         {/* Content */}
         <div className="flex-1 overflow-hidden">
+          {activeTab === "home" && (
+            <Dashboard
+              onNavigateToChat={handleNavigateToChat}
+              onNavigateToInbox={() => setActiveTab("inbox")}
+            />
+          )}
           {activeTab === "chat" && (
             <OrchestratorChat
               conversationId={activeId}
