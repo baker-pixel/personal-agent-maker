@@ -146,6 +146,32 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Demo Video */}
+      <section className="py-20 md:py-28 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="font-display text-3xl md:text-5xl tracking-tight mb-4">
+              See Normy <span className="text-gradient">in action</span>
+            </h2>
+            <p className="text-muted-foreground max-w-lg mx-auto">
+              Watch how Normy manages your day — from email triage to meeting prep to approval workflows.
+            </p>
+          </div>
+          <div className="relative rounded-2xl overflow-hidden border border-border/30 shadow-xl bg-card">
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-auto block"
+              poster=""
+            >
+              <source src="/normy-demo.mp4" type="video/mp4" />
+            </video>
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <section id="features" className="py-24 md:py-32 px-6">
         <div className="max-w-6xl mx-auto">
