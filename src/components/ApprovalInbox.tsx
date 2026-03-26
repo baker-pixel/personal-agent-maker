@@ -12,6 +12,7 @@ import {
   Plug,
   Loader2,
   Send,
+  SendHorizonal,
   Inbox,
   History,
   CheckCircle2,
