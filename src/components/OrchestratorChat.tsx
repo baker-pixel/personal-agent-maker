@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, Loader2, Mic, MicOff, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck } from "lucide-react";
+import { Send, Loader2, Mic, MicOff, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck, Shield } from "lucide-react";
 import { ChatMessages } from "./chat/ChatMessages";
 import { ChatHero } from "./chat/ChatHero";
 import { QuickActionGrid } from "./chat/QuickActionGrid";
@@ -304,6 +304,10 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
 
       {/* Input bar */}
       <div className="px-3 md:px-6 pb-5 pt-2">
+        <div className="flex items-center gap-1.5 mb-2 px-1">
+          <Shield className="w-3 h-3 text-success" />
+          <span className="text-[10px] text-success/80 font-medium">Approval required before any action is executed</span>
+        </div>
         <div className="bg-card border border-border/50 rounded-2xl shadow-sm input-glow transition-all duration-300">
           <AttachmentPreview attachments={attachments} onRemove={handleRemoveAttachment} />
           <div className="flex items-end gap-1 p-2">

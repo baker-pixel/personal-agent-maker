@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Pencil,
   Save,
+  Shield,
 } from "lucide-react";
 
 type Tab = "pending" | "sent" | "history";
@@ -169,6 +170,12 @@ export const ApprovalInbox = () => {
 
   return (
     <div className="max-w-3xl mx-auto px-4">
+      {/* Approval mode badge */}
+      <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl bg-success/5 border border-success/15">
+        <Shield className="w-3.5 h-3.5 text-success shrink-0" />
+        <p className="text-[11px] text-success font-medium">Approval mode — nothing is sent without your permission</p>
+      </div>
+
       {/* Tabs */}
       <div className="flex gap-1 mb-5 bg-muted/30 rounded-xl p-1">
         <button
