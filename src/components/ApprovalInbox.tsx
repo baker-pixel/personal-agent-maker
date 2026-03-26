@@ -390,11 +390,13 @@ export const ApprovalInbox = () => {
                 const recipientDisplay = email.to || "Unknown recipient";
                 const subjectText = email.subject || "(no subject)";
                 const dateStr = email.date ? new Date(email.date).toLocaleString() : "";
+                const isExpanded = expandedEmailId === email.id;
                 return (
                   <div
                     key={email.id}
-                    className="glass-card rounded-xl p-3.5 transition-all duration-200"
+                    className="glass-card rounded-xl p-3.5 transition-all duration-200 cursor-pointer hover:bg-muted/20"
                     style={{ animation: `fade-up 0.3s ease-out ${index * 0.04}s both` }}
+                    onClick={() => toggleEmailExpand(email.id)}
                   >
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-accent/10">
@@ -403,13 +405,33 @@ export const ApprovalInbox = () => {
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] text-muted-foreground mb-0.5 truncate">To: {recipientDisplay}</p>
                         <h3 className="font-medium text-foreground text-sm truncate">{subjectText}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{email.snippet}</p>
+                        {!isExpanded && (
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{email.snippet}</p>
+                        )}
                         <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1 mt-1.5">
                           <Clock className="w-2.5 h-2.5" />
                           {dateStr}
                         </span>
                       </div>
                     </div>
+                    {isExpanded && (
+                      <div className="mt-3 pt-3 border-t border-border/50">
+                        {loadingEmailBody ? (
+                          <div className="flex justify-center py-4">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : expandedEmailIsHtml ? (
+                          <div
+                            className="text-xs text-foreground/90 prose prose-sm max-w-none overflow-auto max-h-96"
+                            dangerouslySetInnerHTML={{ __html: expandedEmailBody }}
+                          />
+                        ) : (
+                          <p className="text-xs text-foreground/90 whitespace-pre-wrap max-h-96 overflow-auto">
+                            {expandedEmailBody}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
