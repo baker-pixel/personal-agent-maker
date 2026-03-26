@@ -117,7 +117,7 @@ const Index = () => {
           <div className="fixed lg:static inset-y-0 right-0 z-40 w-full max-w-sm lg:w-80 bg-card border-l border-border/50 overflow-y-auto animate-slide-in-right shadow-elevated">
             <div className="flex items-center justify-between p-5 border-b border-border/50">
               <h2 className="font-display text-base text-foreground">
-                {panel === "settings" ? "Settings" : "Integrations"}
+                {panel === "settings" ? "Settings" : panel === "inbox" ? "Approval Inbox" : "Integrations"}
               </h2>
               <button
                 onClick={() => setPanel(null)}
@@ -126,8 +126,8 @@ const Index = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-5">
-              {panel === "settings" ? <AgentSettings /> : <IntegrationsSetup />}
+            <div className={panel === "inbox" ? "" : "p-5"}>
+              {panel === "settings" ? <AgentSettings /> : panel === "inbox" ? <ApprovalInbox /> : <IntegrationsSetup />}
             </div>
           </div>
         </>
