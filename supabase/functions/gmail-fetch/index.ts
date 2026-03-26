@@ -122,6 +122,7 @@ Deno.serve(async (req) => {
           threadId: msgData.threadId,
           snippet: msgData.snippet,
           from: getHeader("From"),
+          to: getHeader("To"),
           subject: getHeader("Subject"),
           date: getHeader("Date"),
           labelIds: msgData.labelIds || [],
