@@ -56,6 +56,15 @@ const Index = () => {
 
   const pendingCount = drafts.length;
 
+  const completeOnboarding = useCallback(() => {
+    localStorage.setItem("normy_onboarding_complete", "true");
+    setShowOnboarding(false);
+  }, []);
+
+  if (showOnboarding) {
+    return <OnboardingFlow onComplete={completeOnboarding} onSkip={completeOnboarding} />;
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Conversation sidebar (only visible on chat tab) */}
