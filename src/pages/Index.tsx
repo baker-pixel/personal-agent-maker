@@ -5,7 +5,7 @@ import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
-import { Settings, Plug, X, MessageSquare, LogOut } from "lucide-react";
+import { Settings, Plug, X, ArrowLeft, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
