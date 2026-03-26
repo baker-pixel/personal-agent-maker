@@ -1,13 +1,16 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, Loader2, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch } from "lucide-react";
+import { Send, Loader2, Mic, MicOff, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch } from "lucide-react";
 import { ChatMessages } from "./chat/ChatMessages";
 import { ChatHero } from "./chat/ChatHero";
 import { QuickActionGrid } from "./chat/QuickActionGrid";
 import { QuickActionPills } from "./chat/QuickActionPills";
+import { FileAttachmentButton, AttachmentPreview, type Attachment } from "./chat/FileAttachment";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
+import type { Conversation } from "@/hooks/useConversations";
 
-export type Message = { role: "user" | "assistant"; content: string };
+export type Message = { role: "user" | "assistant"; content: string; attachments?: any[] };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
@@ -29,26 +32,105 @@ export const quickActions: QuickAction[] = [
   { label: "Contact Lookup", prompt: "Help me look up a contact. I'll give you a name — pull together what you know about our interaction history and open threads.", icon: Users, color: "text-info" },
 ];
 
-export const OrchestratorChat = () => {
+interface OrchestratorChatProps {
+  conversationId: string | null;
+  onConversationCreated: (firstMessage: string) => Promise<string | null>;
+  onSaveMessage: (convId: string, msg: Message) => Promise<void>;
+  loadMessages: (convId: string) => Promise<Message[]>;
+}
+
+export const OrchestratorChat = ({ conversationId, onConversationCreated, onSaveMessage, loadMessages }: OrchestratorChatProps) => {
   const { agentName } = useAgent();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const convIdRef = useRef<string | null>(conversationId);
+
+  // Keep ref in sync
+  useEffect(() => { convIdRef.current = conversationId; }, [conversationId]);
+
+  // Load messages when conversation changes
+  useEffect(() => {
+    if (conversationId) {
+      loadMessages(conversationId).then(setMessages);
+    } else {
+      setMessages([]);
+    }
+  }, [conversationId, loadMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleVoiceResult = useCallback((text: string) => {
+    setInput((prev) => (prev ? prev + " " + text : text));
+    inputRef.current?.focus();
+  }, []);
+
+  const { isListening, isSupported: voiceSupported, startListening, stopListening } = useVoiceInput(handleVoiceResult);
+
+  const uploadAttachments = async (files: Attachment[]): Promise<any[]> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || files.length === 0) return [];
+    const uploaded: any[] = [];
+    for (const att of files) {
+      const ext = att.file.name.split(".").pop() || "bin";
+      const path = `${session.user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from("chat-attachments").upload(path, att.file);
+      if (!error) {
+        const { data: { publicUrl } } = supabase.storage.from("chat-attachments").getPublicUrl(path);
+        uploaded.push({ name: att.file.name, type: att.file.type, url: publicUrl });
+      }
+    }
+    return uploaded;
+  };
+
+  const handleAddFiles = (files: FileList) => {
+    const newAtts: Attachment[] = Array.from(files).map((file) => {
+      const att: Attachment = { file };
+      if (file.type.startsWith("image/")) {
+        att.preview = URL.createObjectURL(file);
+      }
+      return att;
+    });
+    setAttachments((prev) => [...prev, ...newAtts]);
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments((prev) => {
+      const removed = prev[index];
+      if (removed.preview) URL.revokeObjectURL(removed.preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
   const handleSend = async (overrideText?: string) => {
     const text = (overrideText || input).trim();
     if (!text || isLoading) return;
 
-    const userMsg: Message = { role: "user", content: text };
+    // Upload attachments
+    const uploadedFiles = await uploadAttachments(attachments);
+    const userMsg: Message = { role: "user", content: text, attachments: uploadedFiles.length > 0 ? uploadedFiles : undefined };
+
     if (!overrideText) setInput("");
+    setAttachments([]);
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
+
+    // Ensure conversation exists
+    let currentConvId = convIdRef.current;
+    if (!currentConvId) {
+      currentConvId = await onConversationCreated(text);
+      if (currentConvId) convIdRef.current = currentConvId;
+    }
+
+    // Save user message
+    if (currentConvId) {
+      await onSaveMessage(currentConvId, userMsg);
+    }
 
     let assistantSoFar = "";
 
@@ -69,6 +151,15 @@ export const OrchestratorChat = () => {
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+      // Build message payload (include attachment info in text for AI context)
+      const messagesPayload = [...messages, userMsg].map((m) => {
+        let content = m.content;
+        if (m.attachments?.length) {
+          content += "\n\n[Attached files: " + m.attachments.map((a: any) => `${a.name} (${a.type})`).join(", ") + "]";
+        }
+        return { role: m.role, content };
+      });
+
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -76,7 +167,7 @@ export const OrchestratorChat = () => {
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
-          messages: [...messages, userMsg],
+          messages: messagesPayload,
           agentName,
         }),
       });
@@ -123,6 +214,11 @@ export const OrchestratorChat = () => {
       upsertAssistant("⚠️ Connection error. Please try again.");
     }
 
+    // Save assistant message
+    if (currentConvId && assistantSoFar) {
+      await onSaveMessage(currentConvId, { role: "assistant", content: assistantSoFar });
+    }
+
     setIsLoading(false);
   };
 
@@ -147,13 +243,11 @@ export const OrchestratorChat = () => {
             <QuickActionGrid actions={quickActions} onAction={handleQuickAction} />
           </div>
         ) : (
-          <>
-            <ChatMessages
-              messages={messages}
-              isLoading={isLoading}
-              messagesEndRef={messagesEndRef}
-            />
-          </>
+          <ChatMessages
+            messages={messages}
+            isLoading={isLoading}
+            messagesEndRef={messagesEndRef}
+          />
         )}
       </div>
 
@@ -164,37 +258,55 @@ export const OrchestratorChat = () => {
 
       {/* Input bar */}
       <div className="px-3 md:px-6 pb-4 pt-2">
-        <div className="bg-card border border-border/60 rounded-2xl flex items-end gap-2 p-2 shadow-sm focus-within:border-primary/20 focus-within:shadow-md transition-all duration-200">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={`Message ${agentName}…`}
-            rows={1}
-            className="flex-1 bg-transparent px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none max-h-32"
-            style={{ minHeight: "44px" }}
-          />
-          {messages.length > 0 && (
-            <button
-              onClick={() => setMessages([])}
-              className="shrink-0 px-3 py-2.5 rounded-xl text-[11px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-              title="Clear conversation"
-            >
-              Clear
-            </button>
-          )}
-          <button
-            onClick={() => handleSend()}
-            disabled={!input.trim() || isLoading}
-            className="shrink-0 w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
+        <div className="bg-card border border-border/60 rounded-2xl shadow-sm focus-within:border-primary/20 focus-within:shadow-md transition-all duration-200">
+          <AttachmentPreview attachments={attachments} onRemove={handleRemoveAttachment} />
+          <div className="flex items-end gap-1 p-2">
+            <FileAttachmentButton onAdd={handleAddFiles} />
+            {voiceSupported && (
+              <button
+                onClick={isListening ? stopListening : startListening}
+                className={`shrink-0 p-2.5 rounded-xl transition-colors ${
+                  isListening
+                    ? "text-destructive bg-destructive/10 animate-pulse"
+                    : "text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50"
+                }`}
+                title={isListening ? "Stop listening" : "Voice input"}
+                type="button"
+              >
+                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
             )}
-          </button>
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={`Message ${agentName}…`}
+              rows={1}
+              className="flex-1 bg-transparent px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none max-h-32"
+              style={{ minHeight: "44px" }}
+            />
+            {messages.length > 0 && (
+              <button
+                onClick={() => setMessages([])}
+                className="shrink-0 px-3 py-2.5 rounded-xl text-[11px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title="Clear conversation"
+              >
+                Clear
+              </button>
+            )}
+            <button
+              onClick={() => handleSend()}
+              disabled={(!input.trim() && attachments.length === 0) || isLoading}
+              className="shrink-0 w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

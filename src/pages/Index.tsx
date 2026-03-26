@@ -1,19 +1,59 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { OrchestratorChat } from "@/components/OrchestratorChat";
 import { AgentSettings } from "@/components/AgentSettings";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
-import { useAgent } from "@/contexts/AgentContext";
-import { Settings, Plug, X } from "lucide-react";
+import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
+import { useConversations } from "@/hooks/useConversations";
+import { Settings, Plug, X, MessageSquare } from "lucide-react";
 
 const Index = () => {
   const [panel, setPanel] = useState<"settings" | "integrations" | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const {
+    conversations,
+    activeId,
+    setActiveId,
+    createConversation,
+    loadMessages,
+    saveMessage,
+    deleteConversation,
+    startNew,
+  } = useConversations();
+
+  const handleSelectConversation = useCallback((id: string) => {
+    setActiveId(id);
+    setSidebarOpen(false);
+  }, [setActiveId]);
+
+  const handleNewConversation = useCallback(() => {
+    startNew();
+    setSidebarOpen(false);
+  }, [startNew]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/* Conversation sidebar */}
+      <ConversationSidebar
+        conversations={conversations}
+        activeId={activeId}
+        onSelect={handleSelectConversation}
+        onNew={handleNewConversation}
+        onDelete={deleteConversation}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Minimal top bar */}
-        <header className="flex items-center justify-end px-4 md:px-6 py-2.5">
+        <header className="flex items-center justify-between px-4 md:px-6 py-2.5">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-2 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 transition-colors lg:hidden"
+            title="Conversations"
+          >
+            <MessageSquare className="w-4 h-4" />
+          </button>
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => setPanel(panel === "integrations" ? null : "integrations")}
@@ -34,7 +74,12 @@ const Index = () => {
 
         {/* Chat */}
         <div className="flex-1 overflow-hidden">
-          <OrchestratorChat />
+          <OrchestratorChat
+            conversationId={activeId}
+            onConversationCreated={createConversation}
+            onSaveMessage={saveMessage}
+            loadMessages={loadMessages}
+          />
         </div>
       </div>
 
