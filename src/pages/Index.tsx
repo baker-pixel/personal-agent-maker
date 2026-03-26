@@ -2,10 +2,11 @@ import { useState, useCallback, useRef } from "react";
 import { OrchestratorChat } from "@/components/OrchestratorChat";
 import { AgentSettings } from "@/components/AgentSettings";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
+import { ApprovalInbox } from "@/components/ApprovalInbox";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
-import { Settings, Plug, X, ArrowLeft, LogOut } from "lucide-react";
+import { Settings, Plug, X, ArrowLeft, LogOut, Inbox } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
