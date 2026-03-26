@@ -33,6 +33,33 @@ function stripDraftBlocks(content: string): string {
   return content.replace(/```draft-json\s*\n[\s\S]*?\n```/g, "").trim();
 }
 
+interface NextStepItem {
+  label: string;
+  prompt: string;
+}
+
+function extractNextSteps(content: string): NextStepItem[] {
+  // Match a "Next Steps:" section followed by bullet points
+  const sectionRegex = /\n*\*{0,2}Next\s*Steps:?\*{0,2}\s*\n((?:\s*[-*•]\s+.+\n?)+)/i;
+  const match = sectionRegex.exec(content);
+  if (!match) return [];
+
+  const bulletBlock = match[1];
+  const bullets = bulletBlock.match(/[-*•]\s+(.+)/g);
+  if (!bullets) return [];
+
+  return bullets.map((b) => {
+    // Strip the bullet marker and clean markdown bold
+    const raw = b.replace(/^[-*•]\s+/, "").trim();
+    const clean = raw.replace(/\*\*/g, "").replace(/\?$/, "").trim();
+    return { label: clean, prompt: clean };
+  });
+}
+
+function stripNextSteps(content: string): string {
+  return content.replace(/\n*\*{0,2}Next\s*Steps:?\*{0,2}\s*\n((?:\s*[-*•]\s+.+\n?)+)/i, "").trim();
+}
+
 interface FollowUpAction {
   label: string;
   prompt: string;
