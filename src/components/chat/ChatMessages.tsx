@@ -1,6 +1,6 @@
-import { Loader2, Sparkles, Inbox, Check } from "lucide-react";
+import { Loader2, Sparkles, Inbox, Check, Sun, MailSearch, Clock, CalendarClock, FileText, PenLine, CalendarSearch, FileBarChart } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useDraftActions } from "@/hooks/useDraftActions";
 import { toast } from "@/hooks/use-toast";
 import type { Message } from "../OrchestratorChat";
@@ -33,13 +33,95 @@ function stripDraftBlocks(content: string): string {
   return content.replace(/```draft-json\s*\n[\s\S]*?\n```/g, "").trim();
 }
 
+interface FollowUpAction {
+  label: string;
+  prompt: string;
+  icon: React.ElementType;
+}
+
+const followUpSets: { keywords: string[]; actions: FollowUpAction[] }[] = [
+  {
+    keywords: ["briefing", "morning", "today's summary", "good morning"],
+    actions: [
+      { label: "Triage my inbox", prompt: "Triage my inbox. Categorize recent emails as Urgent, Needs Reply, FYI, or Newsletter. Draft responses for anything that needs attention.", icon: MailSearch },
+      { label: "Prep for meetings", prompt: "Prepare me for today's meetings. Pull context from recent emails with each attendee and suggest talking points.", icon: CalendarClock },
+      { label: "Auto-draft replies", prompt: "Auto-draft replies for all my emails that need a response.", icon: PenLine },
+    ],
+  },
+  {
+    keywords: ["triage", "inbox", "categoriz", "urgent", "needs reply", "fyi"],
+    actions: [
+      { label: "Auto-draft replies", prompt: "Auto-draft replies for all my emails that need a response. Generate context-aware, professional drafts I can review and approve.", icon: PenLine },
+      { label: "Check follow-ups", prompt: "Check my follow-ups. What sent emails haven't gotten a reply? Draft polite follow-up messages.", icon: Clock },
+      { label: "Morning briefing", prompt: "Give me my morning briefing. Summarize what I need to know today.", icon: Sun },
+    ],
+  },
+  {
+    keywords: ["draft", "reply", "replies", "composed", "written"],
+    actions: [
+      { label: "Check follow-ups", prompt: "Check my follow-ups. What sent emails haven't gotten a reply?", icon: Clock },
+      { label: "Meeting prep", prompt: "Prepare me for today's meetings with context and talking points.", icon: CalendarClock },
+      { label: "Weekly report", prompt: "Generate my weekly report summarizing accomplishments and priorities.", icon: FileBarChart },
+    ],
+  },
+  {
+    keywords: ["meeting", "prep", "talking points", "agenda", "attendee"],
+    actions: [
+      { label: "Find free time", prompt: "Show me my availability for the next 5 business days. Find the best open slots for a 30-minute meeting.", icon: CalendarSearch },
+      { label: "Triage my inbox", prompt: "Triage my inbox and categorize recent emails.", icon: MailSearch },
+      { label: "Summarize a doc", prompt: "I need to summarize a document. I'll paste the text — give me an executive summary.", icon: FileText },
+    ],
+  },
+  {
+    keywords: ["follow-up", "follow up", "overdue", "no reply", "haven't responded"],
+    actions: [
+      { label: "Auto-draft replies", prompt: "Auto-draft replies for all my emails that need a response.", icon: PenLine },
+      { label: "Morning briefing", prompt: "Give me my morning briefing.", icon: Sun },
+      { label: "Weekly report", prompt: "Generate my weekly report.", icon: FileBarChart },
+    ],
+  },
+  {
+    keywords: ["calendar", "conflict", "double-book", "reschedule", "availability", "free time", "open slot"],
+    actions: [
+      { label: "Meeting prep", prompt: "Prepare me for today's meetings with context and talking points.", icon: CalendarClock },
+      { label: "Triage my inbox", prompt: "Triage my inbox and categorize recent emails.", icon: MailSearch },
+      { label: "Auto-draft replies", prompt: "Auto-draft replies for all my emails that need a response.", icon: PenLine },
+    ],
+  },
+  {
+    keywords: ["weekly report", "accomplishments", "summary", "this week"],
+    actions: [
+      { label: "Morning briefing", prompt: "Give me my morning briefing.", icon: Sun },
+      { label: "Check follow-ups", prompt: "Check my follow-ups. What sent emails haven't gotten a reply?", icon: Clock },
+      { label: "Find free time", prompt: "Show me my availability for the next 5 business days.", icon: CalendarSearch },
+    ],
+  },
+];
+
+const defaultFollowUps: FollowUpAction[] = [
+  { label: "Morning briefing", prompt: "Give me my morning briefing. Summarize what I need to know today.", icon: Sun },
+  { label: "Triage inbox", prompt: "Triage my inbox. Categorize recent emails as Urgent, Needs Reply, FYI, or Newsletter.", icon: MailSearch },
+  { label: "Auto-draft replies", prompt: "Auto-draft replies for all my emails that need a response.", icon: PenLine },
+];
+
+function getFollowUpActions(lastAssistantContent: string): FollowUpAction[] {
+  const lower = lastAssistantContent.toLowerCase();
+  for (const set of followUpSets) {
+    if (set.keywords.some((kw) => lower.includes(kw))) {
+      return set.actions;
+    }
+  }
+  return defaultFollowUps;
+}
+
 interface ChatMessagesProps {
   messages: Message[];
   isLoading: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement>;
+  onSend?: (text: string) => void;
 }
 
-export const ChatMessages = ({ messages, isLoading, messagesEndRef }: ChatMessagesProps) => {
+export const ChatMessages = ({ messages, isLoading, messagesEndRef, onSend }: ChatMessagesProps) => {
   const { saveDraft } = useDraftActions();
   const [savedDrafts, setSavedDrafts] = useState<Set<string>>(new Set());
   const [savingDrafts, setSavingDrafts] = useState<Set<string>>(new Set());
@@ -79,6 +161,15 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef }: ChatMessag
       }
     }
   }, [handleSaveDraft, savedDrafts]);
+
+  const lastAssistantMsg = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") return messages[i].content;
+    }
+    return "";
+  }, [messages]);
+
+  const followUps = useMemo(() => getFollowUpActions(lastAssistantMsg), [lastAssistantMsg]);
 
   return (
     <div className="space-y-6 py-8">
@@ -160,6 +251,25 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef }: ChatMessag
           </div>
         );
       })}
+
+      {/* Follow-up action pills after last assistant message */}
+      {!isLoading && messages.length > 0 && messages[messages.length - 1]?.role === "assistant" && onSend && (
+        <div className="flex flex-wrap gap-2 pl-11 animate-fade-up" style={{ animationDelay: "0.2s" }}>
+          {followUps.map((action) => {
+            const Icon = action.icon;
+            return (
+              <button
+                key={action.label}
+                onClick={() => onSend(action.prompt)}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border/40 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-accent/30 hover:bg-accent/[0.04] transition-all duration-200 shadow-sm"
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {action.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
         <div className="flex justify-start gap-3 animate-fade-in">

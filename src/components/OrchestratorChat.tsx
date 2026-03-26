@@ -261,6 +261,7 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
             messages={messages}
             isLoading={isLoading}
             messagesEndRef={messagesEndRef}
+            onSend={handleSend}
           />
         )}
       </div>
