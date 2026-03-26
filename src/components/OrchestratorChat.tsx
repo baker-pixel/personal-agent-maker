@@ -6,6 +6,7 @@ import { ChatMessages } from "./chat/ChatMessages";
 import { ChatHero } from "./chat/ChatHero";
 import { QuickActionGrid } from "./chat/QuickActionGrid";
 import { QuickActionPills } from "./chat/QuickActionPills";
+import { DashboardBriefing } from "./chat/DashboardBriefing";
 import { FileAttachmentButton, AttachmentPreview, type Attachment } from "./chat/FileAttachment";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import type { Conversation } from "@/hooks/useConversations";
