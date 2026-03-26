@@ -20,7 +20,9 @@ export interface DraftAction {
 
 export function useDraftActions() {
   const [drafts, setDrafts] = useState<DraftAction[]>([]);
+  const [sentDrafts, setSentDrafts] = useState<DraftAction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSent, setLoadingSent] = useState(false);
 
   const fetchDrafts = useCallback(async () => {
     const { data, error } = await supabase
@@ -33,6 +35,21 @@ export function useDraftActions() {
       setDrafts(data as unknown as DraftAction[]);
     }
     setLoading(false);
+  }, []);
+
+  const fetchSentDrafts = useCallback(async () => {
+    setLoadingSent(true);
+    const { data, error } = await supabase
+      .from("draft_actions")
+      .select("*")
+      .in("status", ["sent", "rejected", "failed"])
+      .order("updated_at", { ascending: false })
+      .limit(50);
+
+    if (!error && data) {
+      setSentDrafts(data as unknown as DraftAction[]);
+    }
+    setLoadingSent(false);
   }, []);
 
   useEffect(() => {
