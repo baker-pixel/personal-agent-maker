@@ -194,6 +194,11 @@ const Index = () => {
               <ContactReminders />
             </div>
           )}
+          {activeTab === "news" && (
+            <div className="h-full overflow-y-auto py-6 px-4 md:px-6">
+              <NewsMonitor />
+            </div>
+          )}
           {activeTab === "integrations" && (
             <div className="h-full overflow-y-auto py-6 px-4 md:px-6 max-w-2xl mx-auto">
               <IntegrationsSetup />
