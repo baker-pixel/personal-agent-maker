@@ -169,6 +169,7 @@ export const ApprovalInbox = () => {
             <div className="space-y-3">
               {drafts.map((draft, index) => {
                 const isProcessing = processingIds.has(draft.id);
+                const isEditing = editingId === draft.id;
                 return (
                   <div
                     key={draft.id}
@@ -185,38 +186,87 @@ export const ApprovalInbox = () => {
                             Reply to {draft.to_name || draft.to_email}
                           </h3>
                         </div>
-                        <p className="text-xs font-medium text-foreground/80 mb-1">{draft.subject}</p>
-                        <p className="text-xs text-muted-foreground mb-3 line-clamp-3 whitespace-pre-wrap">
-                          {draft.body}
-                        </p>
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {new Date(draft.created_at).toLocaleString()}
-                          </span>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleReject(draft.id)}
-                              disabled={isProcessing}
-                              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50"
-                            >
-                              <X className="w-3 h-3" />
-                              Dismiss
-                            </button>
-                            <button
-                              onClick={() => handleApprove(draft.id)}
-                              disabled={isProcessing}
-                              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
-                            >
-                              {isProcessing ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                              ) : (
-                                <Send className="w-3 h-3" />
-                              )}
-                              {isProcessing ? "Sending…" : "Approve & Send"}
-                            </button>
+
+                        {isEditing ? (
+                          <div className="space-y-2 mb-3">
+                            <input
+                              value={editSubject}
+                              onChange={(e) => setEditSubject(e.target.value)}
+                              className="w-full text-xs font-medium bg-muted/50 border border-border/50 rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-accent/30"
+                              placeholder="Subject"
+                            />
+                            <textarea
+                              value={editBody}
+                              onChange={(e) => setEditBody(e.target.value)}
+                              rows={5}
+                              className="w-full text-xs bg-muted/50 border border-border/50 rounded-lg px-3 py-2 text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-accent/30"
+                              placeholder="Email body"
+                            />
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={cancelEdit}
+                                disabled={savingEdit}
+                                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={saveEdit}
+                                disabled={savingEdit}
+                                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                              >
+                                {savingEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                Save
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <>
+                            <p className="text-xs font-medium text-foreground/80 mb-1">{draft.subject}</p>
+                            <p className="text-xs text-muted-foreground mb-3 line-clamp-3 whitespace-pre-wrap">
+                              {draft.body}
+                            </p>
+                          </>
+                        )}
+
+                        {!isEditing && (
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {new Date(draft.created_at).toLocaleString()}
+                            </span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => startEdit(draft)}
+                                disabled={isProcessing}
+                                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleReject(draft.id)}
+                                disabled={isProcessing}
+                                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50"
+                              >
+                                <X className="w-3 h-3" />
+                                Dismiss
+                              </button>
+                              <button
+                                onClick={() => handleApprove(draft.id)}
+                                disabled={isProcessing}
+                                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+                              >
+                                {isProcessing ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Send className="w-3 h-3" />
+                                )}
+                                {isProcessing ? "Sending…" : "Approve & Send"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
