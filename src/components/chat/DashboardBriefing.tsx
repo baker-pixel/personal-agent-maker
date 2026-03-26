@@ -253,16 +253,13 @@ const EmptyState = ({ text }: { text: string }) => (
   </div>
 );
 
-const EventCard = ({
-  event,
-  isToday: isTodayEvent,
-  onAskAssistant,
-}: {
+const EventCard = forwardRef<HTMLButtonElement, {
   event: CalendarEvent;
   isToday: boolean;
   onAskAssistant: (prompt: string) => void;
-}) => (
+}>(({ event, isToday: isTodayEvent, onAskAssistant }, ref) => (
   <button
+    ref={ref}
     onClick={() => onAskAssistant(`Prepare me for my meeting "${event.summary}". Who's attending and what should I know?`)}
     className={`w-full text-left group flex items-start gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
       isTodayEvent
@@ -291,5 +288,6 @@ const EventCard = ({
       )}
     </div>
   </button>
-);
+));
+EventCard.displayName = "EventCard";
 
