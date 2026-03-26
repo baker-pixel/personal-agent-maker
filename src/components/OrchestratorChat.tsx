@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useAgent } from "@/contexts/AgentContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Send, Loader2, Zap, Trash2, Settings, Sun, MailSearch, Clock, CalendarClock, FileText, Users, Plane, Gavel, FileBarChart, CalendarSearch, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
