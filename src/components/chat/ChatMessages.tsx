@@ -357,6 +357,30 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef, onSend, onRe
                       ))}
                     </div>
                   )}
+
+                  {/* Regenerate / Edit & Resend */}
+                  {isLastAssistant && !isLoading && (onRegenerate || onEditResend) && (
+                    <div className="mt-3 pt-2 border-t border-border/30 flex gap-2">
+                      {onRegenerate && (
+                        <button
+                          onClick={onRegenerate}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:text-foreground bg-muted/30 hover:bg-muted/60 transition-all duration-200"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Regenerate
+                        </button>
+                      )}
+                      {onEditResend && (
+                        <button
+                          onClick={onEditResend}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:text-foreground bg-muted/30 hover:bg-muted/60 transition-all duration-200"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Edit & Resend
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
