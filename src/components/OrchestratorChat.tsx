@@ -38,9 +38,10 @@ interface OrchestratorChatProps {
   onConversationCreated: (firstMessage: string) => Promise<string | null>;
   onSaveMessage: (convId: string, msg: Message) => Promise<void>;
   loadMessages: (convId: string) => Promise<Message[]>;
+  onSendMessageRef?: React.MutableRefObject<((msg: string) => void) | undefined>;
 }
 
-export const OrchestratorChat = ({ conversationId, onConversationCreated, onSaveMessage, loadMessages }: OrchestratorChatProps) => {
+export const OrchestratorChat = ({ conversationId, onConversationCreated, onSaveMessage, loadMessages, onSendMessageRef }: OrchestratorChatProps) => {
   const { agentName } = useAgent();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
