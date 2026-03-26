@@ -76,6 +76,13 @@ export const MeetingPrep = () => {
       if (data.meetings?.length > 0) {
         setExpandedId(data.meetings[0].id);
       }
+      const totalActions = (data.meetings || []).reduce((sum: number, m: any) => sum + (m.actionItemsCreated || 0), 0);
+      if (totalActions > 0) {
+        toast({
+          title: `${totalActions} action item${totalActions > 1 ? "s" : ""} created`,
+          description: "Extracted from your meeting prep",
+        });
+      }
     } catch (err: any) {
       setError(err.message || "Failed to fetch meeting prep");
     } finally {
