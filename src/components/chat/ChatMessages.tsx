@@ -275,6 +275,23 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef, onSend }: Ch
                       )}
                     </div>
                   )}
+
+                  {/* Next Steps as clickable buttons */}
+                  {nextSteps.length > 0 && isLastAssistant && !isLoading && onSend && (
+                    <div className="mt-4 pt-3 border-t border-border/50 space-y-1.5">
+                      <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest mb-2">Next Steps</p>
+                      {nextSteps.map((step, si) => (
+                        <button
+                          key={si}
+                          onClick={() => onSend(step.prompt)}
+                          className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-xs font-medium text-foreground/80 hover:text-foreground bg-muted/30 hover:bg-accent/10 border border-border/30 hover:border-accent/20 transition-all duration-200 text-left group"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5 text-accent shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                          <span className="line-clamp-2">{step.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
