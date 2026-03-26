@@ -239,9 +239,13 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto min-h-0 px-3 md:px-6">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full py-8">
+          <div className="py-6 space-y-8">
             <ChatHero agentName={agentName} />
-            <QuickActionGrid actions={quickActions} onAction={handleQuickAction} />
+            <DashboardBriefing onAskAssistant={handleSend} />
+            <div className="pt-2">
+              <p className="text-[10px] font-medium text-muted-foreground/40 uppercase tracking-wider text-center mb-3">Quick Actions</p>
+              <QuickActionGrid actions={quickActions} onAction={handleQuickAction} />
+            </div>
           </div>
         ) : (
           <ChatMessages
