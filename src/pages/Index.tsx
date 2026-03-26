@@ -205,7 +205,7 @@ const Index = () => {
 
         {/* Bottom tab bar (mobile only) */}
         <nav className="md:hidden flex items-center justify-around border-t border-border/30 bg-card/80 backdrop-blur-sm px-2 py-1.5 safe-area-bottom">
-          {tabs.map((tab) => {
+          {tabs.filter((t) => !t.mobileHide).map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
