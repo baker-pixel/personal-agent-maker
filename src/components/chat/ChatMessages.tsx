@@ -9,27 +9,27 @@ interface ChatMessagesProps {
 }
 
 export const ChatMessages = ({ messages, isLoading, messagesEndRef }: ChatMessagesProps) => (
-  <div className="space-y-5 py-6">
+  <div className="space-y-8 py-8">
     {messages.map((msg, i) => (
       <div
         key={i}
-        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-        style={{ animation: "fade-up 0.25s ease-out both" }}
+        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} gap-3`}
+        style={{ animation: "fade-up 0.3s ease-out both" }}
       >
         {msg.role === "assistant" && (
-          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center mr-2.5 mt-0.5 shrink-0">
-            <Sparkles className="w-3.5 h-3.5 text-primary" />
+          <div className="w-8 h-8 rounded-xl bg-primary/8 flex items-center justify-center mt-1 shrink-0 ring-1 ring-primary/10">
+            <Sparkles className="w-4 h-4 text-primary" />
           </div>
         )}
         <div
-          className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
+          className={`max-w-[72%] ${
             msg.role === "user"
-              ? "bg-primary text-primary-foreground rounded-br-md"
-              : "bg-muted/50 border border-border/50 rounded-bl-md"
+              ? "bg-primary text-primary-foreground rounded-2xl rounded-br-sm px-5 py-3 shadow-sm"
+              : "bg-card border border-border/60 rounded-2xl rounded-bl-sm px-5 py-4 shadow-sm"
           }`}
         >
           {msg.role === "assistant" ? (
-            <div className="prose prose-sm max-w-none text-foreground prose-headings:font-display prose-headings:text-foreground prose-p:text-foreground prose-p:leading-relaxed prose-li:text-foreground prose-strong:text-foreground prose-code:text-accent prose-code:bg-background prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-xs">
+            <div className="prose prose-sm max-w-none text-foreground prose-headings:font-display prose-headings:text-foreground prose-headings:mb-2 prose-headings:mt-4 first:prose-headings:mt-0 prose-p:text-foreground prose-p:leading-relaxed prose-p:mb-3 last:prose-p:mb-0 prose-li:text-foreground prose-li:leading-relaxed prose-ul:my-2 prose-ol:my-2 prose-strong:text-foreground prose-code:text-accent prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-xs prose-hr:my-4 prose-hr:border-border">
               <ReactMarkdown>{msg.content}</ReactMarkdown>
             </div>
           ) : (
@@ -40,14 +40,14 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef }: ChatMessag
     ))}
 
     {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
-      <div className="flex justify-start">
-        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center mr-2.5 shrink-0">
-          <Sparkles className="w-3.5 h-3.5 text-primary" />
+      <div className="flex justify-start gap-3">
+        <div className="w-8 h-8 rounded-xl bg-primary/8 flex items-center justify-center shrink-0 ring-1 ring-primary/10">
+          <Sparkles className="w-4 h-4 text-primary" />
         </div>
-        <div className="bg-muted/50 border border-border/50 rounded-2xl rounded-bl-md px-4 py-2.5">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            <span className="text-xs">Thinking…</span>
+        <div className="bg-card border border-border/60 rounded-2xl rounded-bl-sm px-5 py-4 shadow-sm">
+          <div className="flex items-center gap-2.5 text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-xs font-medium">Thinking…</span>
           </div>
         </div>
       </div>
