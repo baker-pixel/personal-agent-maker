@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Pencil,
   Save,
+  Shield,
 } from "lucide-react";
 
 type Tab = "pending" | "sent" | "history";
