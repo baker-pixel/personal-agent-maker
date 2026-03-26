@@ -73,6 +73,31 @@ export const ApprovalInbox = () => {
     if (hasFetchedHistory) fetchSentDrafts();
   };
 
+  const startEdit = useCallback((draft: DraftAction) => {
+    setEditingId(draft.id);
+    setEditSubject(draft.subject || "");
+    setEditBody(draft.body || "");
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+    setEditSubject("");
+    setEditBody("");
+  }, []);
+
+  const saveEdit = useCallback(async () => {
+    if (!editingId) return;
+    setSavingEdit(true);
+    const success = await updateDraft(editingId, { subject: editSubject, body: editBody });
+    setSavingEdit(false);
+    if (success) {
+      toast({ title: "Draft updated" });
+      setEditingId(null);
+    } else {
+      toast({ title: "Failed to save", variant: "destructive" });
+    }
+  }, [editingId, editSubject, editBody, updateDraft]);
+
   return (
     <div className="max-w-3xl mx-auto px-4">
       {/* Tabs */}
