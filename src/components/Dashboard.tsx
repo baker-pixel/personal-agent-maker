@@ -435,6 +435,11 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox }: DashboardProp
             </section>
           </div>
         </div>
+
+        {/* Weekly Summary — full width */}
+        <div className="animate-fade-up" style={{ animationDelay: "0.15s" }}>
+          <WeeklySummaryWidget />
+        </div>
       </div>
     </div>
   );
