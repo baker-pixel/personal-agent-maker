@@ -53,7 +53,7 @@ export function useConversations() {
       .order("created_at", { ascending: true });
     setIsLoading(false);
     if (!data) return [];
-    return data.map((m) => ({ role: m.role as "user" | "assistant", content: m.content, attachments: m.attachments }));
+    return data.map((m) => ({ role: m.role as "user" | "assistant", content: m.content, attachments: m.attachments as any[] | undefined }));
   }, []);
 
   const saveMessage = useCallback(async (conversationId: string, msg: Message & { attachments?: any[] }) => {
