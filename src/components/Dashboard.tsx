@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import { WeeklySummaryWidget } from "./dashboard/WeeklySummaryWidget";
+import { UpcomingWidget } from "./dashboard/UpcomingWidget";
 
 interface DashboardProps {
   onNavigateToChat: (prompt?: string) => void;
