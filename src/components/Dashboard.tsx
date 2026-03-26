@@ -439,8 +439,13 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
           </div>
         </div>
 
-        {/* Weekly Summary — full width */}
+        {/* Upcoming Reminders & Action Items */}
         <div className="animate-fade-up" style={{ animationDelay: "0.15s" }}>
+          <UpcomingWidget onNavigateToTasks={onNavigateToTasks} onNavigateToReminders={onNavigateToReminders} />
+        </div>
+
+        {/* Weekly Summary — full width */}
+        <div className="animate-fade-up" style={{ animationDelay: "0.2s" }}>
           <WeeklySummaryWidget />
         </div>
       </div>
