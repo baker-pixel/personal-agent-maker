@@ -23,6 +23,9 @@ const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
 const Index = () => {
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem("normy_onboarding_complete");
+  });
   const sendMessageRef = useRef<(msg: string) => void>();
   const { drafts } = useDraftActions();
   const {
