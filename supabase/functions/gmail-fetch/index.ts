@@ -85,8 +85,65 @@ Deno.serve(async (req) => {
 
     const accessToken = await getValidToken(user.id);
 
-    // Fetch recent emails
     const url = new URL(req.url);
+    const messageId = url.searchParams.get("messageId");
+
+    // Single message full-body fetch
+    if (messageId) {
+      const msgRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const msgData = await msgRes.json();
+
+      const headers = msgData.payload?.headers || [];
+      const getHeader = (name: string) =>
+        headers.find((h: { name: string }) => h.name.toLowerCase() === name.toLowerCase())?.value || "";
+
+      // Extract body from parts
+      function extractBody(payload: any): string {
+        if (payload.body?.data) {
+          return atob(payload.body.data.replace(/-/g, "+").replace(/_/g, "/"));
+        }
+        if (payload.parts) {
+          // Prefer text/plain, fall back to text/html
+          const textPart = payload.parts.find((p: any) => p.mimeType === "text/plain");
+          if (textPart?.body?.data) {
+            return atob(textPart.body.data.replace(/-/g, "+").replace(/_/g, "/"));
+          }
+          const htmlPart = payload.parts.find((p: any) => p.mimeType === "text/html");
+          if (htmlPart?.body?.data) {
+            return atob(htmlPart.body.data.replace(/-/g, "+").replace(/_/g, "/"));
+          }
+          // Recurse into nested parts
+          for (const part of payload.parts) {
+            const nested = extractBody(part);
+            if (nested) return nested;
+          }
+        }
+        return "";
+      }
+
+      const body = extractBody(msgData.payload);
+      const isHtml = body.trim().startsWith("<");
+
+      return new Response(
+        JSON.stringify({
+          id: msgData.id,
+          threadId: msgData.threadId,
+          snippet: msgData.snippet,
+          from: getHeader("From"),
+          to: getHeader("To"),
+          subject: getHeader("Subject"),
+          date: getHeader("Date"),
+          body,
+          isHtml,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // List emails
     const maxResults = url.searchParams.get("maxResults") || "20";
     const query = url.searchParams.get("q") || "is:inbox";
 
@@ -103,7 +160,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch details for each message (batch first 10)
     const messageIds = listData.messages.slice(0, 10);
     const emails = await Promise.all(
       messageIds.map(async (msg: { id: string }) => {
