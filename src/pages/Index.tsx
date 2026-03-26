@@ -7,6 +7,7 @@ import { Dashboard } from "@/components/Dashboard";
 import { ActionItems } from "@/components/ActionItems";
 import { ContactReminders } from "@/components/ContactReminders";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
+import { NewsMonitor } from "@/components/NewsMonitor";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
