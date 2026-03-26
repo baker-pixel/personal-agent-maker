@@ -1,4 +1,4 @@
-import { MessageSquare, Plus, Trash2 } from "lucide-react";
+import { MessageSquare, Plus, Trash2, Sparkles } from "lucide-react";
 import type { Conversation } from "@/hooks/useConversations";
 
 interface ConversationSidebarProps {
@@ -29,45 +29,56 @@ export const ConversationSidebar = ({
       />
     )}
     <aside
-      className={`fixed lg:static inset-y-0 left-0 z-40 w-72 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-200 ${
+      className={`fixed lg:static inset-y-0 left-0 z-40 w-72 bg-sidebar flex flex-col transition-transform duration-300 ease-out ${
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       }`}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-        <span className="text-sm font-medium text-sidebar-foreground">Conversations</span>
+      {/* Brand header */}
+      <div className="p-5 pb-4">
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="w-8 h-8 rounded-xl bg-sidebar-primary/15 flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-sidebar-primary" />
+          </div>
+          <span className="font-display text-base text-sidebar-foreground tracking-tight">Normy</span>
+        </div>
         <button
           onClick={onNew}
-          className="p-1.5 rounded-lg text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-          title="New conversation"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sidebar-accent hover:bg-sidebar-accent/80 text-sidebar-accent-foreground text-xs font-medium transition-colors"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" />
+          New conversation
         </button>
       </div>
 
+      {/* Divider */}
+      <div className="mx-5 border-t border-sidebar-border" />
+
       {/* Conversation list */}
-      <div className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+      <div className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5 scrollbar-thin">
         {conversations.length === 0 ? (
-          <p className="text-xs text-sidebar-foreground/40 text-center py-8">No conversations yet</p>
+          <div className="text-center py-12 px-4">
+            <MessageSquare className="w-5 h-5 text-sidebar-foreground/20 mx-auto mb-2" />
+            <p className="text-xs text-sidebar-foreground/30">No conversations yet</p>
+          </div>
         ) : (
           conversations.map((c) => (
             <div
               key={c.id}
-              className={`group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
+              className={`group flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 ${
                 activeId === c.id
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  : "text-sidebar-foreground/60 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground/80"
               }`}
               onClick={() => onSelect(c.id)}
             >
-              <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-60" />
-              <span className="text-xs font-medium truncate flex-1">{c.title}</span>
+              <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-50" />
+              <span className="text-[13px] font-medium truncate flex-1">{c.title}</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(c.id);
                 }}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded text-sidebar-foreground/40 hover:text-destructive transition-all"
+                className="opacity-0 group-hover:opacity-100 p-1 rounded-lg text-sidebar-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all"
                 title="Delete"
               >
                 <Trash2 className="w-3 h-3" />
