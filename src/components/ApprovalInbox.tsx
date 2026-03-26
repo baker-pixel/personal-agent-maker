@@ -326,6 +326,66 @@ export const ApprovalInbox = () => {
         </>
       )}
 
+      {/* Sent tab */}
+      {tab === "sent" && (
+        <>
+          {!gmailConnected ? (
+            <div className="text-center py-16">
+              <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                <Plug className="w-7 h-7 text-muted-foreground" />
+              </div>
+              <h2 className="font-display text-lg text-foreground mb-1">Gmail not connected</h2>
+              <p className="text-sm text-muted-foreground">
+                Connect Gmail in Integrations to view sent emails.
+              </p>
+            </div>
+          ) : loadingSentEmails ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : sentEmails.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                <SendHorizonal className="w-7 h-7 text-muted-foreground" />
+              </div>
+              <h2 className="font-display text-lg text-foreground mb-1">No sent emails</h2>
+              <p className="text-sm text-muted-foreground">
+                Your recently sent emails will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {sentEmails.map((email, index) => {
+                const toMatch = email.snippet;
+                const subjectText = email.subject || "(no subject)";
+                const dateStr = email.date ? new Date(email.date).toLocaleString() : "";
+                return (
+                  <div
+                    key={email.id}
+                    className="glass-card rounded-xl p-3.5 transition-all duration-200"
+                    style={{ animation: `fade-up 0.3s ease-out ${index * 0.04}s both` }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-accent/10">
+                        <SendHorizonal className="w-3.5 h-3.5 text-accent" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-foreground text-sm truncate">{subjectText}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{toMatch}</p>
+                        <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1 mt-1.5">
+                          <Clock className="w-2.5 h-2.5" />
+                          {dateStr}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
       {/* History tab */}
       {tab === "history" && (
         <>
