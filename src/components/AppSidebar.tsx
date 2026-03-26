@@ -11,9 +11,16 @@ import {
   MailSearch,
   Clock,
   CalendarClock,
+  LayoutList,
+  Users,
+  Plane,
+  Gavel,
+  FileBarChart,
+  CalendarSearch,
+  FileText,
 } from "lucide-react";
 
-type View = "briefing" | "triage" | "followups" | "meetings" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
+type View = "briefing" | "agenda" | "triage" | "followups" | "meetings" | "inbox" | "contacts" | "projects" | "delegation" | "travel" | "decisions" | "weekly" | "scheduling" | "summarizer" | "chat" | "integrations" | "settings";
 
 interface AppSidebarProps {
   currentView: View;
@@ -22,13 +29,20 @@ interface AppSidebarProps {
 
 const navItems: { id: View; label: string; icon: React.ElementType }[] = [
   { id: "briefing", label: "Morning Briefing", icon: Sun },
+  { id: "agenda", label: "Daily Agenda", icon: LayoutList },
   { id: "triage", label: "Email Triage", icon: MailSearch },
   { id: "followups", label: "Follow-Ups", icon: Clock },
   { id: "meetings", label: "Meeting Prep", icon: CalendarClock },
+  { id: "scheduling", label: "Smart Scheduling", icon: CalendarSearch },
   { id: "inbox", label: "Approval Inbox", icon: Inbox },
-  { id: "chat", label: "Chat", icon: MessageSquare },
+  { id: "contacts", label: "Contacts", icon: Users },
   { id: "projects", label: "Projects", icon: FolderKanban },
   { id: "delegation", label: "Delegation", icon: Shield },
+  { id: "decisions", label: "Decision Log", icon: Gavel },
+  { id: "travel", label: "Travel & Expenses", icon: Plane },
+  { id: "weekly", label: "Weekly Report", icon: FileBarChart },
+  { id: "summarizer", label: "Doc Summarizer", icon: FileText },
+  { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "settings", label: "Settings", icon: Settings },
 ];

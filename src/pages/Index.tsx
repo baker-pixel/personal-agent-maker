@@ -10,10 +10,17 @@ import { MorningBriefing } from "@/components/MorningBriefing";
 import { EmailTriage } from "@/components/EmailTriage";
 import { FollowUpTracker } from "@/components/FollowUpTracker";
 import { MeetingPrep } from "@/components/MeetingPrep";
+import { DailyAgenda } from "@/components/DailyAgenda";
+import { ContactIntelligence } from "@/components/ContactIntelligence";
+import { TravelExpenseTracker } from "@/components/TravelExpenseTracker";
+import { DecisionLog } from "@/components/DecisionLog";
+import { WeeklyReport } from "@/components/WeeklyReport";
+import { SmartScheduling } from "@/components/SmartScheduling";
+import { DocumentSummarizer } from "@/components/DocumentSummarizer";
 import { useAgent } from "@/contexts/AgentContext";
 import { Menu } from "lucide-react";
 
-type View = "briefing" | "triage" | "followups" | "meetings" | "inbox" | "projects" | "delegation" | "chat" | "integrations" | "settings";
+type View = "briefing" | "agenda" | "triage" | "followups" | "meetings" | "inbox" | "contacts" | "projects" | "delegation" | "travel" | "decisions" | "weekly" | "scheduling" | "summarizer" | "chat" | "integrations" | "settings";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<View>("briefing");
@@ -22,26 +29,23 @@ const Index = () => {
 
   const renderView = () => {
     switch (currentView) {
-      case "briefing":
-        return <MorningBriefing />;
-      case "triage":
-        return <EmailTriage />;
-      case "followups":
-        return <FollowUpTracker />;
-      case "meetings":
-        return <MeetingPrep />;
-      case "inbox":
-        return <ApprovalInbox />;
-      case "projects":
-        return <ProjectsDashboard />;
-      case "delegation":
-        return <DelegationPanel />;
-      case "chat":
-        return <AgentChat />;
-      case "integrations":
-        return <IntegrationsSetup />;
-      case "settings":
-        return <AgentSettings />;
+      case "briefing": return <MorningBriefing />;
+      case "agenda": return <DailyAgenda />;
+      case "triage": return <EmailTriage />;
+      case "followups": return <FollowUpTracker />;
+      case "meetings": return <MeetingPrep />;
+      case "scheduling": return <SmartScheduling />;
+      case "inbox": return <ApprovalInbox />;
+      case "contacts": return <ContactIntelligence />;
+      case "projects": return <ProjectsDashboard />;
+      case "delegation": return <DelegationPanel />;
+      case "decisions": return <DecisionLog />;
+      case "travel": return <TravelExpenseTracker />;
+      case "weekly": return <WeeklyReport />;
+      case "summarizer": return <DocumentSummarizer />;
+      case "chat": return <AgentChat />;
+      case "integrations": return <IntegrationsSetup />;
+      case "settings": return <AgentSettings />;
     }
   };
 
