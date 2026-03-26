@@ -187,7 +187,7 @@ Categories:
 
 ${emailContext}
 
-Return a JSON response using the suggest_triage tool.`
+Return a JSON response using the suggest_triage tool. Also extract any concrete action items from urgent and needs_reply emails (e.g., deadlines, requests, tasks to complete).`
             }
           ],
           tools: [
@@ -195,7 +195,7 @@ Return a JSON response using the suggest_triage tool.`
               type: "function",
               function: {
                 name: "suggest_triage",
-                description: "Categorize emails and provide draft responses",
+                description: "Categorize emails, provide draft responses, and extract action items",
                 parameters: {
                   type: "object",
                   properties: {
@@ -213,9 +213,24 @@ Return a JSON response using the suggest_triage tool.`
                         required: ["email_index", "category", "reason", "draft_response", "priority_score"],
                         additionalProperties: false
                       }
+                    },
+                    action_items: {
+                      type: "array",
+                      description: "Action items extracted from urgent and needs_reply emails",
+                      items: {
+                        type: "object",
+                        properties: {
+                          title: { type: "string", description: "Concise action item" },
+                          from_email_index: { type: "number", description: "Which email this came from" },
+                          priority: { type: "string", enum: ["high", "medium", "low"] },
+                          due_date: { type: "string", description: "ISO date if a deadline is mentioned, empty otherwise" }
+                        },
+                        required: ["title", "from_email_index", "priority"],
+                        additionalProperties: false
+                      }
                     }
                   },
-                  required: ["categorized_emails"],
+                  required: ["categorized_emails", "action_items"],
                   additionalProperties: false
                 }
               }
@@ -248,10 +263,12 @@ Return a JSON response using the suggest_triage tool.`
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
     
     let categorizedEmails: any[] = [];
+    let extractedActions: any[] = [];
     if (toolCall?.function?.arguments) {
       try {
         const parsed = JSON.parse(toolCall.function.arguments);
         categorizedEmails = parsed.categorized_emails || [];
+        extractedActions = parsed.action_items || [];
       } catch (e) {
         console.error("Failed to parse AI response:", e);
       }
