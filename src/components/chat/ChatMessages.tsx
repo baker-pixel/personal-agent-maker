@@ -60,6 +60,39 @@ function stripNextSteps(content: string): string {
   return content.replace(/\n*\*{0,2}Next\s*Steps:?\*{0,2}\s*\n((?:\s*[-*•]\s+.+\n?)+)/i, "").trim();
 }
 
+interface YesNoQuestion {
+  question: string;
+  yesPrompt: string;
+}
+
+function extractYesNoQuestions(content: string): YesNoQuestion[] {
+  const questions: YesNoQuestion[] = [];
+  // Match "Would you like me to..." or "Shall I..." or "Do you want me to..." questions
+  const patterns = [
+    /(?:^|\n)\s*((?:Would you like me to|Shall I|Do you want me to|Should I|Want me to)[^?]*\??)/gim,
+  ];
+  for (const regex of patterns) {
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+      const q = match[1].replace(/\*\*/g, "").trim();
+      // Don't extract if it's inside a bullet list (those become next steps)
+      if (q) {
+        questions.push({
+          question: q,
+          yesPrompt: `Yes, ${q.replace(/^(Would you like me to|Shall I|Do you want me to|Should I|Want me to)\s*/i, "").replace(/\?$/, "").trim()}`,
+        });
+      }
+    }
+  }
+  return questions;
+}
+
+function stripYesNoQuestions(content: string): string {
+  return content
+    .replace(/(?:^|\n)\s*(?:Would you like me to|Shall I|Do you want me to|Should I|Want me to)[^?]*\??/gim, "")
+    .trim();
+}
+
 interface FollowUpAction {
   label: string;
   prompt: string;
@@ -203,12 +236,16 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef, onSend }: Ch
       {messages.map((msg, i) => {
         const drafts = msg.role === "assistant" ? extractDrafts(msg.content) : [];
         const nextSteps = msg.role === "assistant" ? extractNextSteps(msg.content) : [];
+        const yesNoQuestions = msg.role === "assistant" ? extractYesNoQuestions(msg.content) : [];
         const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
         let cleanContent = msg.role === "assistant" && drafts.length > 0
           ? stripDraftBlocks(msg.content)
           : msg.content;
         if (msg.role === "assistant" && nextSteps.length > 0) {
           cleanContent = stripNextSteps(cleanContent);
+        }
+        if (msg.role === "assistant" && yesNoQuestions.length > 0) {
+          cleanContent = stripYesNoQuestions(cleanContent);
         }
 
         return (
@@ -289,6 +326,32 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef, onSend }: Ch
                           <ChevronRight className="w-3.5 h-3.5 text-accent shrink-0 group-hover:translate-x-0.5 transition-transform" />
                           <span className="line-clamp-2">{step.label}</span>
                         </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Yes/No question buttons */}
+                  {yesNoQuestions.length > 0 && isLastAssistant && !isLoading && onSend && (
+                    <div className="mt-4 pt-3 border-t border-border/50 space-y-2">
+                      {yesNoQuestions.map((q, qi) => (
+                        <div key={qi} className="space-y-1.5">
+                          <p className="text-xs text-foreground/70">{q.question}</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => onSend(q.yesPrompt)}
+                              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 border border-accent/20 transition-all duration-200"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => onSend("No thanks, skip that.")}
+                              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted border border-border/30 transition-all duration-200"
+                            >
+                              No thanks
+                            </button>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   )}
