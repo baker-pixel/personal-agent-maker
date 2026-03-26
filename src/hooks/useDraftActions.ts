@@ -124,5 +124,5 @@ export function useDraftActions() {
     return null;
   }, []);
 
-  return { drafts, loading, fetchDrafts, approveDraft, rejectDraft, saveDraft };
+  return { drafts, sentDrafts, loading, loadingSent, fetchDrafts, fetchSentDrafts, approveDraft, rejectDraft, saveDraft };
 }
