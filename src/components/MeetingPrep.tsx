@@ -52,6 +52,7 @@ export const MeetingPrep = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [emailsExpandedId, setEmailsExpandedId] = useState<string | null>(null);
   const [fetched, setFetched] = useState(false);
+  const { toast } = useToast();
 
   const fetchPrep = async () => {
     setLoading(true);
