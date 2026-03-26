@@ -73,6 +73,57 @@ export type Database = {
           },
         ]
       }
+      draft_actions: {
+        Row: {
+          body: string | null
+          created_at: string
+          gmail_message_id: string | null
+          id: string
+          in_reply_to: string | null
+          metadata: Json | null
+          status: string
+          subject: string | null
+          thread_id: string | null
+          to_email: string | null
+          to_name: string | null
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          gmail_message_id?: string | null
+          id?: string
+          in_reply_to?: string | null
+          metadata?: Json | null
+          status?: string
+          subject?: string | null
+          thread_id?: string | null
+          to_email?: string | null
+          to_name?: string | null
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          gmail_message_id?: string | null
+          id?: string
+          in_reply_to?: string | null
+          metadata?: Json | null
+          status?: string
+          subject?: string | null
+          thread_id?: string | null
+          to_email?: string | null
+          to_name?: string | null
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       email_reminders: {
         Row: {
           created_at: string
