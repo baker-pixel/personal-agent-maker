@@ -74,7 +74,7 @@ const formatTime = (start: string, end: string) => {
   }
 };
 
-export const Dashboard = ({ onNavigateToChat, onNavigateToInbox }: DashboardProps) => {
+export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTasks, onNavigateToReminders }: DashboardProps) => {
   const { agentName } = useAgent();
   const { isConnected } = useIntegrations();
   const { drafts } = useDraftActions();
