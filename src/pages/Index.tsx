@@ -10,7 +10,7 @@ import { Settings, Plug, X, ArrowLeft, LogOut, Inbox } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
-  const [panel, setPanel] = useState<"settings" | "integrations" | null>(null);
+  const [panel, setPanel] = useState<"settings" | "integrations" | "inbox" | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sendMessageRef = useRef<(msg: string) => void>();
   const {
