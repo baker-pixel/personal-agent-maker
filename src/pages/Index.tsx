@@ -3,15 +3,16 @@ import { OrchestratorChat } from "@/components/OrchestratorChat";
 import { AgentSettings } from "@/components/AgentSettings";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { ApprovalInbox } from "@/components/ApprovalInbox";
+import { Dashboard } from "@/components/Dashboard";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
 import { useDraftActions } from "@/hooks/useDraftActions";
-import { MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft } from "lucide-react";
+import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Tab = "chat" | "inbox" | "integrations" | "settings";
+type Tab = "home" | "chat" | "inbox" | "integrations" | "settings";
 
 const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "chat", label: "Chat", icon: MessageSquare },
