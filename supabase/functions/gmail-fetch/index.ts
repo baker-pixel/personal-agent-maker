@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
     const emails = await Promise.all(
       messageIds.map(async (msg: { id: string }) => {
         const msgRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         );
         const msgData = await msgRes.json();
@@ -122,6 +122,7 @@ Deno.serve(async (req) => {
           threadId: msgData.threadId,
           snippet: msgData.snippet,
           from: getHeader("From"),
+          to: getHeader("To"),
           subject: getHeader("Subject"),
           date: getHeader("Date"),
           labelIds: msgData.labelIds || [],
