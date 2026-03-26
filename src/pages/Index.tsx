@@ -12,7 +12,7 @@ import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
 import { useDraftActions } from "@/hooks/useDraftActions";
-import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft, ListTodo, Gift } from "lucide-react";
+import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft, ListTodo, Gift, Newspaper } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type Tab = "home" | "chat" | "inbox" | "tasks" | "reminders" | "integrations" | "settings";
