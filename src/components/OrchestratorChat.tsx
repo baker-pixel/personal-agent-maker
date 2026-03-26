@@ -38,9 +38,10 @@ interface OrchestratorChatProps {
   onConversationCreated: (firstMessage: string) => Promise<string | null>;
   onSaveMessage: (convId: string, msg: Message) => Promise<void>;
   loadMessages: (convId: string) => Promise<Message[]>;
+  onSendMessageRef?: React.MutableRefObject<((msg: string) => void) | undefined>;
 }
 
-export const OrchestratorChat = ({ conversationId, onConversationCreated, onSaveMessage, loadMessages }: OrchestratorChatProps) => {
+export const OrchestratorChat = ({ conversationId, onConversationCreated, onSaveMessage, loadMessages, onSendMessageRef }: OrchestratorChatProps) => {
   const { agentName } = useAgent();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -105,6 +106,9 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       return prev.filter((_, i) => i !== index);
     });
   };
+
+
+
 
   const handleSend = async (overrideText?: string) => {
     const text = (overrideText || input).trim();
@@ -222,6 +226,14 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       handleSend();
     }
   };
+
+  // Expose send function for external triggers (e.g. notifications)
+  useEffect(() => {
+    if (onSendMessageRef) {
+      onSendMessageRef.current = (msg: string) => handleSend(msg);
+    }
+  });
+
 
   const handleQuickAction = (action: QuickAction) => {
     handleSend(action.prompt);

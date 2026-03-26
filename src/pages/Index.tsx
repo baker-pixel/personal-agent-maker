@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { OrchestratorChat } from "@/components/OrchestratorChat";
 import { AgentSettings } from "@/components/AgentSettings";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
+import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
 import { Settings, Plug, X, MessageSquare, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 const Index = () => {
   const [panel, setPanel] = useState<"settings" | "integrations" | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sendMessageRef = useRef<(msg: string) => void>();
   const {
     conversations,
     activeId,
@@ -30,6 +32,10 @@ const Index = () => {
     startNew();
     setSidebarOpen(false);
   }, [startNew]);
+
+  const handleNotificationAction = useCallback((message: string) => {
+    sendMessageRef.current?.(message);
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -56,6 +62,7 @@ const Index = () => {
             <MessageSquare className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-1">
+            <NotificationCenter onSendMessage={handleNotificationAction} />
             <button
               onClick={() => setPanel(panel === "integrations" ? null : "integrations")}
               className={`p-2.5 rounded-xl transition-all duration-200 ${panel === "integrations" ? "bg-accent/10 text-accent" : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50"}`}
@@ -87,6 +94,7 @@ const Index = () => {
             onConversationCreated={createConversation}
             onSaveMessage={saveMessage}
             loadMessages={loadMessages}
+            onSendMessageRef={sendMessageRef}
           />
         </div>
       </div>
