@@ -108,7 +108,16 @@ export const IntegrationsSetup = () => {
         </div>
       )}
 
-      <div className="glass-card rounded-2xl p-6 mb-6" style={{ animation: "fade-up 0.3s ease-out 0.05s both" }}>
+      <div className="glass-card rounded-2xl p-4 mb-6 flex items-center gap-3" style={{ animation: "fade-up 0.3s ease-out 0.05s both" }}>
+        <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+          <Mail className="w-4 h-4 text-accent" />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Make sure you're signed into your Google account in this browser before clicking Connect.
+        </p>
+      </div>
+
+      <div className="glass-card rounded-2xl p-6 mb-6" style={{ animation: "fade-up 0.3s ease-out 0.1s both" }}>
         <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">
           <Shield className="w-4 h-4 text-accent" />
           How setup works
