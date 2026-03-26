@@ -302,9 +302,21 @@ export const ActionItems = () => {
                       )}
                     </div>
                   </div>
-                  <button onClick={() => deleteItem(item.id)} className="text-muted-foreground/30 hover:text-destructive transition-colors shrink-0">
-                    <X className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isOverdue && item.assignee && item.assignee.includes("@") && (
+                      <button
+                        onClick={() => nudgeAssignee(item)}
+                        disabled={nudgingId === item.id}
+                        className="p-1.5 rounded-lg text-accent hover:bg-accent/10 transition-colors disabled:opacity-40"
+                        title="Send nudge email to assignee"
+                      >
+                        {nudgingId === item.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+                    <button onClick={() => deleteItem(item.id)} className="p-1.5 text-muted-foreground/30 hover:text-destructive transition-colors">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
