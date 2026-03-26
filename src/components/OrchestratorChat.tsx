@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, Loader2, Mic, MicOff, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck } from "lucide-react";
+import { Send, Loader2, Mic, MicOff, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck, Shield } from "lucide-react";
 import { ChatMessages } from "./chat/ChatMessages";
 import { ChatHero } from "./chat/ChatHero";
 import { QuickActionGrid } from "./chat/QuickActionGrid";
