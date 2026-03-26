@@ -4,21 +4,25 @@ import { AgentSettings } from "@/components/AgentSettings";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { ApprovalInbox } from "@/components/ApprovalInbox";
 import { Dashboard } from "@/components/Dashboard";
+import { ActionItems } from "@/components/ActionItems";
+import { ContactReminders } from "@/components/ContactReminders";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
 import { useDraftActions } from "@/hooks/useDraftActions";
-import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft } from "lucide-react";
+import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft, ListTodo, Gift } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Tab = "home" | "chat" | "inbox" | "integrations" | "settings";
+type Tab = "home" | "chat" | "inbox" | "tasks" | "reminders" | "integrations" | "settings";
 
-const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+const tabs: { id: Tab; label: string; icon: React.ElementType; mobileHide?: boolean }[] = [
   { id: "home", label: "Home", icon: Home },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "inbox", label: "Inbox", icon: Inbox },
-  { id: "integrations", label: "Connect", icon: Plug },
+  { id: "tasks", label: "Tasks", icon: ListTodo },
+  { id: "reminders", label: "Reminders", icon: Gift, mobileHide: true },
+  { id: "integrations", label: "Connect", icon: Plug, mobileHide: true },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -177,6 +181,16 @@ const Index = () => {
               <ApprovalInbox />
             </div>
           )}
+          {activeTab === "tasks" && (
+            <div className="h-full overflow-y-auto py-6 px-4 md:px-6">
+              <ActionItems />
+            </div>
+          )}
+          {activeTab === "reminders" && (
+            <div className="h-full overflow-y-auto py-6 px-4 md:px-6">
+              <ContactReminders />
+            </div>
+          )}
           {activeTab === "integrations" && (
             <div className="h-full overflow-y-auto py-6 px-4 md:px-6 max-w-2xl mx-auto">
               <IntegrationsSetup />
@@ -191,7 +205,7 @@ const Index = () => {
 
         {/* Bottom tab bar (mobile only) */}
         <nav className="md:hidden flex items-center justify-around border-t border-border/30 bg-card/80 backdrop-blur-sm px-2 py-1.5 safe-area-bottom">
-          {tabs.map((tab) => {
+          {tabs.filter((t) => !t.mobileHide).map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (

@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      action_items: {
+        Row: {
+          assignee: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          meeting_date: string | null
+          meeting_summary: string | null
+          priority: string
+          source: string | null
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assignee?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          meeting_date?: string | null
+          meeting_summary?: string | null
+          priority?: string
+          source?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assignee?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          meeting_date?: string | null
+          meeting_summary?: string | null
+          priority?: string
+          source?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_conversations: {
         Row: {
           created_at: string
@@ -72,6 +120,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      contact_reminders: {
+        Row: {
+          contact_email: string | null
+          contact_name: string
+          created_at: string
+          id: string
+          last_action_at: string | null
+          notes: string | null
+          recurring: boolean
+          reminder_date: string
+          reminder_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_name: string
+          created_at?: string
+          id?: string
+          last_action_at?: string | null
+          notes?: string | null
+          recurring?: boolean
+          reminder_date: string
+          reminder_type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_name?: string
+          created_at?: string
+          id?: string
+          last_action_at?: string | null
+          notes?: string | null
+          recurring?: boolean
+          reminder_date?: string
+          reminder_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       draft_actions: {
         Row: {
