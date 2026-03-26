@@ -236,12 +236,16 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef, onSend }: Ch
       {messages.map((msg, i) => {
         const drafts = msg.role === "assistant" ? extractDrafts(msg.content) : [];
         const nextSteps = msg.role === "assistant" ? extractNextSteps(msg.content) : [];
+        const yesNoQuestions = msg.role === "assistant" ? extractYesNoQuestions(msg.content) : [];
         const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
         let cleanContent = msg.role === "assistant" && drafts.length > 0
           ? stripDraftBlocks(msg.content)
           : msg.content;
         if (msg.role === "assistant" && nextSteps.length > 0) {
           cleanContent = stripNextSteps(cleanContent);
+        }
+        if (msg.role === "assistant" && yesNoQuestions.length > 0) {
+          cleanContent = stripYesNoQuestions(cleanContent);
         }
 
         return (
