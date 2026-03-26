@@ -78,12 +78,7 @@ const Index = () => {
 
   if (showOnboarding) {
     return <OnboardingFlow onComplete={completeOnboarding} onSkip={completeOnboarding} />;
-          )}
-          {activeTab === "news" && (
-            <div className="h-full overflow-y-auto py-6 px-4 md:px-6">
-              <NewsMonitor />
-            </div>
-
+  }
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Conversation sidebar (only visible on chat tab) */}
