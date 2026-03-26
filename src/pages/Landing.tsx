@@ -178,8 +178,78 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* How it works */}
+      {/* Approval Inbox preview */}
       <section className="py-24 md:py-32 px-6 bg-muted/20 border-y border-border/20">
+        <div className="max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 bg-accent/8 border border-accent/15 text-accent text-xs font-semibold px-3 py-1 rounded-full mb-6">
+                <Shield className="w-3 h-3" />
+                You're always in control
+              </div>
+              <h2 className="font-display text-3xl md:text-4xl tracking-tight mb-4">
+                AI drafts it.<br />
+                <span className="text-muted-foreground">You approve it.</span>
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-6">
+                Normy never sends anything without your permission. Every email reply goes through your Approval Inbox first. Edit, approve, or dismiss with one tap.
+              </p>
+              <div className="space-y-3">
+                {[
+                  "AI drafts replies based on email context",
+                  "Edit inline before sending",
+                  "One-tap approve sends via your Gmail",
+                  "Full history of sent and dismissed drafts",
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                    <span className="text-sm text-foreground">{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="relative">
+              <div className="bg-card border border-border/50 rounded-2xl p-5 shadow-lg space-y-3">
+                {[
+                  { name: "Marcus Chen", subject: "Re: Q3 partnership proposal", status: "pending" },
+                  { name: "Sarah Kim", subject: "Re: Contract timeline", status: "sent" },
+                  { name: "David Park", subject: "Re: Product demo next week", status: "pending" },
+                ].map((item, i) => (
+                  <div key={i} className={`flex items-center gap-3 rounded-xl p-3 border ${
+                    item.status === "sent" ? "border-success/20 bg-success/5" : "border-border/40"
+                  }`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      item.status === "sent" ? "bg-success/10" : "bg-accent/10"
+                    }`}>
+                      {item.status === "sent" ? (
+                        <CheckCircle2 className="w-4 h-4 text-success" />
+                      ) : (
+                        <Mail className="w-4 h-4 text-accent" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{item.name}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{item.subject}</p>
+                    </div>
+                    {item.status === "pending" ? (
+                      <div className="flex gap-1.5">
+                        <div className="px-2 py-1 rounded-md bg-muted text-[10px] font-medium text-muted-foreground">Edit</div>
+                        <div className="px-2 py-1 rounded-md bg-accent text-[10px] font-medium text-accent-foreground">Send</div>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] font-medium text-success">Sent ✓</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="absolute -bottom-3 -right-3 w-24 h-24 rounded-full bg-accent/[0.06] blur-2xl pointer-events-none" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="py-24 md:py-32 px-6 bg-muted/10 border-y border-border/20">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="font-display text-3xl md:text-5xl tracking-tight mb-4">
