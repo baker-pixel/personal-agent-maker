@@ -157,6 +157,12 @@ const Index = () => {
 
         {/* Content */}
         <div className="flex-1 overflow-hidden">
+          {activeTab === "home" && (
+            <Dashboard
+              onNavigateToChat={handleNavigateToChat}
+              onNavigateToInbox={() => setActiveTab("inbox")}
+            />
+          )}
           {activeTab === "chat" && (
             <OrchestratorChat
               conversationId={activeId}
