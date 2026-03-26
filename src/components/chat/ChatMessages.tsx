@@ -9,23 +9,23 @@ interface ChatMessagesProps {
 }
 
 export const ChatMessages = ({ messages, isLoading, messagesEndRef }: ChatMessagesProps) => (
-  <div className="space-y-8 py-8">
+  <div className="space-y-6 py-8">
     {messages.map((msg, i) => (
       <div
         key={i}
         className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} gap-3`}
-        style={{ animation: "fade-up 0.3s ease-out both" }}
+        style={{ animation: "fade-up 0.3s ease-out both", animationDelay: `${Math.min(i * 0.05, 0.3)}s` }}
       >
         {msg.role === "assistant" && (
-          <div className="w-8 h-8 rounded-xl bg-primary/8 flex items-center justify-center mt-1 shrink-0 ring-1 ring-primary/10">
-            <Sparkles className="w-4 h-4 text-primary" />
+          <div className="w-8 h-8 rounded-xl bg-accent/10 flex items-center justify-center mt-1 shrink-0 ring-1 ring-accent/15">
+            <Sparkles className="w-4 h-4 text-accent" />
           </div>
         )}
         <div
-          className={`max-w-[72%] ${
+          className={`max-w-[75%] ${
             msg.role === "user"
-              ? "bg-primary text-primary-foreground rounded-2xl rounded-br-sm px-5 py-3 shadow-sm"
-              : "bg-card border border-border/60 rounded-2xl rounded-bl-sm px-5 py-4 shadow-sm"
+              ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-5 py-3 shadow-md"
+              : "bg-card border border-border/50 rounded-2xl rounded-bl-md px-5 py-4 shadow-sm"
           }`}
         >
           {msg.role === "assistant" ? (
@@ -40,13 +40,17 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef }: ChatMessag
     ))}
 
     {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
-      <div className="flex justify-start gap-3">
-        <div className="w-8 h-8 rounded-xl bg-primary/8 flex items-center justify-center shrink-0 ring-1 ring-primary/10">
-          <Sparkles className="w-4 h-4 text-primary" />
+      <div className="flex justify-start gap-3 animate-fade-in">
+        <div className="w-8 h-8 rounded-xl bg-accent/10 flex items-center justify-center shrink-0 ring-1 ring-accent/15">
+          <Sparkles className="w-4 h-4 text-accent" />
         </div>
-        <div className="bg-card border border-border/60 rounded-2xl rounded-bl-sm px-5 py-4 shadow-sm">
-          <div className="flex items-center gap-2.5 text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
+        <div className="bg-card border border-border/50 rounded-2xl rounded-bl-md px-5 py-4 shadow-sm">
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <div className="flex gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-accent/60 animate-pulse-soft" style={{ animationDelay: '0s' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-accent/60 animate-pulse-soft" style={{ animationDelay: '0.2s' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-accent/60 animate-pulse-soft" style={{ animationDelay: '0.4s' }} />
+            </div>
             <span className="text-xs font-medium">Thinking…</span>
           </div>
         </div>

@@ -50,10 +50,8 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const convIdRef = useRef<string | null>(conversationId);
 
-  // Keep ref in sync
   useEffect(() => { convIdRef.current = conversationId; }, [conversationId]);
 
-  // Load messages when conversation changes
   useEffect(() => {
     if (conversationId) {
       loadMessages(conversationId).then(setMessages);
@@ -112,7 +110,6 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
     const text = (overrideText || input).trim();
     if (!text || isLoading) return;
 
-    // Upload attachments
     const uploadedFiles = await uploadAttachments(attachments);
     const userMsg: Message = { role: "user", content: text, attachments: uploadedFiles.length > 0 ? uploadedFiles : undefined };
 
@@ -121,14 +118,12 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
-    // Ensure conversation exists
     let currentConvId = convIdRef.current;
     if (!currentConvId) {
       currentConvId = await onConversationCreated(text);
       if (currentConvId) convIdRef.current = currentConvId;
     }
 
-    // Save user message
     if (currentConvId) {
       await onSaveMessage(currentConvId, userMsg);
     }
@@ -152,7 +147,6 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-      // Build message payload (include attachment info in text for AI context)
       const messagesPayload = [...messages, userMsg].map((m) => {
         let content = m.content;
         if (m.attachments?.length) {
@@ -215,7 +209,6 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       upsertAssistant("⚠️ Connection error. Please try again.");
     }
 
-    // Save assistant message
     if (currentConvId && assistantSoFar) {
       await onSaveMessage(currentConvId, { role: "assistant", content: assistantSoFar });
     }
@@ -237,13 +230,13 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
   return (
     <div className="h-full flex flex-col max-w-3xl mx-auto w-full">
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-3 md:px-6">
+      <div className="flex-1 overflow-y-auto min-h-0 px-3 md:px-6 scrollbar-thin">
         {messages.length === 0 ? (
-          <div className="py-6 space-y-8">
+          <div className="py-8 space-y-8">
             <ChatHero agentName={agentName} />
             <DashboardBriefing onAskAssistant={handleSend} />
-            <div className="pt-2">
-              <p className="text-[10px] font-medium text-muted-foreground/40 uppercase tracking-wider text-center mb-3">Quick Actions</p>
+            <div className="pt-4">
+              <p className="text-[10px] font-semibold text-muted-foreground/30 uppercase tracking-widest text-center mb-4">Quick Actions</p>
               <QuickActionGrid actions={quickActions} onAction={handleQuickAction} />
             </div>
           </div>
@@ -262,18 +255,18 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       )}
 
       {/* Input bar */}
-      <div className="px-3 md:px-6 pb-4 pt-2">
-        <div className="bg-card border border-border/60 rounded-2xl shadow-sm focus-within:border-primary/20 focus-within:shadow-md transition-all duration-200">
+      <div className="px-3 md:px-6 pb-5 pt-2">
+        <div className="bg-card border border-border/50 rounded-2xl shadow-sm input-glow transition-all duration-300">
           <AttachmentPreview attachments={attachments} onRemove={handleRemoveAttachment} />
           <div className="flex items-end gap-1 p-2">
             <FileAttachmentButton onAdd={handleAddFiles} />
             {voiceSupported && (
               <button
                 onClick={isListening ? stopListening : startListening}
-                className={`shrink-0 p-2.5 rounded-xl transition-colors ${
+                className={`shrink-0 p-2.5 rounded-xl transition-all duration-200 ${
                   isListening
                     ? "text-destructive bg-destructive/10 animate-pulse"
-                    : "text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50"
+                    : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/40"
                 }`}
                 title={isListening ? "Stop listening" : "Voice input"}
                 type="button"
@@ -288,13 +281,13 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
               onKeyDown={handleKeyDown}
               placeholder={`Message ${agentName}…`}
               rows={1}
-              className="flex-1 bg-transparent px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none max-h-32"
+              className="flex-1 bg-transparent px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground/40 resize-none focus:outline-none max-h-32"
               style={{ minHeight: "44px" }}
             />
             {messages.length > 0 && (
               <button
                 onClick={() => setMessages([])}
-                className="shrink-0 px-3 py-2.5 rounded-xl text-[11px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                className="shrink-0 px-3 py-2.5 rounded-xl text-[11px] font-medium text-muted-foreground/50 hover:text-destructive hover:bg-destructive/5 transition-all duration-200"
                 title="Clear conversation"
               >
                 Clear
@@ -303,7 +296,7 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
             <button
               onClick={() => handleSend()}
               disabled={(!input.trim() && attachments.length === 0) || isLoading}
-              className="shrink-0 w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
+              className="shrink-0 w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-all duration-200 disabled:opacity-20 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -313,6 +306,9 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
             </button>
           </div>
         </div>
+        <p className="text-center text-[10px] text-muted-foreground/30 mt-2">
+          Normy can make mistakes. Verify important information.
+        </p>
       </div>
     </div>
   );
