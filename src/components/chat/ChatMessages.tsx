@@ -179,9 +179,11 @@ interface ChatMessagesProps {
   isLoading: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement>;
   onSend?: (text: string) => void;
+  onRegenerate?: () => void;
+  onEditResend?: () => void;
 }
 
-export const ChatMessages = ({ messages, isLoading, messagesEndRef, onSend }: ChatMessagesProps) => {
+export const ChatMessages = ({ messages, isLoading, messagesEndRef, onSend, onRegenerate, onEditResend }: ChatMessagesProps) => {
   const { saveDraft } = useDraftActions();
   const [savedDrafts, setSavedDrafts] = useState<Set<string>>(new Set());
   const [savingDrafts, setSavingDrafts] = useState<Set<string>>(new Set());
