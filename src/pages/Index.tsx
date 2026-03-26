@@ -1,8 +1,9 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { OrchestratorChat } from "@/components/OrchestratorChat";
 import { AgentSettings } from "@/components/AgentSettings";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { ApprovalInbox } from "@/components/ApprovalInbox";
+import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
@@ -22,6 +23,9 @@ const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
 const Index = () => {
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem("normy_onboarding_complete");
+  });
   const sendMessageRef = useRef<(msg: string) => void>();
   const { drafts } = useDraftActions();
   const {
@@ -51,6 +55,15 @@ const Index = () => {
   }, []);
 
   const pendingCount = drafts.length;
+
+  const completeOnboarding = useCallback(() => {
+    localStorage.setItem("normy_onboarding_complete", "true");
+    setShowOnboarding(false);
+  }, []);
+
+  if (showOnboarding) {
+    return <OnboardingFlow onComplete={completeOnboarding} onSkip={completeOnboarding} />;
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
