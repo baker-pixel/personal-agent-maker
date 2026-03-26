@@ -4,6 +4,8 @@ import { AgentSettings } from "@/components/AgentSettings";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { ApprovalInbox } from "@/components/ApprovalInbox";
 import { Dashboard } from "@/components/Dashboard";
+import { ActionItems } from "@/components/ActionItems";
+import { ContactReminders } from "@/components/ContactReminders";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
