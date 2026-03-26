@@ -130,6 +130,12 @@ export const DashboardBriefing = ({ onAskAssistant }: { onAskAssistant: (prompt:
           >
             Prep all <ArrowUpRight className="w-3 h-3" />
           </button>
+          <button
+            onClick={() => onAskAssistant("Check my calendar for the next 7 days. Flag any double-bookings or conflicts. For each conflict, suggest which to reschedule and draft a message to the attendees.")}
+            className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/30"
+          >
+            Conflicts <AlertCircle className="w-3 h-3" />
+          </button>
         </div>
 
         <div className="px-4 pb-4">
