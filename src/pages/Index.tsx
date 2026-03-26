@@ -6,13 +6,24 @@ import { ApprovalInbox } from "@/components/ApprovalInbox";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
-import { Settings, Plug, X, ArrowLeft, LogOut, Inbox } from "lucide-react";
+import { useDraftActions } from "@/hooks/useDraftActions";
+import { MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
+type Tab = "chat" | "inbox" | "integrations" | "settings";
+
+const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: "chat", label: "Chat", icon: MessageSquare },
+  { id: "inbox", label: "Inbox", icon: Inbox },
+  { id: "integrations", label: "Connect", icon: Plug },
+  { id: "settings", label: "Settings", icon: Settings },
+];
+
 const Index = () => {
-  const [panel, setPanel] = useState<"settings" | "integrations" | "inbox" | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sendMessageRef = useRef<(msg: string) => void>();
+  const { drafts } = useDraftActions();
   const {
     conversations,
     activeId,
@@ -35,56 +46,75 @@ const Index = () => {
   }, [startNew]);
 
   const handleNotificationAction = useCallback((message: string) => {
+    setActiveTab("chat");
     sendMessageRef.current?.(message);
   }, []);
 
+  const pendingCount = drafts.length;
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Conversation sidebar */}
-      <ConversationSidebar
-        conversations={conversations}
-        activeId={activeId}
-        onSelect={handleSelectConversation}
-        onNew={handleNewConversation}
-        onDelete={deleteConversation}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
+      {/* Conversation sidebar (only visible on chat tab) */}
+      {activeTab === "chat" && (
+        <ConversationSidebar
+          conversations={conversations}
+          activeId={activeId}
+          onSelect={handleSelectConversation}
+          onNew={handleNewConversation}
+          onDelete={deleteConversation}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+      )}
 
-      {/* Main chat area */}
+      {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 mesh-bg">
-        {/* Minimal top bar */}
-        <header className="flex items-center justify-between px-4 md:px-6 py-2.5">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200 lg:hidden"
-            title="Conversations"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
+        {/* Top bar */}
+        <header className="flex items-center justify-between px-4 md:px-6 py-2 border-b border-border/30 bg-card/50 backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            {activeTab === "chat" && (
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200 lg:hidden"
+                title="Conversations"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
+            <h1 className="font-display text-sm font-semibold text-foreground hidden md:block">
+              {tabs.find((t) => t.id === activeTab)?.label}
+            </h1>
+          </div>
+
           <div className="flex items-center gap-1">
+            {/* Desktop nav tabs */}
+            <nav className="hidden md:flex items-center gap-0.5 mr-3">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 ${
+                      isActive
+                        ? "bg-accent/10 text-accent"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {tab.label}
+                    {tab.id === "inbox" && pendingCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center">
+                        {pendingCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
             <NotificationCenter onSendMessage={handleNotificationAction} />
-            <button
-              onClick={() => setPanel(panel === "inbox" ? null : "inbox")}
-              className={`p-2.5 rounded-xl transition-all duration-200 ${panel === "inbox" ? "bg-accent/10 text-accent" : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50"}`}
-              title="Approval Inbox"
-            >
-              <Inbox className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setPanel(panel === "integrations" ? null : "integrations")}
-              className={`p-2.5 rounded-xl transition-all duration-200 ${panel === "integrations" ? "bg-accent/10 text-accent" : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50"}`}
-              title="Integrations"
-            >
-              <Plug className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setPanel(panel === "settings" ? null : "settings")}
-              className={`p-2.5 rounded-xl transition-all duration-200 ${panel === "settings" ? "bg-accent/10 text-accent" : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50"}`}
-              title="Settings"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
             <button
               onClick={() => supabase.auth.signOut()}
               className="p-2.5 rounded-xl text-muted-foreground/40 hover:text-destructive hover:bg-destructive/5 transition-all duration-200"
@@ -95,43 +125,63 @@ const Index = () => {
           </div>
         </header>
 
-        {/* Chat */}
+        {/* Content */}
         <div className="flex-1 overflow-hidden">
-          <OrchestratorChat
-            conversationId={activeId}
-            onConversationCreated={createConversation}
-            onSaveMessage={saveMessage}
-            loadMessages={loadMessages}
-            onSendMessageRef={sendMessageRef}
-          />
+          {activeTab === "chat" && (
+            <OrchestratorChat
+              conversationId={activeId}
+              onConversationCreated={createConversation}
+              onSaveMessage={saveMessage}
+              loadMessages={loadMessages}
+              onSendMessageRef={sendMessageRef}
+            />
+          )}
+          {activeTab === "inbox" && (
+            <div className="h-full overflow-y-auto py-6">
+              <ApprovalInbox />
+            </div>
+          )}
+          {activeTab === "integrations" && (
+            <div className="h-full overflow-y-auto py-6 px-4 md:px-6 max-w-2xl mx-auto">
+              <IntegrationsSetup />
+            </div>
+          )}
+          {activeTab === "settings" && (
+            <div className="h-full overflow-y-auto py-6 px-4 md:px-6 max-w-2xl mx-auto">
+              <AgentSettings />
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* Side panel */}
-      {panel && (
-        <>
-          <div
-            className="fixed inset-0 bg-foreground/5 backdrop-blur-sm z-30 lg:hidden"
-            onClick={() => setPanel(null)}
-          />
-          <div className="fixed lg:static inset-y-0 right-0 z-40 w-full max-w-sm lg:w-80 bg-card border-l border-border/50 overflow-y-auto animate-slide-in-right shadow-elevated">
-            <div className="flex items-center justify-between p-5 border-b border-border/50">
-              <h2 className="font-display text-base text-foreground">
-                {panel === "settings" ? "Settings" : panel === "inbox" ? "Approval Inbox" : "Integrations"}
-              </h2>
+        {/* Bottom tab bar (mobile only) */}
+        <nav className="md:hidden flex items-center justify-around border-t border-border/30 bg-card/80 backdrop-blur-sm px-2 py-1.5 safe-area-bottom">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
               <button
-                onClick={() => setPanel(null)}
-                className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-muted/50 transition-colors"
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 min-w-[60px] ${
+                  isActive
+                    ? "text-accent"
+                    : "text-muted-foreground"
+                }`}
               >
-                <X className="w-4 h-4" />
+                <Icon className={`w-5 h-5 ${isActive ? "text-accent" : ""}`} />
+                <span className={`text-[10px] font-medium ${isActive ? "text-accent" : ""}`}>
+                  {tab.label}
+                </span>
+                {tab.id === "inbox" && pendingCount > 0 && (
+                  <span className="absolute top-0 right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center">
+                    {pendingCount}
+                  </span>
+                )}
               </button>
-            </div>
-            <div className={panel === "inbox" ? "" : "p-5"}>
-              {panel === "settings" ? <AgentSettings /> : panel === "inbox" ? <ApprovalInbox /> : <IntegrationsSetup />}
-            </div>
-          </div>
-        </>
-      )}
+            );
+          })}
+        </nav>
+      </div>
     </div>
   );
 };
