@@ -102,15 +102,15 @@ const Index = () => {
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
-            ) : (
+            ) : activeTab !== "home" ? (
               <button
-                onClick={() => setActiveTab("chat")}
+                onClick={() => setActiveTab("home")}
                 className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200"
-                title="Back to Chat"
+                title="Back to Home"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
-            )}
+            ) : null}
             <h1 className="font-display text-sm font-semibold text-foreground hidden md:block">
               {tabs.find((t) => t.id === activeTab)?.label}
             </h1>
