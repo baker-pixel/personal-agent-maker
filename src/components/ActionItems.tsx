@@ -108,6 +108,39 @@ export const ActionItems = () => {
     setItems((prev) => prev.filter((i) => i.id !== id));
   };
 
+  const [nudgingId, setNudgingId] = useState<string | null>(null);
+
+  const nudgeAssignee = async (item: ActionItem) => {
+    if (!item.assignee) {
+      toast({ title: "No assignee", description: "Add an assignee email to nudge them", variant: "destructive" });
+      return;
+    }
+    setNudgingId(item.id);
+    // Use assignee as email if it looks like one, otherwise prompt
+    const email = item.assignee.includes("@") ? item.assignee : null;
+    if (!email) {
+      toast({ title: "Need an email", description: "Set assignee to an email address to send nudges", variant: "destructive" });
+      setNudgingId(null);
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke("draft-followup", {
+      body: {
+        type: "action_nudge",
+        contactEmail: email,
+        actionItemTitle: item.title,
+        actionItemAssignee: item.assignee,
+      },
+    });
+
+    if (error || data?.error) {
+      toast({ title: "Failed to draft", description: data?.error || "Something went wrong", variant: "destructive" });
+    } else {
+      toast({ title: "Nudge drafted!", description: `Check your Inbox to review and send to ${item.assignee}` });
+    }
+    setNudgingId(null);
+  };
+
   const openCount = items.filter((i) => i.status === "open").length;
   const overdueCount = items.filter(
     (i) => i.status === "open" && i.due_date && isPast(parseISO(i.due_date)) && !isToday(parseISO(i.due_date))
