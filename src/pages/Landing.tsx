@@ -157,14 +157,13 @@ const Landing = () => {
               Watch how Normy manages your day — from email triage to meeting prep to approval workflows.
             </p>
           </div>
-          <div className="relative rounded-2xl overflow-hidden border border-border/30 shadow-xl bg-card">
+          <div className="relative rounded-2xl overflow-hidden border border-border/30 shadow-xl bg-card aspect-video">
             <video
               autoPlay
               loop
               muted
               playsInline
-              className="w-full h-auto block"
-              poster=""
+              className="w-full h-full object-cover block"
             >
               <source src="/normy-demo.mp4" type="video/mp4" />
             </video>
