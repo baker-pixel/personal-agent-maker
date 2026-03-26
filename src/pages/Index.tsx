@@ -1,92 +1,81 @@
 import { useState } from "react";
-import { AppSidebar } from "@/components/AppSidebar";
-import { ApprovalInbox } from "@/components/ApprovalInbox";
-import { ProjectsDashboard } from "@/components/ProjectsDashboard";
+import { OrchestratorChat } from "@/components/OrchestratorChat";
 import { AgentSettings } from "@/components/AgentSettings";
-import { DelegationPanel } from "@/components/DelegationPanel";
-import { AgentChat } from "@/components/AgentChat";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
-import { MorningBriefing } from "@/components/MorningBriefing";
-import { EmailTriage } from "@/components/EmailTriage";
-import { FollowUpTracker } from "@/components/FollowUpTracker";
-import { MeetingPrep } from "@/components/MeetingPrep";
-import { DailyAgenda } from "@/components/DailyAgenda";
-import { ContactIntelligence } from "@/components/ContactIntelligence";
-import { TravelExpenseTracker } from "@/components/TravelExpenseTracker";
-import { DecisionLog } from "@/components/DecisionLog";
-import { WeeklyReport } from "@/components/WeeklyReport";
-import { SmartScheduling } from "@/components/SmartScheduling";
-import { DocumentSummarizer } from "@/components/DocumentSummarizer";
 import { useAgent } from "@/contexts/AgentContext";
-import { Menu } from "lucide-react";
-
-type View = "briefing" | "agenda" | "triage" | "followups" | "meetings" | "inbox" | "contacts" | "projects" | "delegation" | "travel" | "decisions" | "weekly" | "scheduling" | "summarizer" | "chat" | "integrations" | "settings";
+import { Settings, Plug, Zap, X } from "lucide-react";
 
 const Index = () => {
-  const [currentView, setCurrentView] = useState<View>("briefing");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [panel, setPanel] = useState<"settings" | "integrations" | null>(null);
   const { agentName } = useAgent();
 
-  const renderView = () => {
-    switch (currentView) {
-      case "briefing": return <MorningBriefing />;
-      case "agenda": return <DailyAgenda />;
-      case "triage": return <EmailTriage />;
-      case "followups": return <FollowUpTracker />;
-      case "meetings": return <MeetingPrep />;
-      case "scheduling": return <SmartScheduling />;
-      case "inbox": return <ApprovalInbox />;
-      case "contacts": return <ContactIntelligence />;
-      case "projects": return <ProjectsDashboard />;
-      case "delegation": return <DelegationPanel />;
-      case "decisions": return <DecisionLog />;
-      case "travel": return <TravelExpenseTracker />;
-      case "weekly": return <WeeklyReport />;
-      case "summarizer": return <DocumentSummarizer />;
-      case "chat": return <AgentChat />;
-      case "integrations": return <IntegrationsSetup />;
-      case "settings": return <AgentSettings />;
-    }
-  };
-
   return (
-    <div className="flex h-screen overflow-hidden">
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-30 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <div
-        className={`fixed lg:static inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
-      >
-        <AppSidebar
-          currentView={currentView}
-          onNavigate={(view) => {
-            setCurrentView(view);
-            setSidebarOpen(false);
-          }}
-        />
-      </div>
-
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg hover:bg-muted transition-colors"
-          >
-            <Menu className="w-5 h-5 text-foreground" />
-          </button>
-          <h1 className="font-display text-lg text-foreground">{agentName}</h1>
-        </div>
+        {/* Minimal header */}
+        <header className="flex items-center justify-between px-4 md:px-6 py-3 border-b border-border bg-card/50 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
+              <Zap className="w-4 h-4 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="font-display text-base text-foreground leading-tight">{agentName}</h1>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span className="text-[10px] text-muted-foreground">Active</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPanel(panel === "integrations" ? null : "integrations")}
+              className={`p-2 rounded-xl transition-colors ${panel === "integrations" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+              title="Integrations"
+            >
+              <Plug className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setPanel(panel === "settings" ? null : "settings")}
+              className={`p-2 rounded-xl transition-colors ${panel === "settings" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+              title="Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          </div>
+        </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
-          {renderView()}
-        </main>
+        {/* Chat */}
+        <div className="flex-1 overflow-hidden p-2 md:p-4">
+          <OrchestratorChat />
+        </div>
       </div>
+
+      {/* Side panel for settings/integrations */}
+      {panel && (
+        <>
+          <div
+            className="fixed inset-0 bg-foreground/10 backdrop-blur-sm z-30 lg:hidden"
+            onClick={() => setPanel(null)}
+          />
+          <div className="fixed lg:static inset-y-0 right-0 z-40 w-full max-w-md lg:w-96 bg-card border-l border-border overflow-y-auto animate-slide-in-right">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="font-display text-lg text-foreground">
+                {panel === "settings" ? "Settings" : "Integrations"}
+              </h2>
+              <button
+                onClick={() => setPanel(null)}
+                className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4">
+              {panel === "settings" ? <AgentSettings /> : <IntegrationsSetup />}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
