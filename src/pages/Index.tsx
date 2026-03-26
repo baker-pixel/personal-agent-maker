@@ -85,11 +85,19 @@ const Index = () => {
         {/* Top bar */}
         <header className="flex items-center justify-between px-4 md:px-6 py-2 border-b border-border/30 bg-card/50 backdrop-blur-sm">
           <div className="flex items-center gap-2">
-            {activeTab === "chat" && (
+            {activeTab === "chat" ? (
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200 lg:hidden"
                 title="Conversations"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setActiveTab("chat")}
+                className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200"
+                title="Back to Chat"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
