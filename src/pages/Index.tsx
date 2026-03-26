@@ -51,6 +51,13 @@ const Index = () => {
     setSidebarOpen(false);
   }, [startNew]);
 
+  const handleNavigateToChat = useCallback((prompt?: string) => {
+    setActiveTab("chat");
+    if (prompt) {
+      setTimeout(() => sendMessageRef.current?.(prompt), 100);
+    }
+  }, []);
+
   const handleNotificationAction = useCallback((message: string) => {
     setActiveTab("chat");
     sendMessageRef.current?.(message);
