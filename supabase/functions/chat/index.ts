@@ -82,6 +82,7 @@ async function fetchRecentEmails(accessToken: string, maxResults = 10) {
           headers.find((h: { name: string }) => h.name.toLowerCase() === name.toLowerCase())?.value || "";
 
         return {
+          id: msg.id,
           from: getHeader("From"),
           subject: getHeader("Subject"),
           date: getHeader("Date"),
@@ -97,19 +98,19 @@ async function fetchRecentEmails(accessToken: string, maxResults = 10) {
   }
 }
 
-// --- Calendar fetch ---
-async function fetchTodayEvents(accessToken: string) {
+// --- Calendar fetch (multi-day for conflict detection) ---
+async function fetchEvents(accessToken: string, days = 7) {
   try {
     const now = new Date();
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
+    const endDate = new Date(now);
+    endDate.setDate(endDate.getDate() + days);
 
     const params = new URLSearchParams({
       timeMin: now.toISOString(),
-      timeMax: endOfDay.toISOString(),
+      timeMax: endDate.toISOString(),
       singleEvents: "true",
       orderBy: "startTime",
-      maxResults: "15",
+      maxResults: "50",
     });
 
     const calRes = await fetch(
@@ -123,8 +124,13 @@ async function fetchTodayEvents(accessToken: string) {
       summary: event.summary || "(No title)",
       start: event.start?.dateTime || event.start?.date,
       end: event.end?.dateTime || event.end?.date,
-      attendees: (event.attendees || []).map((a: any) => a.displayName || a.email).join(", "),
+      attendees: (event.attendees || []).map((a: any) => ({
+        name: a.displayName || a.email,
+        email: a.email,
+        status: a.responseStatus,
+      })),
       location: event.location || "",
+      conferenceLink: event.hangoutLink || "",
     }));
   } catch (e) {
     console.error("Calendar fetch error:", e);
@@ -132,11 +138,31 @@ async function fetchTodayEvents(accessToken: string) {
   }
 }
 
+// --- Detect conflicts ---
+function detectConflicts(events: any[]) {
+  const conflicts: string[] = [];
+  for (let i = 0; i < events.length; i++) {
+    for (let j = i + 1; j < events.length; j++) {
+      const a = events[i];
+      const b = events[j];
+      if (!a.start || !b.start || a.start.length <= 10 || b.start.length <= 10) continue;
+      const aStart = new Date(a.start).getTime();
+      const aEnd = new Date(a.end).getTime();
+      const bStart = new Date(b.start).getTime();
+      const bEnd = new Date(b.end).getTime();
+      if (aStart < bEnd && bStart < aEnd) {
+        conflicts.push(`⚠️ CONFLICT: "${a.summary}" (${a.start}) overlaps with "${b.summary}" (${b.start})`);
+      }
+    }
+  }
+  return conflicts;
+}
+
 // --- Detect if user is asking about real data ---
 function needsRealData(latestMessage: string): { emails: boolean; calendar: boolean } {
   const lower = latestMessage.toLowerCase();
-  const emailKeywords = ["email", "inbox", "mail", "triage", "follow-up", "follow up", "reply", "replies", "unread", "urgent email", "briefing", "brief me", "fill me in", "catch me up", "what did i miss", "what's new", "update me", "morning briefing", "what's going on", "what happened"];
-  const calKeywords = ["meeting", "calendar", "schedule", "agenda", "today", "briefing", "brief me", "fill me in", "catch me up", "what's next", "morning briefing", "what's going on", "prep me"];
+  const emailKeywords = ["email", "inbox", "mail", "triage", "follow-up", "follow up", "reply", "replies", "unread", "urgent email", "briefing", "brief me", "fill me in", "catch me up", "what did i miss", "what's new", "update me", "morning briefing", "what's going on", "what happened", "draft", "auto-draft", "snooze", "remind me"];
+  const calKeywords = ["meeting", "calendar", "schedule", "agenda", "today", "briefing", "brief me", "fill me in", "catch me up", "what's next", "morning briefing", "what's going on", "prep me", "conflict", "double-book", "reschedule", "availability", "free slot", "open time"];
 
   return {
     emails: emailKeywords.some((k) => lower.includes(k)),
@@ -158,11 +184,9 @@ serve(async (req) => {
     const timeOfDay = now.getHours() < 12 ? "morning" : now.getHours() < 17 ? "afternoon" : "evening";
     const today = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
-    // Check if we need real data
     const latestUserMsg = messages.filter((m: any) => m.role === "user").pop()?.content || "";
     const dataNeeds = needsRealData(latestUserMsg);
 
-    // Try to get user context from auth header
     let realDataContext = "";
     const authHeader = req.headers.get("Authorization");
 
@@ -182,8 +206,8 @@ serve(async (req) => {
         ]);
 
         const [emails, events] = await Promise.all([
-          gmailToken ? fetchRecentEmails(gmailToken, 10) : [],
-          calToken ? fetchTodayEvents(calToken) : [],
+          gmailToken ? fetchRecentEmails(gmailToken, 15) : [],
+          calToken ? fetchEvents(calToken, 7) : [],
         ]);
 
         if (emails.length > 0) {
@@ -197,50 +221,73 @@ Preview: ${e.snippet}\n`;
           });
           realDataContext += "\n--- END INBOX DATA ---\n";
         } else if (dataNeeds.emails) {
-          realDataContext += "\n\n[Gmail is not connected. Let the user know they need to connect Gmail via Integrations (gear icon > Integrations) to get real email data.]\n";
+          realDataContext += "\n\n[Gmail is not connected. Let the user know they need to connect Gmail via Integrations (plug icon in the top right) to get real email data.]\n";
         }
 
         if (events.length > 0) {
-          realDataContext += "\n\n--- REAL CALENDAR DATA (from user's actual Google Calendar) ---\n";
+          realDataContext += "\n\n--- REAL CALENDAR DATA (next 7 days) ---\n";
           events.forEach((e: any, i: number) => {
             realDataContext += `\n[Event ${i + 1}]
 Title: ${e.summary}
 Time: ${e.start} – ${e.end}
-Attendees: ${e.attendees || "None"}
+Attendees: ${e.attendees?.map((a: any) => `${a.name} (${a.status})`).join(", ") || "None"}
 Location: ${e.location || "None"}\n`;
           });
+
+          // Add conflict detection
+          const conflicts = detectConflicts(events);
+          if (conflicts.length > 0) {
+            realDataContext += "\n\n--- ⚠️ SCHEDULING CONFLICTS DETECTED ---\n";
+            conflicts.forEach(c => { realDataContext += c + "\n"; });
+            realDataContext += "--- END CONFLICTS ---\n";
+          }
+
           realDataContext += "\n--- END CALENDAR DATA ---\n";
         } else if (dataNeeds.calendar) {
-          realDataContext += "\n\n[Google Calendar is not connected. Let the user know they need to connect Google Calendar via Integrations (gear icon > Integrations) to get real calendar data.]\n";
+          realDataContext += "\n\n[Google Calendar is not connected. Let the user know they need to connect Google Calendar via Integrations (plug icon in the top right) to get real calendar data.]\n";
         }
       }
     }
 
-    const systemPrompt = `You are ${agentName || "Normy Agent"}, an AI-powered executive assistant and orchestrator. Today is ${today}, ${timeOfDay}.
+    const systemPrompt = `You are ${agentName || "Normy"}, an elite AI executive assistant. Today is ${today}, ${timeOfDay}.
 
-## Your Role
-You are the SINGLE point of contact. You are proactive, organized, and action-oriented. You anticipate needs and take initiative.
+## Your Identity
+You are the user's trusted chief of staff — proactive, organized, and anticipatory. You don't just answer questions; you think ahead, flag risks, and take initiative.
 
 ## CRITICAL RULE
 When the user asks about their emails, meetings, calendar, or anything related to their real data:
-- ONLY reference the REAL DATA provided below. Never invent fake emails, fake meetings, or fake contacts.
+- ONLY reference the REAL DATA provided below. Never invent fake emails, meetings, or contacts.
 - If no real data is provided, tell the user to connect their accounts via Integrations (the plug icon in the top right).
 - If real data IS provided, summarize it clearly with sender names, subjects, and actionable insights.
 
-## Capabilities
-- **Email Triage**: Categorize real inbox as Urgent / Needs Reply / FYI / Newsletter. Draft responses.
-- **Follow-Up Tracking**: Identify emails needing follow-up
-- **Meeting Prep**: Provide context for upcoming meetings
-- **Smart Scheduling**: Suggest optimal meeting times
-- **Weekly Reports**: Generate weekly summaries
-- **Document Summaries**: Summarize any pasted text
-- **General EA tasks**: Drafting, planning, organizing, decision-making support
+## Core Capabilities
+
+### 📧 Email Management
+- **Smart Triage**: Categorize inbox as Urgent / Needs Reply / FYI / Newsletter with confidence scores
+- **Auto-Draft Replies**: Generate context-aware, professional reply drafts for each email needing a response. Match the tone of the original email. Keep drafts concise but complete. Present each draft clearly with the recipient and subject.
+- **Follow-Up Detection**: Identify sent emails with no response and draft polite follow-ups
+- **Email Snooze**: When user says "remind me about this email later" or "snooze this", acknowledge and suggest when to resurface it
+- **Batch Processing**: When asked to "draft replies for all" or "auto-draft", generate replies for every email categorized as "Needs Reply"
+
+### 📅 Calendar Intelligence
+- **Conflict Detection**: When you see overlapping events in the calendar data, ALWAYS proactively flag them. Suggest which to reschedule and draft a message to attendees.
+- **Meeting Prep**: Provide attendee context, talking points, and relevant email threads for each meeting
+- **Smart Scheduling**: When asked to find time, analyze calendar density across the week. Consider buffer times, lunch blocks, and focus time. Suggest the top 3 optimal slots with reasoning.
+- **Availability Summary**: Generate shareable availability windows for the next 5 business days
+
+### 🔔 Proactive Intelligence
+- Flag emails that have been waiting for a reply for 48+ hours
+- Warn about back-to-back meetings with no buffer
+- Notice when VIP contacts (frequent correspondents) email and prioritize them
+- Suggest end-of-day summaries when asked
 
 ## Response Style
-- Be concise. Use markdown with headers, bullets, bold.
-- Use emoji for visual scanning (📧 ✅ ⚠️ 📅 💡)
-- Always suggest next steps
-- Confirm before taking significant actions
+- Be concise and scannable. Use markdown with headers, bullets, bold.
+- Use emoji for visual scanning: 📧 ✅ ⚠️ 📅 💡 🔴 🟡 🟢 ⏰
+- For draft replies, use code blocks or quote blocks so they're clearly distinguishable
+- Always suggest 2-3 next steps at the end
+- When showing multiple drafts, number them clearly
+- Confirm before executing significant actions
 ${realDataContext}`;
 
     const response = await fetch(

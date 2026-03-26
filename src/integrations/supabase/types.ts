@@ -73,6 +73,39 @@ export type Database = {
           },
         ]
       }
+      email_reminders: {
+        Row: {
+          created_at: string
+          email_from: string
+          email_snippet: string | null
+          email_subject: string
+          id: string
+          remind_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_from: string
+          email_snippet?: string | null
+          email_subject: string
+          id?: string
+          remind_at: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email_from?: string
+          email_snippet?: string | null
+          email_subject?: string
+          id?: string
+          remind_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       google_oauth_tokens: {
         Row: {
           access_token: string
@@ -106,6 +139,48 @@ export type Database = {
           token_expires_at?: string | null
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      scheduling_preferences: {
+        Row: {
+          block_lunch: boolean
+          buffer_minutes: number
+          created_at: string
+          id: string
+          lunch_end: string
+          lunch_start: string
+          preferred_meeting_duration: number
+          updated_at: string
+          user_id: string
+          working_hours_end: string
+          working_hours_start: string
+        }
+        Insert: {
+          block_lunch?: boolean
+          buffer_minutes?: number
+          created_at?: string
+          id?: string
+          lunch_end?: string
+          lunch_start?: string
+          preferred_meeting_duration?: number
+          updated_at?: string
+          user_id: string
+          working_hours_end?: string
+          working_hours_start?: string
+        }
+        Update: {
+          block_lunch?: boolean
+          buffer_minutes?: number
+          created_at?: string
+          id?: string
+          lunch_end?: string
+          lunch_start?: string
+          preferred_meeting_duration?: number
+          updated_at?: string
+          user_id?: string
+          working_hours_end?: string
+          working_hours_start?: string
         }
         Relationships: []
       }

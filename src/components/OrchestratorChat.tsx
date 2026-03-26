@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, Loader2, Mic, MicOff, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch } from "lucide-react";
+import { Send, Loader2, Mic, MicOff, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck } from "lucide-react";
 import { ChatMessages } from "./chat/ChatMessages";
 import { ChatHero } from "./chat/ChatHero";
 import { QuickActionGrid } from "./chat/QuickActionGrid";
@@ -25,9 +25,13 @@ export interface QuickAction {
 export const quickActions: QuickAction[] = [
   { label: "Morning Briefing", prompt: "Give me my morning briefing. Summarize what I need to know today — key emails, meetings, follow-ups, and priorities.", icon: Sun, color: "text-accent" },
   { label: "Email Triage", prompt: "Triage my inbox. Categorize recent emails as Urgent, Needs Reply, FYI, or Newsletter. Draft responses for anything that needs attention.", icon: MailSearch, color: "text-destructive" },
+  { label: "Auto-Draft Replies", prompt: "Auto-draft replies for all my emails that need a response. Generate context-aware, professional drafts I can review and approve.", icon: PenLine, color: "text-success" },
   { label: "Follow-Ups", prompt: "Check my follow-ups. What sent emails haven't gotten a reply? Draft polite follow-up messages for the overdue ones.", icon: Clock, color: "text-primary" },
   { label: "Meeting Prep", prompt: "Prepare me for today's meetings. Pull context from recent emails with each attendee and suggest talking points.", icon: CalendarClock, color: "text-info" },
-  { label: "Schedule", prompt: "Help me find the best time for a new meeting this week. Consider my calendar density and buffer preferences.", icon: CalendarSearch, color: "text-accent" },
+  { label: "Calendar Conflicts", prompt: "Check my calendar for the next 7 days. Flag any double-bookings or conflicts. For each conflict, suggest which to reschedule and draft a message to the attendees.", icon: AlertTriangle, color: "text-destructive" },
+  { label: "Find Free Time", prompt: "Show me my availability for the next 5 business days. Find the best open slots for a 30-minute meeting, considering buffer times and meeting density.", icon: CalendarSearch, color: "text-accent" },
+  { label: "Schedule Link", prompt: "Generate a shareable summary of my availability for the next week so I can send it to someone who wants to book time with me.", icon: CalendarCheck, color: "text-info" },
+  { label: "Snooze Email", prompt: "I want to snooze an email to be reminded about it later. Which email should I snooze and when should I be reminded?", icon: BellRing, color: "text-warning" },
   { label: "Weekly Report", prompt: "Generate my weekly report. Summarize accomplishments, in-progress items, things needing attention, and next week's priorities.", icon: FileBarChart, color: "text-primary" },
   { label: "Summarize Doc", prompt: "I need to summarize a document. I'll paste the text — give me an executive summary with key takeaways and action items.", icon: FileText, color: "text-muted-foreground" },
   { label: "Contact Lookup", prompt: "Help me look up a contact. I'll give you a name — pull together what you know about our interaction history and open threads.", icon: Users, color: "text-info" },
