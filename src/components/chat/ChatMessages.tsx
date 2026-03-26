@@ -1,4 +1,4 @@
-import { Loader2, Sparkles, Inbox, Check, Sun, MailSearch, Clock, CalendarClock, FileText, PenLine, CalendarSearch, FileBarChart } from "lucide-react";
+import { Loader2, Sparkles, Inbox, Check, Sun, MailSearch, Clock, CalendarClock, FileText, PenLine, CalendarSearch, FileBarChart, ChevronRight } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useState, useCallback, useMemo } from "react";
 import { useDraftActions } from "@/hooks/useDraftActions";
@@ -31,6 +31,33 @@ function extractDrafts(content: string): DraftBlock[] {
 
 function stripDraftBlocks(content: string): string {
   return content.replace(/```draft-json\s*\n[\s\S]*?\n```/g, "").trim();
+}
+
+interface NextStepItem {
+  label: string;
+  prompt: string;
+}
+
+function extractNextSteps(content: string): NextStepItem[] {
+  // Match a "Next Steps:" section followed by bullet points
+  const sectionRegex = /\n*\*{0,2}Next\s*Steps:?\*{0,2}\s*\n((?:\s*[-*•]\s+.+\n?)+)/i;
+  const match = sectionRegex.exec(content);
+  if (!match) return [];
+
+  const bulletBlock = match[1];
+  const bullets = bulletBlock.match(/[-*•]\s+(.+)/g);
+  if (!bullets) return [];
+
+  return bullets.map((b) => {
+    // Strip the bullet marker and clean markdown bold
+    const raw = b.replace(/^[-*•]\s+/, "").trim();
+    const clean = raw.replace(/\*\*/g, "").replace(/\?$/, "").trim();
+    return { label: clean, prompt: clean };
+  });
+}
+
+function stripNextSteps(content: string): string {
+  return content.replace(/\n*\*{0,2}Next\s*Steps:?\*{0,2}\s*\n((?:\s*[-*•]\s+.+\n?)+)/i, "").trim();
 }
 
 interface FollowUpAction {
@@ -175,9 +202,14 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef, onSend }: Ch
     <div className="space-y-6 py-8">
       {messages.map((msg, i) => {
         const drafts = msg.role === "assistant" ? extractDrafts(msg.content) : [];
-        const cleanContent = msg.role === "assistant" && drafts.length > 0
+        const nextSteps = msg.role === "assistant" ? extractNextSteps(msg.content) : [];
+        const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
+        let cleanContent = msg.role === "assistant" && drafts.length > 0
           ? stripDraftBlocks(msg.content)
           : msg.content;
+        if (msg.role === "assistant" && nextSteps.length > 0) {
+          cleanContent = stripNextSteps(cleanContent);
+        }
 
         return (
           <div
@@ -241,6 +273,23 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef, onSend }: Ch
                           Save all {drafts.length} drafts to Approval Inbox
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {/* Next Steps as clickable buttons */}
+                  {nextSteps.length > 0 && isLastAssistant && !isLoading && onSend && (
+                    <div className="mt-4 pt-3 border-t border-border/50 space-y-1.5">
+                      <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest mb-2">Next Steps</p>
+                      {nextSteps.map((step, si) => (
+                        <button
+                          key={si}
+                          onClick={() => onSend(step.prompt)}
+                          className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-xs font-medium text-foreground/80 hover:text-foreground bg-muted/30 hover:bg-accent/10 border border-border/30 hover:border-accent/20 transition-all duration-200 text-left group"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5 text-accent shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                          <span className="line-clamp-2">{step.label}</span>
+                        </button>
+                      ))}
                     </div>
                   )}
                 </>
