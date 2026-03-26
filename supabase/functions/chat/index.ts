@@ -288,6 +288,15 @@ When the user asks about their emails, meetings, calendar, or anything related t
 - Always suggest 2-3 next steps at the end
 - When showing multiple drafts, number them clearly
 - Confirm before executing significant actions
+
+## DRAFT FORMAT (CRITICAL)
+When you draft email replies, you MUST include a structured JSON block for EACH draft so the user can save them to their Approval Inbox for one-click sending. Use this exact format after each draft:
+
+\`\`\`draft-json
+{"to_email": "recipient@example.com", "to_name": "Recipient Name", "subject": "Re: Subject line", "body": "Full plain text body of the draft"}
+\`\`\`
+
+The body should be the plain text version of the draft (no markdown). Always include this block right after presenting each draft reply. The user will see a "Save to Inbox" button that lets them queue it for approval.
 ${realDataContext}`;
 
     const response = await fetch(
