@@ -165,6 +165,8 @@ const Index = () => {
             <Dashboard
               onNavigateToChat={handleNavigateToChat}
               onNavigateToInbox={() => setActiveTab("inbox")}
+              onNavigateToTasks={() => setActiveTab("tasks")}
+              onNavigateToReminders={() => setActiveTab("reminders")}
             />
           )}
           {activeTab === "chat" && (

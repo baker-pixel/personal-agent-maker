@@ -19,10 +19,13 @@ import {
 } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import { WeeklySummaryWidget } from "./dashboard/WeeklySummaryWidget";
+import { UpcomingWidget } from "./dashboard/UpcomingWidget";
 
 interface DashboardProps {
   onNavigateToChat: (prompt?: string) => void;
   onNavigateToInbox: () => void;
+  onNavigateToTasks: () => void;
+  onNavigateToReminders: () => void;
 }
 
 interface Email {
@@ -71,7 +74,7 @@ const formatTime = (start: string, end: string) => {
   }
 };
 
-export const Dashboard = ({ onNavigateToChat, onNavigateToInbox }: DashboardProps) => {
+export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTasks, onNavigateToReminders }: DashboardProps) => {
   const { agentName } = useAgent();
   const { isConnected } = useIntegrations();
   const { drafts } = useDraftActions();
@@ -436,8 +439,13 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox }: DashboardProp
           </div>
         </div>
 
-        {/* Weekly Summary — full width */}
+        {/* Upcoming Reminders & Action Items */}
         <div className="animate-fade-up" style={{ animationDelay: "0.15s" }}>
+          <UpcomingWidget onNavigateToTasks={onNavigateToTasks} onNavigateToReminders={onNavigateToReminders} />
+        </div>
+
+        {/* Weekly Summary — full width */}
+        <div className="animate-fade-up" style={{ animationDelay: "0.2s" }}>
           <WeeklySummaryWidget />
         </div>
       </div>
