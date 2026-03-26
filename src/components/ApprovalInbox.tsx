@@ -63,6 +63,32 @@ export const ApprovalInbox = () => {
 
   const gmailConnected = isConnected("gmail");
 
+  const toggleEmailExpand = useCallback(async (emailId: string) => {
+    if (expandedEmailId === emailId) {
+      setExpandedEmailId(null);
+      return;
+    }
+    setExpandedEmailId(emailId);
+    setExpandedEmailBody("");
+    setLoadingEmailBody(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-fetch?messageId=${emailId}`,
+        { headers: { Authorization: `Bearer ${session.access_token}` } }
+      );
+      const result = await res.json();
+      setExpandedEmailBody(result.body || "");
+      setExpandedEmailIsHtml(result.isHtml || false);
+    } catch (e) {
+      console.error("Failed to fetch email body", e);
+      setExpandedEmailBody("Failed to load email content.");
+    } finally {
+      setLoadingEmailBody(false);
+    }
+  }, [expandedEmailId]);
+
   const fetchSentEmails = useCallback(async () => {
     setLoadingSentEmails(true);
     try {
