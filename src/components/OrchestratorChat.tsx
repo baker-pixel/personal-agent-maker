@@ -163,8 +163,8 @@ export const OrchestratorChat = () => {
       )}
 
       {/* Input bar */}
-      <div className="px-2 md:px-4 pb-3 pt-2">
-        <div className="bg-card border border-border rounded-2xl flex items-end gap-1 p-1.5 shadow-sm focus-within:border-accent/40 focus-within:shadow-md transition-all duration-200">
+      <div className="px-3 md:px-6 pb-4 pt-2">
+        <div className="bg-card border border-border/60 rounded-2xl flex items-end gap-2 p-2 shadow-sm focus-within:border-primary/20 focus-within:shadow-md transition-all duration-200">
           <textarea
             ref={inputRef}
             value={input}
@@ -172,13 +172,13 @@ export const OrchestratorChat = () => {
             onKeyDown={handleKeyDown}
             placeholder={`Message ${agentName}…`}
             rows={1}
-            className="flex-1 bg-transparent px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 resize-none focus:outline-none max-h-32"
-            style={{ minHeight: "42px" }}
+            className="flex-1 bg-transparent px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none max-h-32"
+            style={{ minHeight: "44px" }}
           />
           {messages.length > 0 && (
             <button
               onClick={() => setMessages([])}
-              className="shrink-0 px-3 py-2 rounded-xl text-[11px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              className="shrink-0 px-3 py-2.5 rounded-xl text-[11px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
               title="Clear conversation"
             >
               Clear
@@ -187,7 +187,7 @@ export const OrchestratorChat = () => {
           <button
             onClick={() => handleSend()}
             disabled={!input.trim() || isLoading}
-            className="shrink-0 w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
+            className="shrink-0 w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
