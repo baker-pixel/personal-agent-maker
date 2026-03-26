@@ -29,6 +29,7 @@ interface GmailSentEmail {
   threadId: string;
   snippet: string;
   from: string;
+  to: string;
   subject: string;
   date: string;
   labelIds: string[];
