@@ -13,36 +13,36 @@ interface FileAttachmentProps {
   onRemove: (index: number) => void;
 }
 
-export const FileAttachmentButton = forwardRef<HTMLButtonElement, { onAdd: (files: FileList) => void }>(
-  ({ onAdd }, ref) => {
-    const inputRef = useRef<HTMLInputElement>(null);
-    return (
-      <>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept="image/*,.pdf,.txt,.csv,.docx,.xlsx"
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files?.length) onAdd(e.target.files);
-            e.target.value = "";
-          }}
-        />
-        <button
-          ref={ref}
-          onClick={() => inputRef.current?.click()}
-          className="shrink-0 p-2.5 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50 transition-colors"
-          title="Attach files"
-          type="button"
-        >
-          <Paperclip className="w-4 h-4" />
-        </button>
-      </>
-    );
-  }
-);
-FileAttachmentButton.displayName = "FileAttachmentButton";
+export const FileAttachmentButton = forwardRef<
+  HTMLButtonElement,
+  { onAdd: (files: FileList) => void }
+>(function FileAttachmentButton({ onAdd }, ref) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept="image/*,.pdf,.txt,.csv,.docx,.xlsx"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files?.length) onAdd(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <button
+        ref={ref}
+        onClick={() => inputRef.current?.click()}
+        className="shrink-0 p-2.5 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50 transition-colors"
+        title="Attach files"
+        type="button"
+      >
+        <Paperclip className="w-4 h-4" />
+      </button>
+    </>
+  );
+});
 
 export const AttachmentPreview = ({ attachments, onRemove }: Omit<FileAttachmentProps, "onAdd">) => {
   if (attachments.length === 0) return null;
