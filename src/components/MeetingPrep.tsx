@@ -263,6 +263,17 @@ export const MeetingPrep = () => {
                     <ReactMarkdown>{meeting.prep}</ReactMarkdown>
                   </div>
 
+                  {/* Email summary to attendees */}
+                  {meeting.attendees.length > 0 && !meeting.error && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); emailSummary(meeting); }}
+                      disabled={sendingId === meeting.id}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors disabled:opacity-50"
+                    >
+                      {sendingId === meeting.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                      Email summary to {meeting.attendees.length} attendee{meeting.attendees.length !== 1 ? "s" : ""}
+                    </button>
+                  )}
                   {/* Related Emails */}
                   {meeting.relatedEmails.length > 0 && (
                     <div className="border-t border-border pt-4">
