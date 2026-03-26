@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
-import { useDraftActions } from "@/hooks/useDraftActions";
+import { useDraftActions, type DraftAction } from "@/hooks/useDraftActions";
 import { toast } from "@/hooks/use-toast";
 import {
   Check,
@@ -16,6 +16,8 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  Pencil,
+  Save,
 } from "lucide-react";
 
 type Tab = "pending" | "history";
