@@ -1,101 +1,143 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, Sequence } from "remotion";
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import { colors } from "../theme";
 import { fontDisplay, fontBody } from "../fonts";
 
 const emails = [
-  { from: "Sarah Chen", subject: "Q3 Partnership Proposal — action needed", category: "Urgent", color: "#EF4444" },
-  { from: "Marcus Webb", subject: "Re: Atlas Capital quarterly review", category: "Needs Reply", color: colors.accent },
-  { from: "Priya Sharma", subject: "Team offsite agenda draft", category: "FYI", color: "#3B82F6" },
-  { from: "Newsletter", subject: "TechCrunch Morning Digest", category: "Newsletter", color: colors.textMuted },
+  { from: "Sarah Chen", subject: "Q3 Partnership Proposal — action needed", category: "Urgent", color: "#EF4444", initials: "SC" },
+  { from: "Marcus Webb", subject: "Re: Atlas Capital quarterly review", category: "Needs Reply", color: colors.accent, initials: "MW" },
+  { from: "Priya Sharma", subject: "Team offsite agenda draft", category: "FYI", color: "#3B82F6", initials: "PS" },
+  { from: "TechCrunch", subject: "Morning Digest — AI funding roundup", category: "Newsletter", color: "#6B7280", initials: "TC" },
 ];
 
 export const Scene2EmailTriage = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const titleOp = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp" });
-  const titleX = interpolate(spring({ frame, fps, config: { damping: 20 } }), [0, 1], [-60, 0]);
+  // Left side entrance
+  const leftOp = interpolate(frame, [0, 25], [0, 1], { extrapolateRight: "clamp" });
+  const leftX = interpolate(spring({ frame, fps, config: { damping: 22 } }), [0, 1], [-80, 0]);
 
   return (
-    <AbsoluteFill style={{ display: "flex", padding: 100, gap: 80 }}>
-      {/* Left side — title */}
-      <div style={{ flex: "0 0 500px", display: "flex", flexDirection: "column", justifyContent: "center", opacity: titleOp, transform: `translateX(${titleX}px)` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-          <div style={{ width: 48, height: 48, borderRadius: 14, background: `${colors.accent}15`, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${colors.accent}30` }}>
+    <AbsoluteFill style={{ display: "flex", padding: "80px 120px", gap: 80, alignItems: "center" }}>
+      {/* Left side */}
+      <div style={{ flex: "0 0 480px", opacity: leftOp, transform: `translateX(${leftX}px)` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 28 }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: 16,
+            background: `linear-gradient(135deg, ${colors.accent}20, ${colors.accent}08)`,
+            border: `1px solid ${colors.accent}30`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="4" width="20" height="16" rx="2" />
               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
             </svg>
           </div>
-          <span style={{ fontFamily: fontBody, fontSize: 15, fontWeight: 600, color: colors.accent, textTransform: "uppercase", letterSpacing: 2 }}>
-            Email Triage
+          <span style={{ fontFamily: fontBody, fontSize: 14, fontWeight: 700, color: colors.accent, textTransform: "uppercase", letterSpacing: 2.5 }}>
+            Smart Email Triage
           </span>
         </div>
-        <h2 style={{ fontFamily: fontDisplay, fontSize: 64, color: colors.text, lineHeight: 1.1, margin: 0 }}>
-          Every email,{"\n"}
-          <span style={{ color: colors.textMuted }}>instantly sorted.</span>
+
+        <h2 style={{ fontFamily: fontDisplay, fontSize: 58, color: colors.text, lineHeight: 1.1, margin: 0 }}>
+          Every email,
         </h2>
-        <p style={{ fontFamily: fontBody, fontSize: 20, color: colors.textMuted, lineHeight: 1.6, marginTop: 24, maxWidth: 420 }}>
+        <h2 style={{ fontFamily: fontDisplay, fontSize: 58, color: colors.textMuted, lineHeight: 1.1, margin: 0 }}>
+          instantly sorted.
+        </h2>
+
+        <p style={{ fontFamily: fontBody, fontSize: 19, color: colors.textMuted, lineHeight: 1.7, marginTop: 28, maxWidth: 400 }}>
           AI categorizes your inbox into Urgent, Needs Reply, FYI, and Newsletter — with draft responses ready to go.
         </p>
+
+        {/* Mini stats */}
+        <div style={{ display: "flex", gap: 32, marginTop: 36 }}>
+          {[{ v: "47", l: "Emails triaged" }, { v: "12", l: "Drafts ready" }].map((s, i) => {
+            const d = 60 + i * 15;
+            const op = interpolate(frame, [d, d + 15], [0, 1], { extrapolateRight: "clamp" });
+            return (
+              <div key={i} style={{ opacity: op }}>
+                <div style={{ fontFamily: fontDisplay, fontSize: 36, color: colors.accent }}>{s.v}</div>
+                <div style={{ fontFamily: fontBody, fontSize: 12, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 2, marginTop: 2 }}>{s.l}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Right side — email cards */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: 16 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14 }}>
         {emails.map((email, i) => {
-          const delay = 20 + i * 15;
-          const cardOp = interpolate(frame, [delay, delay + 15], [0, 1], { extrapolateRight: "clamp" });
-          const cardX = interpolate(
-            spring({ frame: frame - delay, fps, config: { damping: 18, stiffness: 150 } }),
-            [0, 1],
-            [80, 0]
-          );
-          // Category badge slides in after card
-          const badgeOp = interpolate(frame, [delay + 20, delay + 35], [0, 1], { extrapolateRight: "clamp" });
-          const badgeScale = spring({ frame: frame - delay - 20, fps, config: { damping: 12 } });
+          const delay = 15 + i * 14;
+          const cardOp = interpolate(frame, [delay, delay + 14], [0, 1], { extrapolateRight: "clamp" });
+          const cardX = interpolate(spring({ frame: frame - delay, fps, config: { damping: 16, stiffness: 140 } }), [0, 1], [100, 0]);
+          const badgeDelay = delay + 22;
+          const badgeScale = spring({ frame: frame - badgeDelay, fps, config: { damping: 10 } });
+          const badgeOp = interpolate(frame, [badgeDelay, badgeDelay + 10], [0, 1], { extrapolateRight: "clamp" });
 
           return (
             <div
               key={i}
               style={{
-                opacity: cardOp,
-                transform: `translateX(${cardX}px)`,
-                background: colors.bgCard,
-                borderRadius: 20,
-                padding: "28px 32px",
+                opacity: cardOp, transform: `translateX(${cardX}px)`,
+                background: `linear-gradient(135deg, ${colors.bgCard}, ${colors.bgCard}DD)`,
+                borderRadius: 18, padding: "24px 28px",
                 border: `1px solid ${colors.border}`,
-                display: "flex",
-                alignItems: "center",
-                gap: 20,
+                display: "flex", alignItems: "center", gap: 18,
+                boxShadow: `0 4px 20px ${colors.bg}80`,
               }}
             >
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: `${email.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <div style={{ width: 10, height: 10, borderRadius: "50%", background: email.color }} />
+              {/* Avatar */}
+              <div style={{
+                width: 46, height: 46, borderRadius: 14, flexShrink: 0,
+                background: `linear-gradient(135deg, ${email.color}25, ${email.color}10)`,
+                border: `1px solid ${email.color}30`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontFamily: fontBody, fontSize: 14, fontWeight: 700, color: email.color,
+              }}>
+                {email.initials}
               </div>
+
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: fontBody, fontSize: 18, fontWeight: 600, color: colors.text }}>{email.from}</div>
-                <div style={{ fontFamily: fontBody, fontSize: 15, color: colors.textMuted, marginTop: 4 }}>{email.subject}</div>
+                <div style={{ fontFamily: fontBody, fontSize: 17, fontWeight: 600, color: colors.text }}>{email.from}</div>
+                <div style={{ fontFamily: fontBody, fontSize: 14, color: colors.textMuted, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email.subject}</div>
               </div>
-              <div
-                style={{
-                  opacity: badgeOp,
-                  transform: `scale(${badgeScale})`,
-                  background: `${email.color}20`,
-                  border: `1px solid ${email.color}40`,
-                  borderRadius: 10,
-                  padding: "8px 16px",
-                  fontFamily: fontBody,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: email.color,
-                  whiteSpace: "nowrap",
-                }}
-              >
+
+              {/* Category badge */}
+              <div style={{
+                opacity: badgeOp, transform: `scale(${badgeScale})`,
+                background: `${email.color}15`, border: `1px solid ${email.color}35`,
+                borderRadius: 10, padding: "7px 16px",
+                fontFamily: fontBody, fontSize: 12, fontWeight: 700, color: email.color,
+                letterSpacing: 0.5, whiteSpace: "nowrap",
+              }}>
                 {email.category}
               </div>
             </div>
           );
         })}
+
+        {/* AI summary bar at bottom */}
+        {(() => {
+          const barDelay = 85;
+          const barOp = interpolate(frame, [barDelay, barDelay + 20], [0, 1], { extrapolateRight: "clamp" });
+          const barY = interpolate(spring({ frame: frame - barDelay, fps, config: { damping: 20 } }), [0, 1], [20, 0]);
+          return (
+            <div style={{
+              opacity: barOp, transform: `translateY(${barY}px)`,
+              background: `linear-gradient(135deg, ${colors.accent}12, ${colors.accent}06)`,
+              border: `1px solid ${colors.accent}20`,
+              borderRadius: 14, padding: "16px 24px",
+              display: "flex", alignItems: "center", gap: 12, marginTop: 8,
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={colors.accent} strokeWidth="2">
+                <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
+              </svg>
+              <span style={{ fontFamily: fontBody, fontSize: 14, color: colors.accent, fontWeight: 500 }}>
+                1 urgent, 1 needs reply — 2 draft responses ready for your approval
+              </span>
+            </div>
+          );
+        })()}
       </div>
     </AbsoluteFill>
   );
