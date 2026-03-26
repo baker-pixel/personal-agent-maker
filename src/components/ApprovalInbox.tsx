@@ -357,7 +357,7 @@ export const ApprovalInbox = () => {
           ) : (
             <div className="space-y-2">
               {sentEmails.map((email, index) => {
-                const toMatch = email.snippet;
+                const recipientDisplay = email.to || "Unknown recipient";
                 const subjectText = email.subject || "(no subject)";
                 const dateStr = email.date ? new Date(email.date).toLocaleString() : "";
                 return (
@@ -371,8 +371,9 @@ export const ApprovalInbox = () => {
                         <SendHorizonal className="w-3.5 h-3.5 text-accent" />
                       </div>
                       <div className="flex-1 min-w-0">
+                        <p className="text-[11px] text-muted-foreground mb-0.5 truncate">To: {recipientDisplay}</p>
                         <h3 className="font-medium text-foreground text-sm truncate">{subjectText}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{toMatch}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{email.snippet}</p>
                         <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1 mt-1.5">
                           <Clock className="w-2.5 h-2.5" />
                           {dateStr}
