@@ -157,6 +157,17 @@ export const ApprovalInbox = () => {
           )}
         </button>
         <button
+          onClick={() => setTab("sent")}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+            tab === "sent"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <SendHorizonal className="w-3.5 h-3.5" />
+          Sent
+        </button>
+        <button
           onClick={() => setTab("history")}
           className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
             tab === "history"
