@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Loader2,
   Sparkles,
+  Send,
 } from "lucide-react";
 
 interface Attendee {
@@ -52,6 +53,7 @@ export const MeetingPrep = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [emailsExpandedId, setEmailsExpandedId] = useState<string | null>(null);
   const [fetched, setFetched] = useState(false);
+  const [sendingId, setSendingId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchPrep = async () => {
@@ -88,6 +90,32 @@ export const MeetingPrep = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const emailSummary = async (meeting: Meeting) => {
+    setSendingId(meeting.id);
+    const attendeeEmails = meeting.attendees
+      .map((a) => a.email)
+      .filter((e) => e && !e.includes("calendar.google.com"))
+      .join(", ");
+
+    const { data, error: err } = await supabase.functions.invoke("draft-followup", {
+      body: {
+        type: "meeting_summary",
+        meetingSummary: meeting.summary,
+        meetingAttendees: attendeeEmails,
+      },
+    });
+
+    if (err || data?.error) {
+      toast({ title: "Failed to draft", description: data?.error || "Something went wrong", variant: "destructive" });
+    } else {
+      toast({
+        title: `${data.draftsCreated || 1} draft${(data.draftsCreated || 1) > 1 ? "s" : ""} created`,
+        description: "Check your Inbox to review and send",
+      });
+    }
+    setSendingId(null);
   };
 
   const formatTime = (iso: string) => {
@@ -235,6 +263,17 @@ export const MeetingPrep = () => {
                     <ReactMarkdown>{meeting.prep}</ReactMarkdown>
                   </div>
 
+                  {/* Email summary to attendees */}
+                  {meeting.attendees.length > 0 && !meeting.error && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); emailSummary(meeting); }}
+                      disabled={sendingId === meeting.id}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors disabled:opacity-50"
+                    >
+                      {sendingId === meeting.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                      Email summary to {meeting.attendees.length} attendee{meeting.attendees.length !== 1 ? "s" : ""}
+                    </button>
+                  )}
                   {/* Related Emails */}
                   {meeting.relatedEmails.length > 0 && (
                     <div className="border-t border-border pt-4">

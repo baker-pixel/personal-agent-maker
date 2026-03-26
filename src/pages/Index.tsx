@@ -7,14 +7,15 @@ import { Dashboard } from "@/components/Dashboard";
 import { ActionItems } from "@/components/ActionItems";
 import { ContactReminders } from "@/components/ContactReminders";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
+import { NewsMonitor } from "@/components/NewsMonitor";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
 import { useDraftActions } from "@/hooks/useDraftActions";
-import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft, ListTodo, Gift } from "lucide-react";
+import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft, ListTodo, Gift, Newspaper } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Tab = "home" | "chat" | "inbox" | "tasks" | "reminders" | "integrations" | "settings";
+type Tab = "home" | "chat" | "inbox" | "tasks" | "reminders" | "news" | "integrations" | "settings";
 
 const tabs: { id: Tab; label: string; icon: React.ElementType; mobileHide?: boolean }[] = [
   { id: "home", label: "Home", icon: Home },
@@ -22,6 +23,7 @@ const tabs: { id: Tab; label: string; icon: React.ElementType; mobileHide?: bool
   { id: "inbox", label: "Inbox", icon: Inbox },
   { id: "tasks", label: "Tasks", icon: ListTodo },
   { id: "reminders", label: "Reminders", icon: Gift, mobileHide: true },
+  { id: "news", label: "News", icon: Newspaper, mobileHide: true },
   { id: "integrations", label: "Connect", icon: Plug, mobileHide: true },
   { id: "settings", label: "Settings", icon: Settings },
 ];
@@ -77,7 +79,6 @@ const Index = () => {
   if (showOnboarding) {
     return <OnboardingFlow onComplete={completeOnboarding} onSkip={completeOnboarding} />;
   }
-
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Conversation sidebar (only visible on chat tab) */}
@@ -191,6 +192,11 @@ const Index = () => {
           {activeTab === "reminders" && (
             <div className="h-full overflow-y-auto py-6 px-4 md:px-6">
               <ContactReminders />
+            </div>
+          )}
+          {activeTab === "news" && (
+            <div className="h-full overflow-y-auto py-6 px-4 md:px-6">
+              <NewsMonitor />
             </div>
           )}
           {activeTab === "integrations" && (
