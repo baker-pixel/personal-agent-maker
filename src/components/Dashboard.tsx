@@ -18,6 +18,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
+import { WeeklySummaryWidget } from "./dashboard/WeeklySummaryWidget";
 
 interface DashboardProps {
   onNavigateToChat: (prompt?: string) => void;
@@ -433,6 +434,11 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox }: DashboardProp
               </div>
             </section>
           </div>
+        </div>
+
+        {/* Weekly Summary — full width */}
+        <div className="animate-fade-up" style={{ animationDelay: "0.15s" }}>
+          <WeeklySummaryWidget />
         </div>
       </div>
     </div>
