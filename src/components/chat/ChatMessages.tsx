@@ -329,6 +329,32 @@ export const ChatMessages = ({ messages, isLoading, messagesEndRef, onSend }: Ch
                       ))}
                     </div>
                   )}
+
+                  {/* Yes/No question buttons */}
+                  {yesNoQuestions.length > 0 && isLastAssistant && !isLoading && onSend && (
+                    <div className="mt-4 pt-3 border-t border-border/50 space-y-2">
+                      {yesNoQuestions.map((q, qi) => (
+                        <div key={qi} className="space-y-1.5">
+                          <p className="text-xs text-foreground/70">{q.question}</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => onSend(q.yesPrompt)}
+                              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 border border-accent/20 transition-all duration-200"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => onSend("No thanks, skip that.")}
+                              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted border border-border/30 transition-all duration-200"
+                            >
+                              No thanks
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
