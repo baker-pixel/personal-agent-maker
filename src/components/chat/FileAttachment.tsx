@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, forwardRef } from "react";
 import { Paperclip, X, FileText, Image } from "lucide-react";
 
 export interface Attachment {

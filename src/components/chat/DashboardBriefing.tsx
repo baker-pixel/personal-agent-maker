@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Mail, Calendar, Clock, AlertCircle, ChevronRight, Loader2, ArrowUpRight } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
