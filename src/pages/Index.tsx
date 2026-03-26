@@ -65,6 +65,13 @@ const Index = () => {
           <div className="flex items-center gap-1">
             <NotificationCenter onSendMessage={handleNotificationAction} />
             <button
+              onClick={() => setPanel(panel === "inbox" ? null : "inbox")}
+              className={`p-2.5 rounded-xl transition-all duration-200 ${panel === "inbox" ? "bg-accent/10 text-accent" : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50"}`}
+              title="Approval Inbox"
+            >
+              <Inbox className="w-4 h-4" />
+            </button>
+            <button
               onClick={() => setPanel(panel === "integrations" ? null : "integrations")}
               className={`p-2.5 rounded-xl transition-all duration-200 ${panel === "integrations" ? "bg-accent/10 text-accent" : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50"}`}
               title="Integrations"
