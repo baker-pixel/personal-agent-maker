@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { useAgent } from "@/contexts/AgentContext";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useDraftActions, type DraftAction } from "@/hooks/useDraftActions";
@@ -11,6 +12,7 @@ import {
   Plug,
   Loader2,
   Send,
+  SendHorizonal,
   Inbox,
   History,
   CheckCircle2,
@@ -20,7 +22,18 @@ import {
   Save,
 } from "lucide-react";
 
-type Tab = "pending" | "history";
+type Tab = "pending" | "sent" | "history";
+
+interface GmailSentEmail {
+  id: string;
+  threadId: string;
+  snippet: string;
+  from: string;
+  subject: string;
+  date: string;
+  labelIds: string[];
+  isUnread: boolean;
+}
 
 const statusConfig: Record<string, { icon: React.ElementType; label: string; className: string }> = {
   sent: { icon: CheckCircle2, label: "Sent", className: "text-success bg-success/10" },
@@ -35,6 +48,9 @@ export const ApprovalInbox = () => {
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<Tab>("pending");
   const [hasFetchedHistory, setHasFetchedHistory] = useState(false);
+  const [sentEmails, setSentEmails] = useState<GmailSentEmail[]>([]);
+  const [loadingSentEmails, setLoadingSentEmails] = useState(false);
+  const [hasFetchedSent, setHasFetchedSent] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
@@ -42,12 +58,34 @@ export const ApprovalInbox = () => {
 
   const gmailConnected = isConnected("gmail");
 
+  const fetchSentEmails = useCallback(async () => {
+    setLoadingSentEmails(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-fetch?q=${encodeURIComponent("is:sent")}&maxResults=20`,
+        { headers: { Authorization: `Bearer ${session.access_token}` } }
+      );
+      const result = await res.json();
+      if (result.emails) setSentEmails(result.emails);
+    } catch (e) {
+      console.error("Failed to fetch sent emails", e);
+    } finally {
+      setLoadingSentEmails(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (tab === "history" && !hasFetchedHistory) {
       fetchSentDrafts();
       setHasFetchedHistory(true);
     }
-  }, [tab, hasFetchedHistory, fetchSentDrafts]);
+    if (tab === "sent" && !hasFetchedSent) {
+      fetchSentEmails();
+      setHasFetchedSent(true);
+    }
+  }, [tab, hasFetchedHistory, fetchSentDrafts, hasFetchedSent, fetchSentEmails]);
 
   const handleApprove = async (id: string) => {
     setProcessingIds((prev) => new Set(prev).add(id));
@@ -117,6 +155,17 @@ export const ApprovalInbox = () => {
               {drafts.length}
             </span>
           )}
+        </button>
+        <button
+          onClick={() => setTab("sent")}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+            tab === "sent"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <SendHorizonal className="w-3.5 h-3.5" />
+          Sent
         </button>
         <button
           onClick={() => setTab("history")}
@@ -267,6 +316,66 @@ export const ApprovalInbox = () => {
                             </div>
                           </div>
                         )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Sent tab */}
+      {tab === "sent" && (
+        <>
+          {!gmailConnected ? (
+            <div className="text-center py-16">
+              <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                <Plug className="w-7 h-7 text-muted-foreground" />
+              </div>
+              <h2 className="font-display text-lg text-foreground mb-1">Gmail not connected</h2>
+              <p className="text-sm text-muted-foreground">
+                Connect Gmail in Integrations to view sent emails.
+              </p>
+            </div>
+          ) : loadingSentEmails ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : sentEmails.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                <SendHorizonal className="w-7 h-7 text-muted-foreground" />
+              </div>
+              <h2 className="font-display text-lg text-foreground mb-1">No sent emails</h2>
+              <p className="text-sm text-muted-foreground">
+                Your recently sent emails will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {sentEmails.map((email, index) => {
+                const toMatch = email.snippet;
+                const subjectText = email.subject || "(no subject)";
+                const dateStr = email.date ? new Date(email.date).toLocaleString() : "";
+                return (
+                  <div
+                    key={email.id}
+                    className="glass-card rounded-xl p-3.5 transition-all duration-200"
+                    style={{ animation: `fade-up 0.3s ease-out ${index * 0.04}s both` }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-accent/10">
+                        <SendHorizonal className="w-3.5 h-3.5 text-accent" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-foreground text-sm truncate">{subjectText}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{toMatch}</p>
+                        <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1 mt-1.5">
+                          <Clock className="w-2.5 h-2.5" />
+                          {dateStr}
+                        </span>
                       </div>
                     </div>
                   </div>
