@@ -24,6 +24,8 @@ import { UpcomingWidget } from "./dashboard/UpcomingWidget";
 interface DashboardProps {
   onNavigateToChat: (prompt?: string) => void;
   onNavigateToInbox: () => void;
+  onNavigateToTasks: () => void;
+  onNavigateToReminders: () => void;
 }
 
 interface Email {
