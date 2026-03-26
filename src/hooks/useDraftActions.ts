@@ -124,5 +124,20 @@ export function useDraftActions() {
     return null;
   }, []);
 
-  return { drafts, sentDrafts, loading, loadingSent, fetchDrafts, fetchSentDrafts, approveDraft, rejectDraft, saveDraft };
+  const updateDraft = useCallback(async (draftId: string, updates: { subject?: string; body?: string; to_email?: string }) => {
+    const { error } = await supabase
+      .from("draft_actions")
+      .update({ ...updates, updated_at: new Date().toISOString() } as any)
+      .eq("id", draftId);
+
+    if (!error) {
+      setDrafts((prev) =>
+        prev.map((d) => (d.id === draftId ? { ...d, ...updates } : d))
+      );
+      return true;
+    }
+    return false;
+  }, []);
+
+  return { drafts, sentDrafts, loading, loadingSent, fetchDrafts, fetchSentDrafts, approveDraft, rejectDraft, saveDraft, updateDraft };
 }
