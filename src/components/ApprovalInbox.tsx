@@ -52,6 +52,10 @@ export const ApprovalInbox = () => {
   const [sentEmails, setSentEmails] = useState<GmailSentEmail[]>([]);
   const [loadingSentEmails, setLoadingSentEmails] = useState(false);
   const [hasFetchedSent, setHasFetchedSent] = useState(false);
+  const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null);
+  const [expandedEmailBody, setExpandedEmailBody] = useState<string>("");
+  const [expandedEmailIsHtml, setExpandedEmailIsHtml] = useState(false);
+  const [loadingEmailBody, setLoadingEmailBody] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
