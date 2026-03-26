@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 type Tab = "home" | "chat" | "inbox" | "integrations" | "settings";
 
 const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: "home", label: "Home", icon: Home },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "inbox", label: "Inbox", icon: Inbox },
   { id: "integrations", label: "Connect", icon: Plug },
