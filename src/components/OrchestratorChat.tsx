@@ -243,6 +243,35 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
     handleSend(action.prompt);
   };
 
+  const handleRegenerate = useCallback(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        const userMsg = messages[i].content;
+        setMessages((prev) => {
+          const lastIdx = prev.length - 1;
+          return prev[lastIdx]?.role === "assistant" ? prev.slice(0, lastIdx) : prev;
+        });
+        setTimeout(() => handleSend(userMsg), 50);
+        break;
+      }
+    }
+  }, [messages, handleSend]);
+
+  const handleEditResend = useCallback(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        setInput(messages[i].content);
+        setMessages((prev) => {
+          const lastIdx = prev.length - 1;
+          const endIdx = prev[lastIdx]?.role === "assistant" ? i : i;
+          return prev.slice(0, endIdx);
+        });
+        inputRef.current?.focus();
+        break;
+      }
+    }
+  }, [messages]);
+
   return (
     <div className="h-full flex flex-col max-w-3xl mx-auto w-full">
       {/* Messages area */}
@@ -262,6 +291,8 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
             isLoading={isLoading}
             messagesEndRef={messagesEndRef}
             onSend={handleSend}
+            onRegenerate={handleRegenerate}
+            onEditResend={handleEditResend}
           />
         )}
       </div>
