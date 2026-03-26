@@ -227,6 +227,14 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
     }
   };
 
+  // Expose send function for external triggers (e.g. notifications)
+  useEffect(() => {
+    if (onSendMessageRef) {
+      onSendMessageRef.current = (msg: string) => handleSend(msg);
+    }
+  });
+
+
   const handleQuickAction = (action: QuickAction) => {
     handleSend(action.prompt);
   };
