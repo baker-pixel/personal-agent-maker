@@ -48,6 +48,9 @@ export const ApprovalInbox = () => {
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<Tab>("pending");
   const [hasFetchedHistory, setHasFetchedHistory] = useState(false);
+  const [sentEmails, setSentEmails] = useState<GmailSentEmail[]>([]);
+  const [loadingSentEmails, setLoadingSentEmails] = useState(false);
+  const [hasFetchedSent, setHasFetchedSent] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
