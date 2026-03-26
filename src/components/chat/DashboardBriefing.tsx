@@ -171,12 +171,20 @@ export const DashboardBriefing = ({ onAskAssistant }: { onAskAssistant: (prompt:
               )}
             </div>
           </div>
-          <button
-            onClick={() => onAskAssistant("Triage my inbox. Categorize recent emails as Urgent, Needs Reply, FYI, or Newsletter. Draft responses for anything that needs attention.")}
-            className="text-[11px] font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent/5"
-          >
-            Triage all <ArrowUpRight className="w-3 h-3" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onAskAssistant("Auto-draft replies for all my emails that need a response. Generate context-aware, professional drafts I can review and approve.")}
+              className="text-[11px] font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent/5"
+            >
+              Draft all <ArrowUpRight className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => onAskAssistant("Triage my inbox. Categorize recent emails as Urgent, Needs Reply, FYI, or Newsletter. Draft responses for anything that needs attention.")}
+              className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/30"
+            >
+              Triage <ArrowUpRight className="w-3 h-3" />
+            </button>
+          </div>
         </div>
 
         <div className="px-4 pb-4">
