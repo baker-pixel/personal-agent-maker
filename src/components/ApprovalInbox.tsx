@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { useAgent } from "@/contexts/AgentContext";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useDraftActions, type DraftAction } from "@/hooks/useDraftActions";
