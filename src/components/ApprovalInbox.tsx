@@ -55,12 +55,34 @@ export const ApprovalInbox = () => {
 
   const gmailConnected = isConnected("gmail");
 
+  const fetchSentEmails = useCallback(async () => {
+    setLoadingSentEmails(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-fetch?q=${encodeURIComponent("is:sent")}&maxResults=20`,
+        { headers: { Authorization: `Bearer ${session.access_token}` } }
+      );
+      const result = await res.json();
+      if (result.emails) setSentEmails(result.emails);
+    } catch (e) {
+      console.error("Failed to fetch sent emails", e);
+    } finally {
+      setLoadingSentEmails(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (tab === "history" && !hasFetchedHistory) {
       fetchSentDrafts();
       setHasFetchedHistory(true);
     }
-  }, [tab, hasFetchedHistory, fetchSentDrafts]);
+    if (tab === "sent" && !hasFetchedSent) {
+      fetchSentEmails();
+      setHasFetchedSent(true);
+    }
+  }, [tab, hasFetchedHistory, fetchSentDrafts, hasFetchedSent, fetchSentEmails]);
 
   const handleApprove = async (id: string) => {
     setProcessingIds((prev) => new Set(prev).add(id));
