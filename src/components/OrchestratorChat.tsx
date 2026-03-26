@@ -140,7 +140,7 @@ export const OrchestratorChat = () => {
   return (
     <div className="h-full flex flex-col max-w-3xl mx-auto w-full">
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-1 md:px-4">
+      <div className="flex-1 overflow-y-auto min-h-0 px-3 md:px-6">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full py-8">
             <ChatHero agentName={agentName} />

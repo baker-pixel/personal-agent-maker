@@ -12,15 +12,17 @@ const getGreeting = () => {
 };
 
 export const ChatHero = ({ agentName }: ChatHeroProps) => (
-  <div className="mb-8 text-center">
-    <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
+  <div className="mb-10 text-center">
+    <div className="w-16 h-16 rounded-2xl bg-primary/8 ring-1 ring-primary/10 flex items-center justify-center mx-auto mb-6">
       <Sparkles className="w-7 h-7 text-primary" />
     </div>
-    <h1 className="font-display text-2xl md:text-3xl text-foreground mb-1.5">
+    <h1 className="font-display text-3xl md:text-4xl text-foreground mb-3 tracking-tight">
       {getGreeting()}
     </h1>
-    <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-      I'm {agentName} — your executive assistant. Ask me anything or pick a quick action below.
+    <p className="text-base text-muted-foreground max-w-md mx-auto leading-relaxed">
+      I'm {agentName} — your executive assistant.
+      <br />
+      <span className="text-muted-foreground/70">Ask me anything or pick a quick action below.</span>
     </p>
   </div>
 );
