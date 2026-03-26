@@ -60,6 +60,39 @@ function stripNextSteps(content: string): string {
   return content.replace(/\n*\*{0,2}Next\s*Steps:?\*{0,2}\s*\n((?:\s*[-*•]\s+.+\n?)+)/i, "").trim();
 }
 
+interface YesNoQuestion {
+  question: string;
+  yesPrompt: string;
+}
+
+function extractYesNoQuestions(content: string): YesNoQuestion[] {
+  const questions: YesNoQuestion[] = [];
+  // Match "Would you like me to..." or "Shall I..." or "Do you want me to..." questions
+  const patterns = [
+    /(?:^|\n)\s*((?:Would you like me to|Shall I|Do you want me to|Should I|Want me to)[^?]*\??)/gim,
+  ];
+  for (const regex of patterns) {
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+      const q = match[1].replace(/\*\*/g, "").trim();
+      // Don't extract if it's inside a bullet list (those become next steps)
+      if (q) {
+        questions.push({
+          question: q,
+          yesPrompt: `Yes, ${q.replace(/^(Would you like me to|Shall I|Do you want me to|Should I|Want me to)\s*/i, "").replace(/\?$/, "").trim()}`,
+        });
+      }
+    }
+  }
+  return questions;
+}
+
+function stripYesNoQuestions(content: string): string {
+  return content
+    .replace(/(?:^|\n)\s*(?:Would you like me to|Shall I|Do you want me to|Should I|Want me to)[^?]*\??/gim, "")
+    .trim();
+}
+
 interface FollowUpAction {
   label: string;
   prompt: string;
