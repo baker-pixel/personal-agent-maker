@@ -1,8 +1,9 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { OrchestratorChat } from "@/components/OrchestratorChat";
 import { AgentSettings } from "@/components/AgentSettings";
 import { IntegrationsSetup } from "@/components/IntegrationsSetup";
 import { ApprovalInbox } from "@/components/ApprovalInbox";
+import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useConversations } from "@/hooks/useConversations";
