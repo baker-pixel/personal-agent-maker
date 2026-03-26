@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Loader2,
   Sparkles,
+  Send,
 } from "lucide-react";
 
 interface Attendee {
