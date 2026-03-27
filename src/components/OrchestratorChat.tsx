@@ -70,12 +70,23 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const tts = useTextToSpeech();
+  const pendingSendRef = useRef(false);
+
   const handleVoiceResult = useCallback((text: string) => {
     setInput((prev) => (prev ? prev + " " + text : text));
-    inputRef.current?.focus();
+    pendingSendRef.current = true;
   }, []);
 
   const { isListening, isSupported: voiceSupported, startListening, stopListening } = useVoiceInput(handleVoiceResult);
+
+  // Auto-send after voice input completes
+  useEffect(() => {
+    if (!isListening && pendingSendRef.current && input.trim()) {
+      pendingSendRef.current = false;
+      handleSend();
+    }
+  }, [isListening]);
 
   const uploadAttachments = async (files: Attachment[]): Promise<any[]> => {
     const { data: { session } } = await supabase.auth.getSession();
