@@ -255,9 +255,10 @@ const ArticleCard = ({ article }: { article: NewsArticle }) => {
   };
 
   return (
-    <Wrapper
-      {...(safeUrl ? { type: "button" as const, onClick: openArticle } : {})}
-      className={`glass-card rounded-xl p-4 hover:bg-muted/20 transition-all w-full text-left ${safeUrl ? "cursor-pointer" : ""}`}
+    <button
+      type="button"
+      onClick={openArticle}
+      className="glass-card rounded-xl p-4 hover:bg-muted/20 transition-all w-full text-left cursor-pointer"
     >
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
@@ -273,11 +274,9 @@ const ArticleCard = ({ article }: { article: NewsArticle }) => {
           <p className="text-xs text-muted-foreground mt-1">{article.summary}</p>
           <p className="text-[10px] text-muted-foreground/60 mt-2">{article.source}</p>
         </div>
-        {safeUrl && (
-          <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
-        )}
+        <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
       </div>
-    </Wrapper>
+    </button>
   );
 };
 
