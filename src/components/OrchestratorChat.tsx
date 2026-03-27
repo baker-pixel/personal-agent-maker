@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, Loader2, Mic, MicOff, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck, Shield } from "lucide-react";
+import { Send, Loader2, Mic, MicOff, Volume2, VolumeX, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck, Shield } from "lucide-react";
 import { ChatMessages } from "./chat/ChatMessages";
 import { ChatHero } from "./chat/ChatHero";
 import { QuickActionGrid } from "./chat/QuickActionGrid";
@@ -9,6 +9,7 @@ import { QuickActionPills } from "./chat/QuickActionPills";
 import { DashboardBriefing } from "./chat/DashboardBriefing";
 import { FileAttachmentButton, AttachmentPreview, type Attachment } from "./chat/FileAttachment";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import type { Conversation } from "@/hooks/useConversations";
 
 export type Message = { role: "user" | "assistant"; content: string; attachments?: any[] };
