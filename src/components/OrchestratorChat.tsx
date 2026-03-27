@@ -233,6 +233,9 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       await onSaveMessage(currentConvId, { role: "assistant", content: assistantSoFar });
     }
 
+    // Speak response aloud if TTS enabled
+    if (assistantSoFar) tts.speak(assistantSoFar);
+
     setIsLoading(false);
   };
 
