@@ -255,8 +255,13 @@ const ArticleCard = ({ article }: { article: NewsArticle }) => {
     window.open(safeUrl, "_blank", "noopener,noreferrer");
   };
 
+  const Wrapper = safeUrl ? 'button' : 'div';
+
   return (
-    <div className="glass-card rounded-xl p-4 hover:bg-muted/20 transition-all">
+    <Wrapper
+      {...(safeUrl ? { type: "button" as const, onClick: openArticle } : {})}
+      className={`glass-card rounded-xl p-4 hover:bg-muted/20 transition-all w-full text-left ${safeUrl ? "cursor-pointer" : ""}`}
+    >
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -272,17 +277,10 @@ const ArticleCard = ({ article }: { article: NewsArticle }) => {
           <p className="text-[10px] text-muted-foreground/60 mt-2">{article.source}</p>
         </div>
         {safeUrl && (
-          <button
-            type="button"
-            onClick={openArticle}
-            className="p-2 text-muted-foreground hover:text-accent transition-colors shrink-0"
-            aria-label={`Open article: ${article.title}`}
-          >
-            <ExternalLink className="w-4 h-4" />
-          </button>
+          <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
         )}
       </div>
-    </div>
+    </Wrapper>
   );
 };
 
