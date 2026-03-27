@@ -25,6 +25,7 @@ interface TriagedEmail {
   from: string;
   subject: string;
   snippet: string;
+  body?: string;
   date: string;
   isUnread: boolean;
   category: string;
@@ -113,6 +114,31 @@ const EmailCard = ({ email, showDraft }: { email: TriagedEmail; showDraft: boole
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-border/50 pt-3 space-y-3">
+          {/* Original Email */}
+          <div className="rounded-lg bg-muted/30 border border-border/30 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Mail className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Original Email
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-baseline gap-2">
+                <span className="text-[10px] font-medium text-muted-foreground/60 uppercase w-10 shrink-0">From</span>
+                <span className="text-xs text-foreground">{fromName}</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-[10px] font-medium text-muted-foreground/60 uppercase w-10 shrink-0">Subj</span>
+                <span className="text-xs font-medium text-foreground">{email.subject}</span>
+              </div>
+              <div className="border-t border-border/20 pt-2 mt-2">
+                <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                  {email.body || email.snippet}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* AI Reason */}
           <div className="flex items-start gap-2">
             <Sparkles className="w-3.5 h-3.5 text-accent mt-0.5 shrink-0" />
