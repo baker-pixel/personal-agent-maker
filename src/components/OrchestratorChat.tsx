@@ -299,7 +299,7 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
 
       {/* Quick action pills when in conversation */}
       {messages.length > 0 && !isLoading && (
-        <QuickActionPills actions={quickActions.slice(0, 4)} onAction={handleQuickAction} />
+        <QuickActionPills actions={quickActions.slice(0, 6)} onAction={handleQuickAction} />
       )}
 
       {/* Input bar */}
