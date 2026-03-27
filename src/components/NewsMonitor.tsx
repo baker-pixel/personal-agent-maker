@@ -274,16 +274,19 @@ const ArticleCard = ({ article }: { article: NewsArticle }) => {
     return <div className="glass-card rounded-xl p-4 hover:bg-muted/20 transition-all">{cardContent}</div>;
   }
 
+  const openArticle = () => {
+    window.open(safeUrl, "_blank", "noopener,noreferrer");
+  };
+
   return (
-    <a
-      href={safeUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="block glass-card rounded-xl p-4 hover:bg-muted/20 transition-all cursor-pointer"
+    <button
+      type="button"
+      onClick={openArticle}
+      className="w-full text-left glass-card rounded-xl p-4 hover:bg-muted/20 transition-all cursor-pointer"
       aria-label={`Open article: ${article.title}`}
     >
       {cardContent}
-    </a>
+    </button>
   );
 };
 
