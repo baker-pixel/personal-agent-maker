@@ -7,7 +7,7 @@ export interface Integration {
   description: string;
   icon: string;
   connected: boolean;
-  accountLabel?: string;
+  connectedAccounts: string[];
   capabilities: string[];
   setupSteps: string[];
 }
@@ -16,6 +16,7 @@ interface IntegrationsContextType {
   integrations: Integration[];
   toggleConnection: (id: string) => void;
   isConnected: (id: string) => boolean;
+  refreshConnections: () => Promise<void>;
 }
 
 const defaultIntegrations: Integration[] = [
@@ -25,6 +26,7 @@ const defaultIntegrations: Integration[] = [
     description: "Read, categorize, and draft email replies. Triage your inbox automatically.",
     icon: "mail",
     connected: false,
+    connectedAccounts: [],
     capabilities: [
       "Read and categorize incoming emails",
       "Draft replies for your approval",
@@ -45,6 +47,7 @@ const defaultIntegrations: Integration[] = [
     description: "Manage scheduling, detect conflicts, and optimize your calendar.",
     icon: "calendar",
     connected: false,
+    connectedAccounts: [],
     capabilities: [
       "Detect and resolve scheduling conflicts",
       "Suggest optimal meeting times",
@@ -65,6 +68,7 @@ const defaultIntegrations: Integration[] = [
     description: "Full email and calendar management through Microsoft 365.",
     icon: "mail",
     connected: false,
+    connectedAccounts: [],
     capabilities: [
       "Email triage and draft responses",
       "Calendar conflict resolution",
@@ -84,6 +88,7 @@ const defaultIntegrations: Integration[] = [
     description: "Monitor channels, surface action items, and draft responses.",
     icon: "message",
     connected: false,
+    connectedAccounts: [],
     capabilities: [
       "Surface messages that need your response",
       "Summarize channel activity",
@@ -102,6 +107,7 @@ const IntegrationsContext = createContext<IntegrationsContextType>({
   integrations: defaultIntegrations,
   toggleConnection: () => {},
   isConnected: () => false,
+  refreshConnections: async () => {},
 });
 
 export const useIntegrations = () => useContext(IntegrationsContext);
@@ -109,29 +115,39 @@ export const useIntegrations = () => useContext(IntegrationsContext);
 export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [integrations, setIntegrations] = useState<Integration[]>(defaultIntegrations);
 
-  // Fetch connected integrations from the database on mount
-  useEffect(() => {
-    const fetchConnected = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+  const fetchConnected = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
 
-      const { data: tokens } = await supabase
-        .from("google_oauth_tokens")
-        .select("provider, email");
+    const { data: tokens } = await supabase
+      .from("google_oauth_tokens")
+      .select("provider, email");
 
-      if (tokens && tokens.length > 0) {
-        const tokenMap = new Map(tokens.map((t) => [t.provider, t.email]));
-        setIntegrations((prev) =>
-          prev.map((i) => ({
-            ...i,
-            connected: tokenMap.has(i.id) || i.connected,
-            accountLabel: tokenMap.get(i.id) ?? i.accountLabel,
-          }))
-        );
+    if (tokens && tokens.length > 0) {
+      // Group emails by provider
+      const providerEmails = new Map<string, string[]>();
+      for (const t of tokens) {
+        const emails = providerEmails.get(t.provider) || [];
+        if (t.email && !emails.includes(t.email)) emails.push(t.email);
+        providerEmails.set(t.provider, emails);
       }
-    };
-    fetchConnected();
+
+      setIntegrations((prev) =>
+        prev.map((i) => {
+          const emails = providerEmails.get(i.id) || [];
+          return {
+            ...i,
+            connected: emails.length > 0 || i.connected,
+            connectedAccounts: emails.length > 0 ? emails : i.connectedAccounts,
+          };
+        })
+      );
+    }
   }, []);
+
+  useEffect(() => {
+    fetchConnected();
+  }, [fetchConnected]);
 
   const toggleConnection = useCallback((id: string) => {
     setIntegrations((prev) =>
@@ -141,7 +157,7 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return {
           ...i,
           connected: nowConnected,
-          accountLabel: nowConnected ? i.accountLabel : undefined,
+          connectedAccounts: nowConnected ? i.connectedAccounts : [],
         };
       })
     );
@@ -153,7 +169,7 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   );
 
   return (
-    <IntegrationsContext.Provider value={{ integrations, toggleConnection, isConnected }}>
+    <IntegrationsContext.Provider value={{ integrations, toggleConnection, isConnected, refreshConnections: fetchConnected }}>
       {children}
     </IntegrationsContext.Provider>
   );
