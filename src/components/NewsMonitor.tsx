@@ -225,8 +225,18 @@ export const NewsMonitor = ({ onNavigateToChat }: NewsMonitorProps) => {
   );
 };
 
+const isValidExternalUrl = (url: string): boolean => {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 const ArticleCard = ({ article }: { article: NewsArticle }) => {
   const impColor = importanceColors[article.importance] || importanceColors.low;
+  const hasValidUrl = article.url && isValidExternalUrl(article.url);
   return (
     <div className="glass-card rounded-xl p-4 hover:bg-muted/20 transition-all">
       <div className="flex items-start gap-3">
@@ -243,11 +253,12 @@ const ArticleCard = ({ article }: { article: NewsArticle }) => {
           <p className="text-xs text-muted-foreground mt-1">{article.summary}</p>
           <p className="text-[10px] text-muted-foreground/60 mt-2">{article.source}</p>
         </div>
-        {article.url && (
+        {hasValidUrl && (
           <a
             href={article.url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="p-2 text-muted-foreground hover:text-accent transition-colors shrink-0"
           >
             <ExternalLink className="w-4 h-4" />
