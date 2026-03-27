@@ -225,42 +225,20 @@ export const NewsMonitor = ({ onNavigateToChat }: NewsMonitorProps) => {
   );
 };
 
-const normalizeExternalUrl = (rawUrl: string): string | null => {
-  const trimmed = rawUrl?.trim();
-  if (!trimmed) return null;
-
-  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-
-  try {
-    const parsed = new URL(withProtocol);
-    const host = parsed.hostname.toLowerCase();
-    const isHttp = parsed.protocol === "http:" || parsed.protocol === "https:";
-    const isInternalHost =
-      host.includes("lovableproject.com") ||
-      host.includes("lovable.app") ||
-      host === "localhost";
-
-    return isHttp && !isInternalHost ? parsed.toString() : null;
-  } catch {
-    return null;
-  }
-};
 
 const ArticleCard = ({ article }: { article: NewsArticle }) => {
   const impColor = importanceColors[article.importance] || importanceColors.low;
-  const safeUrl = normalizeExternalUrl(article.url);
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(article.title + " " + article.source)}`;
 
   const openArticle = () => {
-    if (!safeUrl) return;
-    window.open(safeUrl, "_blank", "noopener,noreferrer");
+    window.open(searchUrl, "_blank", "noopener,noreferrer");
   };
 
-  const Wrapper = safeUrl ? 'button' : 'div';
-
   return (
-    <Wrapper
-      {...(safeUrl ? { type: "button" as const, onClick: openArticle } : {})}
-      className={`glass-card rounded-xl p-4 hover:bg-muted/20 transition-all w-full text-left ${safeUrl ? "cursor-pointer" : ""}`}
+    <button
+      type="button"
+      onClick={openArticle}
+      className="glass-card rounded-xl p-4 hover:bg-muted/20 transition-all w-full text-left cursor-pointer"
     >
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
@@ -276,11 +254,9 @@ const ArticleCard = ({ article }: { article: NewsArticle }) => {
           <p className="text-xs text-muted-foreground mt-1">{article.summary}</p>
           <p className="text-[10px] text-muted-foreground/60 mt-2">{article.source}</p>
         </div>
-        {safeUrl && (
-          <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
-        )}
+        <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
       </div>
-    </Wrapper>
+    </button>
   );
 };
 
