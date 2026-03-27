@@ -25,6 +25,7 @@ interface TriagedEmail {
   from: string;
   subject: string;
   snippet: string;
+  body?: string;
   date: string;
   isUnread: boolean;
   category: string;
