@@ -9,6 +9,10 @@ import {
   AlertCircle,
   Tag,
   Check,
+  MessageSquare,
+  FileText,
+  Share2,
+  Bookmark,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -46,7 +50,11 @@ const importanceColors: Record<string, string> = {
   low: "bg-muted text-muted-foreground",
 };
 
-export const NewsMonitor = () => {
+interface NewsMonitorProps {
+  onNavigateToChat?: (prompt: string) => void;
+}
+
+export const NewsMonitor = ({ onNavigateToChat }: NewsMonitorProps) => {
   const { agentName } = useAgent();
   const { toast } = useToast();
   const [articles, setArticles] = useState<NewsArticle[]>([]);
@@ -187,6 +195,11 @@ export const NewsMonitor = () => {
                   <ArticleCard key={i} article={article} />
                 ))}
               </div>
+              <SectionActions
+                label="high-priority news"
+                articles={highPriority}
+                onNavigateToChat={onNavigateToChat}
+              />
             </div>
           )}
           {otherArticles.length > 0 && (
@@ -199,6 +212,11 @@ export const NewsMonitor = () => {
                   <ArticleCard key={i} article={article} />
                 ))}
               </div>
+              <SectionActions
+                label="noteworthy news"
+                articles={otherArticles}
+                onNavigateToChat={onNavigateToChat}
+              />
             </div>
           )}
         </div>
@@ -235,6 +253,64 @@ const ArticleCard = ({ article }: { article: NewsArticle }) => {
             <ExternalLink className="w-4 h-4" />
           </a>
         )}
+      </div>
+    </div>
+  );
+};
+
+const SectionActions = ({
+  label,
+  articles,
+  onNavigateToChat,
+}: {
+  label: string;
+  articles: NewsArticle[];
+  onNavigateToChat?: (prompt: string) => void;
+}) => {
+  const titles = articles.map((a) => `"${a.title}"`).join(", ");
+
+  const actions = [
+    {
+      icon: FileText,
+      text: "Summarize for me",
+      prompt: `Summarize these ${label} articles in a concise executive brief: ${titles}`,
+    },
+    {
+      icon: MessageSquare,
+      text: "Draft a memo",
+      prompt: `Draft a short internal memo highlighting the key takeaways from these ${label} articles: ${titles}`,
+    },
+    {
+      icon: Share2,
+      text: "Share with my team",
+      prompt: `Draft a short Slack message or email I can send to my team summarizing these ${label} articles: ${titles}`,
+    },
+    {
+      icon: Bookmark,
+      text: "Add to my briefing",
+      prompt: `Add these ${label} articles to my morning briefing notes and highlight action items: ${titles}`,
+    },
+  ];
+
+  return (
+    <div className="mt-3 px-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+        What do you want me to do?
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {actions.map((action) => {
+          const Icon = action.icon;
+          return (
+            <button
+              key={action.text}
+              onClick={() => onNavigateToChat?.(action.prompt)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-accent/10 border border-transparent hover:border-accent/20 transition-all duration-200"
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {action.text}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
