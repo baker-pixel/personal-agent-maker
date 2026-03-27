@@ -50,7 +50,11 @@ const importanceColors: Record<string, string> = {
   low: "bg-muted text-muted-foreground",
 };
 
-export const NewsMonitor = () => {
+interface NewsMonitorProps {
+  onNavigateToChat?: (prompt: string) => void;
+}
+
+export const NewsMonitor = ({ onNavigateToChat }: NewsMonitorProps) => {
   const { agentName } = useAgent();
   const { toast } = useToast();
   const [articles, setArticles] = useState<NewsArticle[]>([]);
