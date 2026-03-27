@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { Sparkles, Mail, Calendar, Brain, Shield, Clock, ArrowRight, CheckCircle2, Star, Zap, Users, BarChart3 } from "lucide-react";
+import { Mail, Calendar, Brain, Shield, Clock, ArrowRight, CheckCircle2, Star, Zap, Users, BarChart3 } from "lucide-react";
+import normyLogo from "@/assets/normy-logo.png";
 
 const features = [
   {
