@@ -1,4 +1,5 @@
-import { Mail, Calendar, MessageSquare, Sparkles, ArrowRight } from "lucide-react";
+import { Mail, Calendar, MessageSquare, ArrowRight } from "lucide-react";
+import normyLogo from "@/assets/normy-logo.png";
 
 interface Props {
   onNext: () => void;
