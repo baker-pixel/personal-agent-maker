@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { Bell, X, Clock, AlertTriangle, Mail, Calendar, CheckCircle2, ChevronRight } from "lucide-react";
+import { Bell, X, Clock, AlertTriangle, Mail, Calendar, CheckCircle2, ChevronRight, Sparkles, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Notification {
   id: string;
-  type: "urgent" | "follow_up" | "meeting" | "deadline" | "info";
+  type: "urgent" | "follow_up" | "meeting" | "deadline" | "info" | "briefing";
   title: string;
   body: string;
   timestamp: Date;
@@ -23,11 +23,57 @@ const typeConfig = {
   meeting: { icon: Calendar, color: "text-info", bg: "bg-info/8", ring: "ring-info/15" },
   deadline: { icon: Clock, color: "text-warning", bg: "bg-warning/8", ring: "ring-warning/15" },
   info: { icon: CheckCircle2, color: "text-success", bg: "bg-success/8", ring: "ring-success/15" },
+  briefing: { icon: Sparkles, color: "text-accent", bg: "bg-accent/10", ring: "ring-accent/20" },
 };
 
 export const NotificationCenter = ({ onSendMessage }: NotificationCenterProps) => {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loadingBriefing, setLoadingBriefing] = useState(false);
+
+  // Fetch AI-generated daily briefing
+  const fetchDailyBriefing = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const today = new Date().toISOString().split("T")[0];
+      const briefingId = `daily-briefing-${today}`;
+      const dismissed = JSON.parse(localStorage.getItem("normy_dismissed_alerts") || "[]");
+      if (dismissed.includes(briefingId)) return;
+
+      setLoadingBriefing(true);
+
+      const { data, error } = await supabase.functions.invoke("daily-briefing", {});
+
+      if (error || data?.error) {
+        console.error("Briefing error:", error || data?.error);
+        setLoadingBriefing(false);
+        return;
+      }
+
+      const briefingNotif: Notification = {
+        id: briefingId,
+        type: "briefing",
+        title: "☀️ Your daily briefing",
+        body: data.summary,
+        timestamp: new Date(),
+        read: false,
+        actionLabel: "Open full briefing",
+        onAction: () => onSendMessage?.("Give me my morning briefing. Summarize what I need to know today — key emails, meetings, follow-ups, and priorities."),
+      };
+
+      setNotifications((prev) => {
+        if (prev.some((n) => n.id === briefingId)) return prev;
+        return [briefingNotif, ...prev];
+      });
+
+      setLoadingBriefing(false);
+    } catch (e) {
+      console.error("Failed to fetch briefing:", e);
+      setLoadingBriefing(false);
+    }
+  }, [onSendMessage]);
 
   const generateProactiveAlerts = useCallback(async () => {
     try {
@@ -38,21 +84,6 @@ export const NotificationCenter = ({ onSendMessage }: NotificationCenterProps) =
       const now = new Date();
       const hour = now.getHours();
 
-      // Morning briefing nudge (7-9am)
-      if (hour >= 7 && hour < 9) {
-        alerts.push({
-          id: `briefing-${now.toDateString()}`,
-          type: "info",
-          title: "Morning briefing ready",
-          body: "Your daily agenda and priority emails are waiting.",
-          timestamp: now,
-          read: false,
-          actionLabel: "View briefing",
-          onAction: () => onSendMessage?.("Give me my morning briefing"),
-        });
-      }
-
-      // Meeting prep reminder (check if meetings within 30 min)
       if (hour >= 8 && hour < 18) {
         alerts.push({
           id: `prep-${now.getHours()}`,
@@ -66,7 +97,6 @@ export const NotificationCenter = ({ onSendMessage }: NotificationCenterProps) =
         });
       }
 
-      // Follow-up check (afternoon)
       if (hour >= 13 && hour < 16) {
         alerts.push({
           id: `followup-${now.toDateString()}`,
@@ -80,7 +110,6 @@ export const NotificationCenter = ({ onSendMessage }: NotificationCenterProps) =
         });
       }
 
-      // End of day wrap-up (5-7pm)
       if (hour >= 17 && hour < 19) {
         alerts.push({
           id: `wrapup-${now.toDateString()}`,
@@ -94,12 +123,11 @@ export const NotificationCenter = ({ onSendMessage }: NotificationCenterProps) =
         });
       }
 
-      // Only add alerts not already dismissed
       const dismissed = JSON.parse(localStorage.getItem("normy_dismissed_alerts") || "[]");
-      const fresh = alerts.filter(a => !dismissed.includes(a.id));
-      setNotifications(prev => {
-        const existingIds = new Set(prev.map(p => p.id));
-        const newAlerts = fresh.filter(a => !existingIds.has(a.id));
+      const fresh = alerts.filter((a) => !dismissed.includes(a.id));
+      setNotifications((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id));
+        const newAlerts = fresh.filter((a) => !existingIds.has(a.id));
         return [...prev, ...newAlerts];
       });
     } catch (e) {
@@ -108,15 +136,16 @@ export const NotificationCenter = ({ onSendMessage }: NotificationCenterProps) =
   }, [onSendMessage]);
 
   useEffect(() => {
+    fetchDailyBriefing();
     generateProactiveAlerts();
-    const interval = setInterval(generateProactiveAlerts, 15 * 60 * 1000); // every 15 min
+    const interval = setInterval(generateProactiveAlerts, 15 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [generateProactiveAlerts]);
+  }, [fetchDailyBriefing, generateProactiveAlerts]);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const dismiss = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
     const dismissed = JSON.parse(localStorage.getItem("normy_dismissed_alerts") || "[]");
     localStorage.setItem("normy_dismissed_alerts", JSON.stringify([...dismissed, id]));
   };
@@ -151,33 +180,42 @@ export const NotificationCenter = ({ onSendMessage }: NotificationCenterProps) =
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-12 z-50 w-[360px] bg-card border border-border/50 rounded-2xl shadow-elevated overflow-hidden animate-scale-in">
+          <div className="absolute right-0 top-12 z-50 w-[380px] bg-card border border-border/50 rounded-2xl shadow-elevated overflow-hidden animate-scale-in">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border/30">
               <h3 className="font-display text-sm text-foreground">Notifications</h3>
+              {loadingBriefing && <Loader2 className="w-3.5 h-3.5 animate-spin text-accent/50" />}
               <button onClick={() => setOpen(false)} className="p-1 rounded-lg text-muted-foreground/50 hover:text-foreground transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="max-h-80 overflow-y-auto scrollbar-thin">
+            <div className="max-h-96 overflow-y-auto scrollbar-thin">
               {notifications.length === 0 ? (
                 <div className="py-12 text-center text-sm text-muted-foreground/60">
                   You're all caught up ✨
                 </div>
               ) : (
-                notifications.map(n => {
+                notifications.map((n) => {
                   const cfg = typeConfig[n.type];
                   const Icon = cfg.icon;
+                  const isBriefing = n.type === "briefing";
                   return (
-                    <div key={n.id} className="flex gap-3 px-5 py-4 border-b border-border/20 last:border-0 hover:bg-muted/30 transition-colors">
+                    <div
+                      key={n.id}
+                      className={`flex gap-3 px-5 py-4 border-b border-border/20 last:border-0 transition-colors ${
+                        isBriefing ? "bg-accent/[0.03] hover:bg-accent/[0.06]" : "hover:bg-muted/30"
+                      }`}
+                    >
                       <div className={`w-8 h-8 rounded-lg ${cfg.bg} ring-1 ${cfg.ring} flex items-center justify-center flex-shrink-0 mt-0.5`}>
                         <Icon className={`w-4 h-4 ${cfg.color}`} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-foreground">{n.title}</p>
+                          <p className={`text-sm font-medium text-foreground ${isBriefing ? "font-semibold" : ""}`}>{n.title}</p>
                           <span className="text-[10px] text-muted-foreground/50 flex-shrink-0">{formatTime(n.timestamp)}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{n.body}</p>
+                        <p className={`text-xs mt-0.5 leading-relaxed ${isBriefing ? "text-foreground/80" : "text-muted-foreground"}`}>
+                          {n.body}
+                        </p>
                         {n.actionLabel && (
                           <button
                             onClick={() => handleAction(n)}
