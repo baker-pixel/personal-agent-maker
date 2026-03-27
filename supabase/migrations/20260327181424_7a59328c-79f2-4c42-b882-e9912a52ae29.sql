@@ -1,0 +1,1 @@
+ALTER TABLE public.google_oauth_tokens ADD CONSTRAINT google_oauth_tokens_user_id_email_provider_key UNIQUE (user_id, email, provider);

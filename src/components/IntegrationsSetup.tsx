@@ -13,6 +13,7 @@ import {
   Shield,
   Zap,
   LogOut,
+  Plus,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -63,7 +64,22 @@ export const IntegrationsSetup = () => {
     setConnectingId(null);
   };
 
-  const handleDisconnect = (id: string) => {
+  const handleDisconnect = async (id: string, email?: string) => {
+    if (GOOGLE_PROVIDERS.includes(id) && email) {
+      const { error } = await supabase
+        .from("google_oauth_tokens")
+        .delete()
+        .eq("provider", id)
+        .eq("email", email);
+
+      if (error) {
+        toast({ title: "Error", description: "Failed to disconnect account", variant: "destructive" });
+        return;
+      }
+      // Refresh state
+      window.location.reload();
+      return;
+    }
     toggleConnection(id);
   };
 
@@ -113,7 +129,7 @@ export const IntegrationsSetup = () => {
           <Mail className="w-4 h-4 text-accent" />
         </div>
         <p className="text-sm text-muted-foreground">
-          Make sure you're signed into your Google account in this browser before clicking Connect.
+          You can connect multiple Google accounts. Each one will be monitored separately.
         </p>
       </div>
 
@@ -146,6 +162,7 @@ export const IntegrationsSetup = () => {
           const Icon = iconMap[integration.icon] || Mail;
           const isExpanded = expandedId === integration.id;
           const isConnecting = connectingId === integration.id;
+          const accounts = integration.connectedAccounts;
 
           return (
             <div
@@ -169,13 +186,15 @@ export const IntegrationsSetup = () => {
                     <h3 className="font-semibold text-foreground">{integration.name}</h3>
                     {integration.connected && (
                       <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-success/10 text-success">
-                        Connected
+                        {accounts.length} connected
                       </span>
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground truncate">{integration.description}</p>
-                  {integration.connected && integration.accountLabel && (
-                    <p className="text-xs text-success mt-0.5">{integration.accountLabel}</p>
+                  {accounts.length > 0 && (
+                    <p className="text-xs text-success mt-0.5 truncate">
+                      {accounts.join(", ")}
+                    </p>
                   )}
                 </div>
                 <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
@@ -183,6 +202,32 @@ export const IntegrationsSetup = () => {
 
               {isExpanded && (
                 <div className="px-5 pb-5 border-t border-border/50">
+                  {/* Connected accounts list */}
+                  {accounts.length > 0 && (
+                    <div className="mt-4 mb-4">
+                      <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 tracking-wider">
+                        Connected accounts
+                      </h4>
+                      <div className="space-y-2">
+                        {accounts.map((email) => (
+                          <div key={email} className="flex items-center justify-between gap-2 bg-muted/30 rounded-xl px-4 py-2.5">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Check className="w-3.5 h-3.5 text-success shrink-0" />
+                              <span className="text-sm text-foreground truncate">{email}</span>
+                            </div>
+                            <button
+                              onClick={() => handleDisconnect(integration.id, email)}
+                              className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0 flex items-center gap-1"
+                            >
+                              <Unplug className="w-3 h-3" />
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid gap-6 md:grid-cols-2 mt-4">
                     <div>
                       <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-3 tracking-wider">
@@ -215,33 +260,23 @@ export const IntegrationsSetup = () => {
                   </div>
 
                   <div className="flex gap-2 mt-5">
-                    {integration.connected ? (
-                      <button
-                        onClick={() => handleDisconnect(integration.id)}
-                        className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-muted text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      >
-                        <Unplug className="w-4 h-4" />
-                        Disconnect
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleConnect(integration.id)}
-                        disabled={isConnecting}
-                        className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-60"
-                      >
-                        {isConnecting ? (
-                          <>
-                            <span className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
-                            Connecting...
-                          </>
-                        ) : (
-                          <>
-                            <ExternalLink className="w-4 h-4" />
-                            Connect {integration.name}
-                          </>
-                        )}
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleConnect(integration.id)}
+                      disabled={isConnecting}
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-60"
+                    >
+                      {isConnecting ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
+                          Connecting...
+                        </>
+                      ) : (
+                        <>
+                          {integration.connected ? <Plus className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
+                          {integration.connected ? "Add another account" : `Connect ${integration.name}`}
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               )}
