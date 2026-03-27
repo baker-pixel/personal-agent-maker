@@ -341,6 +341,22 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
               </button>
             )}
+            {tts.isSupported && (
+              <button
+                onClick={tts.isSpeaking ? tts.stop : tts.toggle}
+                className={`shrink-0 p-2.5 rounded-xl transition-all duration-200 ${
+                  tts.isSpeaking
+                    ? "text-accent bg-accent/10 animate-pulse"
+                    : tts.enabled
+                      ? "text-accent/70 hover:text-accent hover:bg-accent/10"
+                      : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/40"
+                }`}
+                title={tts.isSpeaking ? "Stop speaking" : tts.enabled ? "Voice responses on" : "Voice responses off"}
+                type="button"
+              >
+                {tts.enabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              </button>
+            )}
             <textarea
               ref={inputRef}
               value={input}
