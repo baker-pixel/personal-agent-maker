@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, Loader2, Mic, MicOff, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck, Shield } from "lucide-react";
+import { Send, Loader2, Mic, MicOff, Volume2, VolumeX, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck, Shield } from "lucide-react";
 import { ChatMessages } from "./chat/ChatMessages";
 import { ChatHero } from "./chat/ChatHero";
 import { QuickActionGrid } from "./chat/QuickActionGrid";
@@ -9,6 +9,7 @@ import { QuickActionPills } from "./chat/QuickActionPills";
 import { DashboardBriefing } from "./chat/DashboardBriefing";
 import { FileAttachmentButton, AttachmentPreview, type Attachment } from "./chat/FileAttachment";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import type { Conversation } from "@/hooks/useConversations";
 
 export type Message = { role: "user" | "assistant"; content: string; attachments?: any[] };
@@ -69,12 +70,23 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const tts = useTextToSpeech();
+  const pendingSendRef = useRef(false);
+
   const handleVoiceResult = useCallback((text: string) => {
     setInput((prev) => (prev ? prev + " " + text : text));
-    inputRef.current?.focus();
+    pendingSendRef.current = true;
   }, []);
 
   const { isListening, isSupported: voiceSupported, startListening, stopListening } = useVoiceInput(handleVoiceResult);
+
+  // Auto-send after voice input completes
+  useEffect(() => {
+    if (!isListening && pendingSendRef.current && input.trim()) {
+      pendingSendRef.current = false;
+      handleSend();
+    }
+  }, [isListening]);
 
   const uploadAttachments = async (files: Attachment[]): Promise<any[]> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -221,6 +233,9 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       await onSaveMessage(currentConvId, { role: "assistant", content: assistantSoFar });
     }
 
+    // Speak response aloud if TTS enabled
+    if (assistantSoFar) tts.speak(assistantSoFar);
+
     setIsLoading(false);
   };
 
@@ -324,6 +339,22 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
                 type="button"
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+            )}
+            {tts.isSupported && (
+              <button
+                onClick={tts.isSpeaking ? tts.stop : tts.toggle}
+                className={`shrink-0 p-2.5 rounded-xl transition-all duration-200 ${
+                  tts.isSpeaking
+                    ? "text-accent bg-accent/10 animate-pulse"
+                    : tts.enabled
+                      ? "text-accent/70 hover:text-accent hover:bg-accent/10"
+                      : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/40"
+                }`}
+                title={tts.isSpeaking ? "Stop speaking" : tts.enabled ? "Voice responses on" : "Voice responses off"}
+                type="button"
+              >
+                {tts.enabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
               </button>
             )}
             <textarea
