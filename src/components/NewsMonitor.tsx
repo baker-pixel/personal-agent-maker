@@ -225,18 +225,36 @@ export const NewsMonitor = ({ onNavigateToChat }: NewsMonitorProps) => {
   );
 };
 
-const isValidExternalUrl = (url: string): boolean => {
+const normalizeExternalUrl = (rawUrl: string): string | null => {
+  const trimmed = rawUrl?.trim();
+  if (!trimmed) return null;
+
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
   try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    const parsed = new URL(withProtocol);
+    const host = parsed.hostname.toLowerCase();
+    const isHttp = parsed.protocol === "http:" || parsed.protocol === "https:";
+    const isInternalHost =
+      host.includes("lovableproject.com") ||
+      host.includes("lovable.app") ||
+      host === "localhost";
+
+    return isHttp && !isInternalHost ? parsed.toString() : null;
   } catch {
-    return false;
+    return null;
   }
 };
 
 const ArticleCard = ({ article }: { article: NewsArticle }) => {
   const impColor = importanceColors[article.importance] || importanceColors.low;
-  const hasValidUrl = article.url && isValidExternalUrl(article.url);
+  const safeUrl = normalizeExternalUrl(article.url);
+
+  const openArticle = () => {
+    if (!safeUrl) return;
+    window.open(safeUrl, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="glass-card rounded-xl p-4 hover:bg-muted/20 transition-all">
       <div className="flex items-start gap-3">
@@ -253,16 +271,15 @@ const ArticleCard = ({ article }: { article: NewsArticle }) => {
           <p className="text-xs text-muted-foreground mt-1">{article.summary}</p>
           <p className="text-[10px] text-muted-foreground/60 mt-2">{article.source}</p>
         </div>
-        {hasValidUrl && (
-          <a
-            href={article.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
+        {safeUrl && (
+          <button
+            type="button"
+            onClick={openArticle}
             className="p-2 text-muted-foreground hover:text-accent transition-colors shrink-0"
+            aria-label={`Open article: ${article.title}`}
           >
             <ExternalLink className="w-4 h-4" />
-          </a>
+          </button>
         )}
       </div>
     </div>

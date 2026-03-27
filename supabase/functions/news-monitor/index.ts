@@ -44,13 +44,13 @@ Deno.serve(async (req) => {
 
     const prompt = `You are a news research assistant. Search for and summarize the most important and recent news from the past 24 hours on these topics: ${topicList}.
 
-Return a JSON object with a "articles" array. Each article should have:
+Return a JSON object with an "articles" array. Each article should have:
 - "title": headline
 - "summary": 2-3 sentence summary
 - "source": publication name
 - "topic": which topic it relates to
 - "importance": "high", "medium", or "low"
-- "url": a plausible URL (use real publication domains)
+- "url": a real, absolute URL starting with https:// (never relative, never missing protocol)
 
 Return 8-12 articles, prioritized by importance. Focus on actionable business intelligence.`;
 
