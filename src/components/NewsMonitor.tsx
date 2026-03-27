@@ -225,26 +225,6 @@ export const NewsMonitor = ({ onNavigateToChat }: NewsMonitorProps) => {
   );
 };
 
-const normalizeExternalUrl = (rawUrl: string): string | null => {
-  const trimmed = rawUrl?.trim();
-  if (!trimmed) return null;
-
-  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-
-  try {
-    const parsed = new URL(withProtocol);
-    const host = parsed.hostname.toLowerCase();
-    const isHttp = parsed.protocol === "http:" || parsed.protocol === "https:";
-    const isInternalHost =
-      host.includes("lovableproject.com") ||
-      host.includes("lovable.app") ||
-      host === "localhost";
-
-    return isHttp && !isInternalHost ? parsed.toString() : null;
-  } catch {
-    return null;
-  }
-};
 
 const ArticleCard = ({ article }: { article: NewsArticle }) => {
   const impColor = importanceColors[article.importance] || importanceColors.low;
