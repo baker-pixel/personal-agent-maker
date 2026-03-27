@@ -195,6 +195,11 @@ export const NewsMonitor = ({ onNavigateToChat }: NewsMonitorProps) => {
                   <ArticleCard key={i} article={article} />
                 ))}
               </div>
+              <SectionActions
+                label="high-priority news"
+                articles={highPriority}
+                onNavigateToChat={onNavigateToChat}
+              />
             </div>
           )}
           {otherArticles.length > 0 && (
@@ -207,6 +212,11 @@ export const NewsMonitor = ({ onNavigateToChat }: NewsMonitorProps) => {
                   <ArticleCard key={i} article={article} />
                 ))}
               </div>
+              <SectionActions
+                label="noteworthy news"
+                articles={otherArticles}
+                onNavigateToChat={onNavigateToChat}
+              />
             </div>
           )}
         </div>
