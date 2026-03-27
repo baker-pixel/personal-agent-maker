@@ -336,9 +336,7 @@ const Landing = () => {
           <div className="relative">
             <div className="absolute inset-0 -m-12 rounded-3xl bg-accent/[0.04] blur-2xl pointer-events-none" />
             <div className="relative glass-card rounded-3xl p-12 md:p-16">
-              <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-7 ring-1 ring-accent/20 animate-glow-pulse">
-                <Sparkles className="w-6 h-6 text-accent" />
-              </div>
+              <img src={normyLogo} alt="Normy" className="h-12 w-auto mx-auto mb-7" />
               <h2 className="font-display text-3xl md:text-5xl tracking-tight mb-4">
                 Ready to reclaim your day?
               </h2>
