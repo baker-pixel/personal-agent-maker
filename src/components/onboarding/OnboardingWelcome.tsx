@@ -8,10 +8,8 @@ interface Props {
 
 export const OnboardingWelcome = ({ onNext, onSkip }: Props) => (
   <>
-    <div className="flex justify-center mb-6">
-      <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center ring-1 ring-accent/20 animate-fade-up">
-        <Sparkles className="w-7 h-7 text-accent" />
-      </div>
+    <div className="flex justify-center mb-6 animate-fade-up">
+      <img src={normyLogo} alt="Normy" className="h-14 w-auto" />
     </div>
 
     <div className="text-center mb-10 animate-fade-up" style={{ animationDelay: "0.1s" }}>

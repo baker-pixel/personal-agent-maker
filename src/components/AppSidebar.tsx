@@ -55,13 +55,7 @@ export const AppSidebar = ({ currentView, onNavigate }: AppSidebarProps) => {
       {/* Logo */}
       <div className="p-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sidebar-primary flex items-center justify-center">
-            <Zap className="w-5 h-5 text-sidebar-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="font-display text-lg text-sidebar-foreground">{agentName}</h1>
-            <p className="text-xs text-sidebar-foreground/60">Executive Assistant</p>
-          </div>
+          <img src={normyLogo} alt="Normy" className="h-9 w-auto" />
         </div>
       </div>
 

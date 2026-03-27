@@ -72,10 +72,7 @@ const Landing = () => {
       <nav className="fixed top-0 inset-x-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/30">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center ring-1 ring-accent/20">
-              <Sparkles className="w-4 h-4 text-accent" />
-            </div>
-            <span className="font-display text-xl tracking-tight">Normy</span>
+            <img src={normyLogo} alt="Normy" className="h-8 w-auto" />
           </div>
           <div className="flex items-center gap-3">
             <button
