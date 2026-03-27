@@ -1,10 +1,10 @@
 import { useAgent } from "@/contexts/AgentContext";
+import normyLogo from "@/assets/normy-logo.png";
 import {
   Inbox,
   FolderKanban,
   Shield,
   Settings,
-  Zap,
   MessageSquare,
   Plug,
   Sun,
