@@ -281,7 +281,7 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
             <ChatHero agentName={agentName} />
             <DashboardBriefing onAskAssistant={handleSend} />
             <div className="pt-4">
-              <p className="text-[10px] font-semibold text-muted-foreground/30 uppercase tracking-widest text-center mb-4">Quick Actions</p>
+              <p className="text-[10px] font-semibold text-muted-foreground/30 uppercase tracking-widest text-center mb-4">Just tell me what to do</p>
               <QuickActionGrid actions={quickActions} onAction={handleQuickAction} />
             </div>
           </div>

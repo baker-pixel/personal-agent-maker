@@ -11,6 +11,14 @@ const getGreeting = () => {
   return "Good evening";
 };
 
+const getProactivePrompt = () => {
+  const h = new Date().getHours();
+  if (h < 10) return "Let me get your day started — what should I handle first?";
+  if (h < 14) return "What can I take off your plate right now?";
+  if (h < 17) return "What do you need me to handle this afternoon?";
+  return "Anything I should wrap up or prep for tomorrow?";
+};
+
 export const ChatHero = ({ agentName }: ChatHeroProps) => (
   <div className="mb-10 text-center relative">
     {/* Ambient glow */}
@@ -34,8 +42,8 @@ export const ChatHero = ({ agentName }: ChatHeroProps) => (
       <p className="text-base md:text-lg text-muted-foreground max-w-md mx-auto leading-relaxed animate-fade-up" style={{ animationDelay: '0.1s' }}>
         I'm <span className="font-semibold text-foreground">{agentName}</span> — your executive assistant.
       </p>
-      <p className="text-sm text-muted-foreground/60 mt-1.5 animate-fade-up" style={{ animationDelay: '0.2s' }}>
-        Ask me anything or pick a quick action below.
+      <p className="text-sm text-accent/80 mt-2 font-medium animate-fade-up" style={{ animationDelay: '0.2s' }}>
+        {getProactivePrompt()}
       </p>
     </div>
   </div>
