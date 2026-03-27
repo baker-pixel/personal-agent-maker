@@ -248,14 +248,11 @@ const normalizeExternalUrl = (rawUrl: string): string | null => {
 
 const ArticleCard = ({ article }: { article: NewsArticle }) => {
   const impColor = importanceColors[article.importance] || importanceColors.low;
-  const safeUrl = normalizeExternalUrl(article.url);
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(article.title + " " + article.source)}`;
 
   const openArticle = () => {
-    if (!safeUrl) return;
-    window.open(safeUrl, "_blank", "noopener,noreferrer");
+    window.open(searchUrl, "_blank", "noopener,noreferrer");
   };
-
-  const Wrapper = safeUrl ? 'button' : 'div';
 
   return (
     <Wrapper
