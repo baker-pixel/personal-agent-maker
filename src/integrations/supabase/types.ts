@@ -163,6 +163,39 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_briefings: {
+        Row: {
+          briefing_date: string
+          created_at: string
+          email_count: number | null
+          id: string
+          meeting_count: number | null
+          summary: string
+          urgent_items: number | null
+          user_id: string
+        }
+        Insert: {
+          briefing_date?: string
+          created_at?: string
+          email_count?: number | null
+          id?: string
+          meeting_count?: number | null
+          summary: string
+          urgent_items?: number | null
+          user_id: string
+        }
+        Update: {
+          briefing_date?: string
+          created_at?: string
+          email_count?: number | null
+          id?: string
+          meeting_count?: number | null
+          summary?: string
+          urgent_items?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       draft_actions: {
         Row: {
           body: string | null
