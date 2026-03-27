@@ -196,7 +196,7 @@ const Index = () => {
           )}
           {activeTab === "news" && (
             <div className="h-full overflow-y-auto py-6 px-4 md:px-6">
-              <NewsMonitor />
+              <NewsMonitor onNavigateToChat={handleNavigateToChat} />
             </div>
           )}
           {activeTab === "integrations" && (

@@ -9,6 +9,10 @@ import {
   AlertCircle,
   Tag,
   Check,
+  MessageSquare,
+  FileText,
+  Share2,
+  Bookmark,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
