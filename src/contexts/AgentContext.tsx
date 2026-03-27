@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AgentContextType {
   agentName: string;
@@ -17,9 +18,39 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return localStorage.getItem("agent-name") || "Normy Agent";
   });
 
-  const setAgentName = useCallback((name: string) => {
+  // Load from database on mount
+  useEffect(() => {
+    const loadFromDb = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("user_preferences")
+        .select("agent_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (data?.agent_name) {
+        setAgentNameState(data.agent_name);
+        localStorage.setItem("agent-name", data.agent_name);
+      }
+    };
+    loadFromDb();
+  }, []);
+
+  const setAgentName = useCallback(async (name: string) => {
     setAgentNameState(name);
     localStorage.setItem("agent-name", name);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await supabase
+      .from("user_preferences")
+      .upsert(
+        { user_id: user.id, agent_name: name, updated_at: new Date().toISOString() },
+        { onConflict: "user_id" }
+      );
   }, []);
 
   return (
