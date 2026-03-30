@@ -35,7 +35,7 @@ const Index = () => {
     return !localStorage.getItem("normy_onboarding_complete");
   });
   const sendMessageRef = useRef<(msg: string) => void>();
-  const { drafts } = useDraftActions();
+  const draftActions = useDraftActions();
   const {
     conversations,
     activeId,
