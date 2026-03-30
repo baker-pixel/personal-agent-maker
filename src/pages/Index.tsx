@@ -181,7 +181,7 @@ const Index = () => {
           )}
           {activeTab === "inbox" && (
             <div className="h-full overflow-y-auto py-6">
-              <ApprovalInbox />
+              <ApprovalInbox draftActions={draftActions} />
             </div>
           )}
           {activeTab === "tasks" && (
