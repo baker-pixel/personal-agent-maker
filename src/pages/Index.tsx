@@ -69,7 +69,7 @@ const Index = () => {
     sendMessageRef.current?.(message);
   }, []);
 
-  const pendingCount = drafts.length;
+  const pendingCount = draftActions.drafts.length;
 
   const completeOnboarding = useCallback(() => {
     localStorage.setItem("normy_onboarding_complete", "true");
