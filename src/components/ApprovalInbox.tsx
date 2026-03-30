@@ -43,10 +43,14 @@ const statusConfig: Record<string, { icon: React.ElementType; label: string; cla
   failed: { icon: AlertCircle, label: "Failed", className: "text-destructive bg-destructive/10" },
 };
 
-export const ApprovalInbox = () => {
+interface ApprovalInboxProps {
+  draftActions: ReturnType<typeof useDraftActions>;
+}
+
+export const ApprovalInbox = ({ draftActions }: ApprovalInboxProps) => {
   const { agentName } = useAgent();
   const { isConnected } = useIntegrations();
-  const { drafts, sentDrafts, loading, loadingSent, approveDraft, rejectDraft, fetchSentDrafts, updateDraft } = useDraftActions();
+  const { drafts, sentDrafts, loading, loadingSent, approveDraft, rejectDraft, fetchSentDrafts, updateDraft } = draftActions;
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<Tab>("pending");
   const [hasFetchedHistory, setHasFetchedHistory] = useState(false);

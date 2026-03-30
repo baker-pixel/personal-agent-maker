@@ -35,7 +35,7 @@ const Index = () => {
     return !localStorage.getItem("normy_onboarding_complete");
   });
   const sendMessageRef = useRef<(msg: string) => void>();
-  const { drafts } = useDraftActions();
+  const draftActions = useDraftActions();
   const {
     conversations,
     activeId,
@@ -69,7 +69,7 @@ const Index = () => {
     sendMessageRef.current?.(message);
   }, []);
 
-  const pendingCount = drafts.length;
+  const pendingCount = draftActions.drafts.length;
 
   const completeOnboarding = useCallback(() => {
     localStorage.setItem("normy_onboarding_complete", "true");
@@ -181,7 +181,7 @@ const Index = () => {
           )}
           {activeTab === "inbox" && (
             <div className="h-full overflow-y-auto py-6">
-              <ApprovalInbox />
+              <ApprovalInbox draftActions={draftActions} />
             </div>
           )}
           {activeTab === "tasks" && (
