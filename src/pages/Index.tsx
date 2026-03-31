@@ -10,6 +10,7 @@ import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { NewsMonitor } from "@/components/NewsMonitor";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import SignOutDialog from "@/components/SignOutDialog";
 import { useConversations } from "@/hooks/useConversations";
 import { useDraftActions } from "@/hooks/useDraftActions";
 import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft, ListTodo, Gift, Newspaper } from "lucide-react";
@@ -156,13 +157,14 @@ const Index = () => {
             </nav>
 
             <NotificationCenter onSendMessage={handleNotificationAction} />
-            <button
-              onClick={() => supabase.auth.signOut()}
-              className="p-2.5 rounded-xl text-muted-foreground/40 hover:text-destructive hover:bg-destructive/5 transition-all duration-200"
-              title="Sign out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <SignOutDialog>
+              <button
+                className="p-2.5 rounded-xl text-muted-foreground/40 hover:text-destructive hover:bg-destructive/5 transition-all duration-200"
+                title="Sign out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </SignOutDialog>
           </div>
         </header>
 
