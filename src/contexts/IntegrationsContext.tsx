@@ -147,6 +147,14 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   useEffect(() => {
     fetchConnected();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        fetchConnected();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [fetchConnected]);
 
   const toggleConnection = useCallback((id: string) => {
