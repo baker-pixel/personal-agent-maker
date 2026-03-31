@@ -17,6 +17,16 @@ const Auth = () => {
     setError("");
     setMessage("");
 
+    if (isForgot) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) setError(error.message);
+      else setMessage("Check your email for a password reset link.");
+      setLoading(false);
+      return;
+    }
+
     if (isLogin) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setError(error.message);
