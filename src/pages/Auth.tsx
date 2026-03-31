@@ -56,10 +56,10 @@ const Auth = () => {
             <Sparkles className="w-7 h-7 text-accent" />
           </div>
           <h1 className="font-display text-4xl text-foreground mb-2 tracking-tight">
-            {isLogin ? "Welcome back" : "Get started"}
+            {isForgot ? "Reset password" : isLogin ? "Welcome back" : "Get started"}
           </h1>
           <p className="text-muted-foreground text-sm">
-            {isLogin ? "Sign in to your executive assistant" : "Create your account to begin"}
+            {isForgot ? "We'll send you a reset link" : isLogin ? "Sign in to your executive assistant" : "Create your account to begin"}
           </p>
         </div>
 
