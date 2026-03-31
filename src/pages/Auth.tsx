@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Mail, Lock, ArrowRight, Sparkles } from "lucide-react";
+import { Mail, Lock, ArrowRight, Sparkles, ArrowLeft } from "lucide-react";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [isForgot, setIsForgot] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,6 +16,16 @@ const Auth = () => {
     setLoading(true);
     setError("");
     setMessage("");
+
+    if (isForgot) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) setError(error.message);
+      else setMessage("Check your email for a password reset link.");
+      setLoading(false);
+      return;
+    }
 
     if (isLogin) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -45,10 +56,10 @@ const Auth = () => {
             <Sparkles className="w-7 h-7 text-accent" />
           </div>
           <h1 className="font-display text-4xl text-foreground mb-2 tracking-tight">
-            {isLogin ? "Welcome back" : "Get started"}
+            {isForgot ? "Reset password" : isLogin ? "Welcome back" : "Get started"}
           </h1>
           <p className="text-muted-foreground text-sm">
-            {isLogin ? "Sign in to your executive assistant" : "Create your account to begin"}
+            {isForgot ? "We'll send you a reset link" : isLogin ? "Sign in to your executive assistant" : "Create your account to begin"}
           </p>
         </div>
 
@@ -68,21 +79,32 @@ const Auth = () => {
             </div>
           </div>
 
-          <div>
-            <label className="text-xs font-semibold text-foreground/80 mb-2 block uppercase tracking-wider">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-muted/50 border border-border/60 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/30 transition-all text-sm"
-                placeholder="••••••••"
-                required
-                minLength={6}
-              />
+          {!isForgot && (
+            <div>
+              <label className="text-xs font-semibold text-foreground/80 mb-2 block uppercase tracking-wider">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 rounded-xl bg-muted/50 border border-border/60 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/30 transition-all text-sm"
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                />
+              </div>
+              {isLogin && (
+                <button
+                  type="button"
+                  onClick={() => { setIsForgot(true); setError(""); setMessage(""); }}
+                  className="text-xs text-accent hover:underline mt-2 block ml-auto"
+                >
+                  Forgot password?
+                </button>
+              )}
             </div>
-          </div>
+          )}
 
           {error && (
             <p className="text-sm text-destructive bg-destructive/5 border border-destructive/10 rounded-xl px-4 py-2.5">{error}</p>
@@ -100,7 +122,7 @@ const Auth = () => {
               <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
             ) : (
               <>
-                {isLogin ? "Sign in" : "Create account"}
+                {isForgot ? "Send reset link" : isLogin ? "Sign in" : "Create account"}
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -108,13 +130,25 @@ const Auth = () => {
         </form>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-          <button
-            onClick={() => { setIsLogin(!isLogin); setError(""); setMessage(""); }}
-            className="text-accent hover:underline font-semibold"
-          >
-            {isLogin ? "Sign up" : "Sign in"}
-          </button>
+          {isForgot ? (
+            <button
+              onClick={() => { setIsForgot(false); setError(""); setMessage(""); }}
+              className="text-accent hover:underline font-semibold inline-flex items-center gap-1"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to sign in
+            </button>
+          ) : (
+            <>
+              {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
+              <button
+                onClick={() => { setIsLogin(!isLogin); setError(""); setMessage(""); }}
+                className="text-accent hover:underline font-semibold"
+              >
+                {isLogin ? "Sign up" : "Sign in"}
+              </button>
+            </>
+          )}
         </p>
       </div>
     </div>
