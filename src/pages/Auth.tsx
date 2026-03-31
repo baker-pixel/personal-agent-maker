@@ -122,7 +122,7 @@ const Auth = () => {
               <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
             ) : (
               <>
-                {isLogin ? "Sign in" : "Create account"}
+                {isForgot ? "Send reset link" : isLogin ? "Sign in" : "Create account"}
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
