@@ -17,6 +17,7 @@ import {
   Plus,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import SignOutDialog from "@/components/SignOutDialog";
 
 const iconMap: Record<string, React.ElementType> = {
   mail: Mail,
