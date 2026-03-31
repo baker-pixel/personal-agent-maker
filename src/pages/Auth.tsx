@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 import { Mail, Lock, ArrowRight, Sparkles, ArrowLeft } from "lucide-react";
 
 const Auth = () => {
