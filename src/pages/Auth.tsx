@@ -79,21 +79,32 @@ const Auth = () => {
             </div>
           </div>
 
-          <div>
-            <label className="text-xs font-semibold text-foreground/80 mb-2 block uppercase tracking-wider">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-muted/50 border border-border/60 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/30 transition-all text-sm"
-                placeholder="••••••••"
-                required
-                minLength={6}
-              />
+          {!isForgot && (
+            <div>
+              <label className="text-xs font-semibold text-foreground/80 mb-2 block uppercase tracking-wider">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 rounded-xl bg-muted/50 border border-border/60 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/30 transition-all text-sm"
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                />
+              </div>
+              {isLogin && (
+                <button
+                  type="button"
+                  onClick={() => { setIsForgot(true); setError(""); setMessage(""); }}
+                  className="text-xs text-accent hover:underline mt-2 block ml-auto"
+                >
+                  Forgot password?
+                </button>
+              )}
             </div>
-          </div>
+          )}
 
           {error && (
             <p className="text-sm text-destructive bg-destructive/5 border border-destructive/10 rounded-xl px-4 py-2.5">{error}</p>
