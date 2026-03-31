@@ -18,16 +18,13 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return localStorage.getItem("agent-name") || "Normy Agent";
   });
 
-  // Load from database on mount
+  // Load from database when auth state changes
   useEffect(() => {
-    const loadFromDb = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
+    const loadFromDb = async (userId: string) => {
       const { data } = await supabase
         .from("user_preferences")
         .select("agent_name")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .maybeSingle();
 
       if (data?.agent_name) {
@@ -35,7 +32,14 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         localStorage.setItem("agent-name", data.agent_name);
       }
     };
-    loadFromDb();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        loadFromDb(session.user.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const setAgentName = useCallback(async (name: string) => {
