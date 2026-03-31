@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Bot, ArrowRight, ArrowLeft, Wand2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, Wand2 } from "lucide-react";
 import { useAgent } from "@/contexts/AgentContext";
+import normyLogo from "@/assets/normy-logo.png";
 
 interface Props {
   onNext: () => void;
@@ -15,29 +16,38 @@ export const OnboardingNameAgent = ({ onNext, onBack, onSkip }: Props) => {
   const [name, setName] = useState(agentName === "Normy Agent" ? "" : agentName);
 
   const handleContinue = () => {
-    if (name.trim()) setAgentName(name.trim());
-    else setAgentName("Normy Agent");
+    const finalName = name.trim() || "Normy Agent";
+    setAgentName(finalName);
     onNext();
   };
 
+  const displayName = name.trim() || "Normy";
+
   return (
     <div className="text-center">
-      <div className="mb-8 animate-fade-up">
-        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/15 to-accent/10 flex items-center justify-center mx-auto ring-1 ring-primary/15 shadow-lg shadow-primary/5">
-          <Bot className="w-9 h-9 text-primary" />
+      {/* Normy speech */}
+      <div className="relative mb-6 animate-fade-up">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-primary/10 flex items-center justify-center mx-auto ring-1 ring-accent/15 shadow-lg overflow-hidden">
+          <img src={normyLogo} alt="Normy" className="h-11 w-auto" />
         </div>
       </div>
 
       <div className="mb-6 animate-fade-up" style={{ animationDelay: "0.1s" }}>
-        <h2 className="font-display text-3xl md:text-4xl text-foreground mb-3 tracking-tight">
+        <div className="bg-card border border-border/40 rounded-2xl rounded-tl-md px-5 py-4 text-left max-w-xs mx-auto shadow-sm mb-6">
+          <p className="text-sm text-foreground leading-relaxed">
+            First things first — <span className="font-semibold">what should people call me?</span>
+          </p>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            I go by Normy, but you can rename me to anything you'd like.
+          </p>
+        </div>
+
+        <h2 className="font-display text-2xl md:text-3xl text-foreground mb-2 tracking-tight">
           Name your assistant
         </h2>
-        <p className="text-muted-foreground text-sm max-w-xs mx-auto leading-relaxed">
-          Give it a personality. You can always change this in settings.
-        </p>
       </div>
 
-      <div className="mb-5 animate-fade-up" style={{ animationDelay: "0.2s" }}>
+      <div className="mb-4 animate-fade-up" style={{ animationDelay: "0.2s" }}>
         <input
           type="text"
           value={name}
@@ -50,8 +60,8 @@ export const OnboardingNameAgent = ({ onNext, onBack, onSkip }: Props) => {
       </div>
 
       <div className="mb-8 animate-fade-up" style={{ animationDelay: "0.25s" }}>
-        <p className="text-xs text-muted-foreground/60 mb-2.5 flex items-center justify-center gap-1">
-          <Wand2 className="w-3 h-3" /> Need inspiration?
+        <p className="text-xs text-muted-foreground/50 mb-2.5 flex items-center justify-center gap-1">
+          <Wand2 className="w-3 h-3" /> Or pick one
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           {SUGGESTIONS.map((s) => (
@@ -75,20 +85,14 @@ export const OnboardingNameAgent = ({ onNext, onBack, onSkip }: Props) => {
           onClick={handleContinue}
           className="w-full flex items-center justify-center gap-2.5 bg-accent text-accent-foreground font-semibold py-4 rounded-2xl hover:opacity-90 transition-all shadow-lg shadow-accent/10 text-base"
         >
-          {name.trim() ? `Continue as "${name.trim()}"` : "Continue with default name"}
+          Call me {displayName}
           <ArrowRight className="w-5 h-5" />
         </button>
         <div className="flex justify-between items-center">
-          <button
-            onClick={onBack}
-            className="text-sm text-muted-foreground/60 hover:text-muted-foreground py-2 px-3 transition-colors flex items-center gap-1"
-          >
+          <button onClick={onBack} className="text-sm text-muted-foreground/50 hover:text-muted-foreground py-2 px-3 transition-colors flex items-center gap-1">
             <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
-          <button
-            onClick={onSkip}
-            className="text-sm text-muted-foreground/60 hover:text-muted-foreground py-2 px-3 transition-colors"
-          >
+          <button onClick={onSkip} className="text-sm text-muted-foreground/50 hover:text-muted-foreground py-2 px-3 transition-colors">
             Skip
           </button>
         </div>
