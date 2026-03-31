@@ -76,9 +76,15 @@ const Index = () => {
     setShowOnboarding(false);
   }, []);
 
+  const replayOnboarding = useCallback(() => {
+    localStorage.removeItem("normy_onboarding_complete");
+    setShowOnboarding(true);
+  }, []);
+
   if (showOnboarding) {
     return <OnboardingFlow onComplete={completeOnboarding} onSkip={completeOnboarding} />;
   }
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Conversation sidebar (only visible on chat tab) */}
@@ -206,7 +212,7 @@ const Index = () => {
           )}
           {activeTab === "settings" && (
             <div className="h-full overflow-y-auto py-6 px-4 md:px-6 max-w-2xl mx-auto">
-              <AgentSettings />
+              <AgentSettings onReplayOnboarding={replayOnboarding} />
             </div>
           )}
         </div>

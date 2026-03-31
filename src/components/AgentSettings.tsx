@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useAgent } from "@/contexts/AgentContext";
-import { Zap, Check, Bell } from "lucide-react";
+import { Zap, Check, Bell, RotateCcw } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+
+interface AgentSettingsProps {
+  onReplayOnboarding?: () => void;
+}
 
 const PREFS = [
   { id: "daily_briefing", label: "Daily Briefing", description: "Get an AI summary of your day every morning" },
@@ -10,7 +14,7 @@ const PREFS = [
   { id: "task_reminders", label: "Task Reminders", description: "Nudge you about overdue action items" },
 ];
 
-export const AgentSettings = () => {
+export const AgentSettings = ({ onReplayOnboarding }: AgentSettingsProps) => {
   const { agentName, setAgentName } = useAgent();
   const [nameInput, setNameInput] = useState(agentName);
   const [saved, setSaved] = useState(false);
@@ -110,6 +114,26 @@ export const AgentSettings = () => {
           ))}
         </div>
       </div>
+      {onReplayOnboarding && (
+        <div className="glass-card rounded-2xl p-6" style={{ animation: "fade-up 0.4s ease-out both", animationDelay: "0.2s" }}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+              <RotateCcw className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-foreground">Onboarding</h2>
+              <p className="text-xs text-muted-foreground">Replay the setup walkthrough</p>
+            </div>
+          </div>
+          <button
+            onClick={onReplayOnboarding}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-muted text-foreground font-medium text-sm hover:bg-muted/80 transition-colors"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Replay onboarding
+          </button>
+        </div>
+      )}
     </div>
   );
 };
