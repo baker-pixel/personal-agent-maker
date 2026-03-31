@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { Mail, Calendar, ArrowRight, ArrowLeft, Check, Shield, Loader2 } from "lucide-react";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useAgent } from "@/contexts/AgentContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
 import normyLogo from "@/assets/normy-logo.png";
 
 interface Props {
@@ -12,7 +11,7 @@ interface Props {
 }
 
 export const OnboardingConnect = ({ onNext, onBack, onSkip }: Props) => {
-  const [connecting, setConnecting] = useState<string | null>(null);
+  const { connecting, connect } = useGoogleOAuthPopup();
   const { integrations } = useIntegrations();
   const { agentName } = useAgent();
 
