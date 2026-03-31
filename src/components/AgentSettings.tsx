@@ -14,7 +14,7 @@ const PREFS = [
   { id: "task_reminders", label: "Task Reminders", description: "Nudge you about overdue action items" },
 ];
 
-export const AgentSettings = () => {
+export const AgentSettings = ({ onReplayOnboarding }: AgentSettingsProps) => {
   const { agentName, setAgentName } = useAgent();
   const [nameInput, setNameInput] = useState(agentName);
   const [saved, setSaved] = useState(false);
