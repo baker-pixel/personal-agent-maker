@@ -155,7 +155,7 @@ export const IntegrationsSetup = () => {
         {integrations.map((integration, index) => {
           const Icon = iconMap[integration.icon] || Mail;
           const isExpanded = expandedId === integration.id;
-          const isConnecting = connectingId === integration.id;
+          const isConnecting = connectingId === integration.id || popupConnecting === integration.id;
           const accounts = integration.connectedAccounts;
 
           return (
