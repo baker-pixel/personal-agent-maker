@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Mail, Calendar, Zap, ArrowRight, ArrowLeft, Check } from "lucide-react";
+import { Mail, Calendar, ArrowRight, ArrowLeft, Check, Shield, Loader2 } from "lucide-react";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
@@ -12,9 +13,11 @@ interface Props {
 export const OnboardingConnect = ({ onNext, onBack, onSkip }: Props) => {
   const [connecting, setConnecting] = useState<string | null>(null);
   const { integrations } = useIntegrations();
+  const { agentName } = useAgent();
 
   const gmailConnected = integrations.find((i) => i.id === "gmail")?.connected;
   const calendarConnected = integrations.find((i) => i.id === "google-calendar")?.connected;
+  const anyConnected = gmailConnected || calendarConnected;
 
   const handleConnect = async (service: string) => {
     setConnecting(service);
@@ -28,64 +31,113 @@ export const OnboardingConnect = ({ onNext, onBack, onSkip }: Props) => {
     }
   };
 
+  const services = [
+    {
+      service: "gmail",
+      connected: gmailConnected,
+      label: "Gmail",
+      desc: "Read, triage, and draft email replies",
+      Icon: Mail,
+      color: "text-blue-400",
+      bgColor: "bg-blue-500/10",
+    },
+    {
+      service: "google-calendar",
+      connected: calendarConnected,
+      label: "Google Calendar",
+      desc: "Meeting prep, conflicts, and scheduling",
+      Icon: Calendar,
+      color: "text-emerald-400",
+      bgColor: "bg-emerald-500/10",
+    },
+  ];
+
   return (
-    <>
-      <div className="flex justify-center mb-6">
-        <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center ring-1 ring-accent/20 animate-fade-up">
-          <Zap className="w-7 h-7 text-accent" />
+    <div className="text-center">
+      <div className="mb-8 animate-fade-up">
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500/15 to-emerald-500/10 flex items-center justify-center mx-auto ring-1 ring-blue-500/15 shadow-lg shadow-blue-500/5">
+          <Mail className="w-9 h-9 text-blue-400" />
         </div>
       </div>
 
-      <div className="text-center mb-8 animate-fade-up" style={{ animationDelay: "0.1s" }}>
-        <h2 className="font-display text-2xl md:text-3xl text-foreground mb-3">Connect your tools</h2>
-        <p className="text-muted-foreground text-sm md:text-base max-w-sm mx-auto">
-          Your assistant needs access to email and calendar to work its magic.
+      <div className="mb-6 animate-fade-up" style={{ animationDelay: "0.1s" }}>
+        <h2 className="font-display text-3xl md:text-4xl text-foreground mb-3 tracking-tight">
+          Connect your accounts
+        </h2>
+        <p className="text-muted-foreground text-sm max-w-xs mx-auto leading-relaxed">
+          {agentName} needs access to work on your behalf. You can add more accounts later.
         </p>
       </div>
 
-      <div className="space-y-3 mb-8 animate-fade-up" style={{ animationDelay: "0.2s" }}>
-        {[
-          { service: "gmail", connected: gmailConnected, label: "Gmail", connectedLabel: "Gmail connected", desc: "Triage, drafts, and follow-ups", connectedDesc: "Reading and drafting emails", Icon: Mail },
-          { service: "google-calendar", connected: calendarConnected, label: "Google Calendar", connectedLabel: "Calendar connected", desc: "Meeting prep and scheduling", connectedDesc: "Prep, conflicts, and scheduling", Icon: Calendar },
-        ].map(({ service, connected, label, connectedLabel, desc, connectedDesc, Icon }) => (
+      <div className="space-y-3 mb-5 animate-fade-up" style={{ animationDelay: "0.2s" }}>
+        {services.map(({ service, connected, label, desc, Icon, color, bgColor }) => (
           <button
             key={service}
-            onClick={() => handleConnect(service)}
+            onClick={() => !connected && handleConnect(service)}
             disabled={!!connected || connecting === service}
-            className={`w-full flex items-center gap-3 rounded-xl px-4 py-4 border transition-all ${
+            className={`w-full flex items-center gap-4 rounded-2xl px-5 py-4.5 border transition-all text-left ${
               connected
                 ? "bg-success/5 border-success/20"
-                : "bg-card border-border/40 hover:border-accent/30 cursor-pointer"
+                : connecting === service
+                ? "bg-card border-accent/30 opacity-80"
+                : "bg-card/80 border-border/30 hover:border-accent/30 hover:bg-card cursor-pointer"
             }`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${connected ? "bg-success/10" : "bg-accent/10"}`}>
-              {connected ? <Check className="w-5 h-5 text-success" /> : <Icon className="w-5 h-5 text-accent" />}
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${connected ? "bg-success/10" : bgColor}`}>
+              {connected ? (
+                <Check className="w-5 h-5 text-success" />
+              ) : connecting === service ? (
+                <Loader2 className="w-5 h-5 text-accent animate-spin" />
+              ) : (
+                <Icon className={`w-5 h-5 ${color}`} />
+              )}
             </div>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-medium text-foreground">{connected ? connectedLabel : `Connect ${label}`}</p>
-              <p className="text-xs text-muted-foreground">{connected ? connectedDesc : desc}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                {connected ? `${label} connected ✓` : connecting === service ? "Connecting…" : `Connect ${label}`}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
             </div>
           </button>
         ))}
       </div>
 
-      <div className="flex flex-col gap-3 animate-fade-up" style={{ animationDelay: "0.3s" }}>
+      <div className="flex items-center justify-center gap-2 mb-8 animate-fade-up" style={{ animationDelay: "0.25s" }}>
+        <Shield className="w-3.5 h-3.5 text-muted-foreground/40" />
+        <p className="text-xs text-muted-foreground/60">
+          OAuth sign-in — your credentials are never stored
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2.5 animate-fade-up" style={{ animationDelay: "0.3s" }}>
         <button
           onClick={onNext}
-          className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold py-3.5 rounded-xl hover:opacity-90 transition-all shadow-md"
+          className={`w-full flex items-center justify-center gap-2.5 font-semibold py-4 rounded-2xl transition-all text-base ${
+            anyConnected
+              ? "bg-accent text-accent-foreground shadow-lg shadow-accent/10 hover:opacity-90"
+              : "bg-muted text-muted-foreground hover:bg-muted/80"
+          }`}
         >
-          Continue
-          <ArrowRight className="w-4 h-4" />
+          {anyConnected ? "Finish setup" : "Skip — I'll connect later"}
+          <ArrowRight className="w-5 h-5" />
         </button>
-        <div className="flex justify-between">
-          <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground py-2 px-3 transition-colors flex items-center gap-1">
-            <ArrowLeft className="w-3 h-3" /> Back
+        <div className="flex justify-between items-center">
+          <button
+            onClick={onBack}
+            className="text-sm text-muted-foreground/60 hover:text-muted-foreground py-2 px-3 transition-colors flex items-center gap-1"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
-          <button onClick={onSkip} className="text-sm text-muted-foreground hover:text-foreground py-2 px-3 transition-colors">
-            Skip for now
-          </button>
+          {!anyConnected && (
+            <button
+              onClick={onSkip}
+              className="text-sm text-muted-foreground/60 hover:text-muted-foreground py-2 px-3 transition-colors"
+            >
+              Skip all
+            </button>
+          )}
         </div>
       </div>
-    </>
+    </div>
   );
 };
