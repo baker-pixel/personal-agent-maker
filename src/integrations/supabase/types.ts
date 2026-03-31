@@ -363,6 +363,8 @@ export type Database = {
           agent_name: string
           created_at: string
           id: string
+          slack_notification_channel_id: string | null
+          slack_notification_channel_name: string | null
           updated_at: string
           user_id: string
         }
@@ -370,6 +372,8 @@ export type Database = {
           agent_name?: string
           created_at?: string
           id?: string
+          slack_notification_channel_id?: string | null
+          slack_notification_channel_name?: string | null
           updated_at?: string
           user_id: string
         }
@@ -377,6 +381,8 @@ export type Database = {
           agent_name?: string
           created_at?: string
           id?: string
+          slack_notification_channel_id?: string | null
+          slack_notification_channel_name?: string | null
           updated_at?: string
           user_id?: string
         }
