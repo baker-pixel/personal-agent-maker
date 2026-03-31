@@ -76,14 +76,14 @@ const Index = () => {
     setShowOnboarding(false);
   }, []);
 
-  if (showOnboarding) {
-    return <OnboardingFlow onComplete={completeOnboarding} onSkip={completeOnboarding} />;
-  }
-
   const replayOnboarding = useCallback(() => {
     localStorage.removeItem("normy_onboarding_complete");
     setShowOnboarding(true);
   }, []);
+
+  if (showOnboarding) {
+    return <OnboardingFlow onComplete={completeOnboarding} onSkip={completeOnboarding} />;
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
