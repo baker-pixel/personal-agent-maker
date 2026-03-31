@@ -275,7 +275,8 @@ const ArticleCard = ({ article }: { article: NewsArticle }) => {
   }
 
   const openArticle = () => {
-    window.open(safeUrl, "_blank", "noopener,noreferrer");
+    const searchQuery = encodeURIComponent(`${article.title} ${article.source}`);
+    window.open(`https://www.google.com/search?q=${searchQuery}`, "_blank", "noopener,noreferrer");
   };
 
   return (
