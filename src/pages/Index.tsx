@@ -10,6 +10,7 @@ import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { NewsMonitor } from "@/components/NewsMonitor";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import SignOutDialog from "@/components/SignOutDialog";
 import { useConversations } from "@/hooks/useConversations";
 import { useDraftActions } from "@/hooks/useDraftActions";
 import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft, ListTodo, Gift, Newspaper } from "lucide-react";

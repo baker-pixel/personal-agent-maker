@@ -89,13 +89,14 @@ export const IntegrationsSetup = () => {
             Connect your accounts so {agentName} can manage your inbox, calendar, and communications.
           </p>
         </div>
-        <button
-          onClick={handleSignOut}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-muted text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-        >
-          <LogOut className="w-4 h-4" />
-          Sign out
-        </button>
+        <SignOutDialog>
+          <button
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-muted text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign out
+          </button>
+        </SignOutDialog>
       </div>
 
       {connectedCount > 0 && (
