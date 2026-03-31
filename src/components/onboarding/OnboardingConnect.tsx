@@ -20,16 +20,8 @@ export const OnboardingConnect = ({ onNext, onBack, onSkip }: Props) => {
   const anyConnected = gmailConnected || calendarConnected;
   const bothConnected = gmailConnected && calendarConnected;
 
-  const handleConnect = async (service: string) => {
-    setConnecting(service);
-    try {
-      const response = await supabase.functions.invoke("google-auth", { body: { service } });
-      if (response.error) throw response.error;
-      const { url } = response.data;
-      if (url) window.location.href = url;
-    } catch {
-      setConnecting(null);
-    }
+  const handleConnect = (service: string) => {
+    connect(service).catch(() => {});
   };
 
   const services = [
