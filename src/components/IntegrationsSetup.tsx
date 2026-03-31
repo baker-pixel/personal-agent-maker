@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import SignOutDialog from "@/components/SignOutDialog";
+import { SlackChannelSelector } from "@/components/SlackChannelSelector";
 
 const iconMap: Record<string, React.ElementType> = {
   mail: Mail,
