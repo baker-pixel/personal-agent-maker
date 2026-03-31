@@ -12,11 +12,16 @@ const ResetPassword = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check for recovery token in URL hash
+    // Allow access if redirected here with recovery hash or from PASSWORD_RECOVERY event
     const hash = window.location.hash;
     if (!hash.includes("type=recovery")) {
-      // No recovery token, redirect to auth
-      navigate("/auth", { replace: true });
+      // Check if we got here via a valid session with recovery — give a brief grace period
+      const timeout = setTimeout(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!session) navigate("/auth", { replace: true });
+        });
+      }, 1000);
+      return () => clearTimeout(timeout);
     }
   }, [navigate]);
 

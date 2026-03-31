@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -24,10 +24,15 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const recoveryRedirected = useRef(false);
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setSession(session);
         setLoading(false);
+        if (event === "PASSWORD_RECOVERY" && !recoveryRedirected.current) {
+          recoveryRedirected.current = true;
+          window.location.href = "/reset-password#type=recovery";
+        }
       }
     );
 
