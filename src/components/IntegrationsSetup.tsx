@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Mail,
@@ -30,21 +31,15 @@ export const IntegrationsSetup = () => {
   const { integrations, toggleConnection } = useIntegrations();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const { connecting: popupConnecting, connect: popupConnect } = useGoogleOAuthPopup();
   const { toast } = useToast();
 
   const connectedCount = integrations.filter((i) => i.connected).length;
 
   const handleConnect = async (id: string) => {
     if (GOOGLE_PROVIDERS.includes(id)) {
-      setConnectingId(id);
       try {
-        const response = await supabase.functions.invoke("google-auth", {
-          body: { service: id },
-        });
-        if (response.error) throw response.error;
-        const { url } = response.data;
-        if (!url) throw new Error("No auth URL returned");
-        window.location.href = url;
+        await popupConnect(id);
       } catch (error: any) {
         console.error("Google connect error:", error);
         toast({
@@ -52,7 +47,6 @@ export const IntegrationsSetup = () => {
           description: error.message || "Could not start Google sign-in",
           variant: "destructive",
         });
-        setConnectingId(null);
       }
       return;
     }
@@ -161,7 +155,7 @@ export const IntegrationsSetup = () => {
         {integrations.map((integration, index) => {
           const Icon = iconMap[integration.icon] || Mail;
           const isExpanded = expandedId === integration.id;
-          const isConnecting = connectingId === integration.id;
+          const isConnecting = connectingId === integration.id || popupConnecting === integration.id;
           const accounts = integration.connectedAccounts;
 
           return (

@@ -54,12 +54,19 @@ const GoogleCallback = () => {
         localStorage.setItem("integrations-state", JSON.stringify(connectedIds));
       }
 
-      // Redirect back after a moment
-      setTimeout(() => navigate("/"), 2000);
+      // If opened as popup, close after brief success message; otherwise redirect
+      const isPopup = window.opener && window.opener !== window;
+      if (isPopup) {
+        setTimeout(() => window.close(), 1500);
+      } else {
+        setTimeout(() => navigate("/"), 2000);
+      }
     };
 
     handleCallback();
   }, [navigate]);
+
+  const isPopup = window.opener && window.opener !== window;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -74,7 +81,9 @@ const GoogleCallback = () => {
           <>
             <CheckCircle2 className="w-10 h-10 text-success mx-auto mb-4" />
             <p className="text-foreground font-medium">{message}</p>
-            <p className="text-sm text-muted-foreground mt-2">Redirecting...</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              {isPopup ? "This window will close…" : "Redirecting..."}
+            </p>
           </>
         )}
         {status === "error" && (
@@ -82,10 +91,10 @@ const GoogleCallback = () => {
             <XCircle className="w-10 h-10 text-destructive mx-auto mb-4" />
             <p className="text-foreground font-medium">{message}</p>
             <button
-              onClick={() => navigate("/")}
+              onClick={() => isPopup ? window.close() : navigate("/")}
               className="mt-4 px-4 py-2 rounded-xl bg-accent text-accent-foreground text-sm font-medium hover:opacity-90 transition-opacity"
             >
-              Back to app
+              {isPopup ? "Close" : "Back to app"}
             </button>
           </>
         )}
