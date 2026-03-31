@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
-import { Mail, Lock, ArrowRight, Sparkles, ArrowLeft } from "lucide-react";
+import { Mail, Lock, ArrowRight, Sparkles, ArrowLeft, Eye, EyeOff } from "lucide-react";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
