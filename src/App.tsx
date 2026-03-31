@@ -14,6 +14,7 @@ import Landing from "./pages/Landing.tsx";
 import GoogleCallback from "./pages/GoogleCallback.tsx";
 import PrivacyPolicy from "./pages/PrivacyPolicy.tsx";
 import TermsOfService from "./pages/TermsOfService.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
