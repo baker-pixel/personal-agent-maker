@@ -22,9 +22,9 @@ const queryClient = new QueryClient();
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const recoveryRedirected = useRef(false);
 
   useEffect(() => {
-    const recoveryRedirected = useRef(false);
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
