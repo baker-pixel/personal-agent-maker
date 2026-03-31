@@ -130,13 +130,25 @@ const Auth = () => {
         </form>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-          <button
-            onClick={() => { setIsLogin(!isLogin); setError(""); setMessage(""); }}
-            className="text-accent hover:underline font-semibold"
-          >
-            {isLogin ? "Sign up" : "Sign in"}
-          </button>
+          {isForgot ? (
+            <button
+              onClick={() => { setIsForgot(false); setError(""); setMessage(""); }}
+              className="text-accent hover:underline font-semibold inline-flex items-center gap-1"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to sign in
+            </button>
+          ) : (
+            <>
+              {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
+              <button
+                onClick={() => { setIsLogin(!isLogin); setError(""); setMessage(""); }}
+                className="text-accent hover:underline font-semibold"
+              >
+                {isLogin ? "Sign up" : "Sign in"}
+              </button>
+            </>
+          )}
         </p>
       </div>
     </div>
