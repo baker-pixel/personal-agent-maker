@@ -77,9 +77,7 @@ export const IntegrationsSetup = () => {
     toggleConnection(id);
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
+  // Sign out is now handled by SignOutDialog
 
   return (
     <div className="max-w-3xl mx-auto">
