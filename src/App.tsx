@@ -24,10 +24,15 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const recoveryRedirected = useRef(false);
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setSession(session);
         setLoading(false);
+        if (event === "PASSWORD_RECOVERY" && !recoveryRedirected.current) {
+          recoveryRedirected.current = true;
+          window.location.href = "/reset-password#type=recovery";
+        }
       }
     );
 
