@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useAgent } from "@/contexts/AgentContext";
-import { Zap, Check, Bell } from "lucide-react";
+import { Zap, Check, Bell, RotateCcw } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+
+interface AgentSettingsProps {
+  onReplayOnboarding?: () => void;
+}
 
 const PREFS = [
   { id: "daily_briefing", label: "Daily Briefing", description: "Get an AI summary of your day every morning" },

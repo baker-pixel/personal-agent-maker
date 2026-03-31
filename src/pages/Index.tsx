@@ -212,7 +212,7 @@ const Index = () => {
           )}
           {activeTab === "settings" && (
             <div className="h-full overflow-y-auto py-6 px-4 md:px-6 max-w-2xl mx-auto">
-              <AgentSettings />
+              <AgentSettings onReplayOnboarding={replayOnboarding} />
             </div>
           )}
         </div>
