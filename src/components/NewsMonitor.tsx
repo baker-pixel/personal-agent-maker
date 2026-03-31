@@ -247,10 +247,19 @@ const normalizeExternalUrl = (rawUrl: string): string | null => {
 
 const ArticleCard = ({ article }: { article: NewsArticle }) => {
   const impColor = importanceColors[article.importance] || importanceColors.low;
-  const safeUrl = normalizeExternalUrl(article.url);
 
-  const cardContent = (
-    <>
+  const openArticle = () => {
+    const searchQuery = encodeURIComponent(`${article.title} ${article.source}`);
+    window.open(`https://www.google.com/search?q=${searchQuery}`, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={openArticle}
+      className="w-full text-left glass-card rounded-xl p-4 hover:bg-muted/20 transition-all cursor-pointer"
+      aria-label={`Search for article: ${article.title}`}
+    >
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -265,28 +274,8 @@ const ArticleCard = ({ article }: { article: NewsArticle }) => {
           <p className="text-xs text-muted-foreground mt-1">{article.summary}</p>
           <p className="text-[10px] text-muted-foreground/60 mt-2">{article.source}</p>
         </div>
-        {safeUrl && <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />}
+        <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
       </div>
-    </>
-  );
-
-  if (!safeUrl) {
-    return <div className="glass-card rounded-xl p-4 hover:bg-muted/20 transition-all">{cardContent}</div>;
-  }
-
-  const openArticle = () => {
-    const searchQuery = encodeURIComponent(`${article.title} ${article.source}`);
-    window.open(`https://www.google.com/search?q=${searchQuery}`, "_blank", "noopener,noreferrer");
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={openArticle}
-      className="w-full text-left glass-card rounded-xl p-4 hover:bg-muted/20 transition-all cursor-pointer"
-      aria-label={`Open article: ${article.title}`}
-    >
-      {cardContent}
     </button>
   );
 };
