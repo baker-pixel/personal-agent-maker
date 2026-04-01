@@ -228,12 +228,12 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
           <div className="md:col-span-3 space-y-6">
             {/* Today's schedule */}
             <section className="bg-card rounded-2xl border border-border/40 overflow-hidden">
-              <div className="flex items-center justify-between px-5 pt-5 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <div className="flex items-center justify-between px-5 pt-5 pb-3 gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                     <Calendar className="w-4 h-4 text-primary" />
                   </div>
-                  <h2 className="text-sm font-semibold text-foreground">Today's Schedule</h2>
+                  <h2 className="text-sm font-semibold text-foreground truncate">Today's Schedule</h2>
                 </div>
                 <button
                   onClick={() =>
