@@ -368,7 +368,7 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
           </div>
 
           {/* Activity feed — right column */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 min-w-0">
             <section className="bg-card rounded-2xl border border-border/40 overflow-hidden">
               <div className="flex items-center justify-between px-5 pt-5 pb-3">
                 <div className="flex items-center gap-2.5">
