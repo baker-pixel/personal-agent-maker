@@ -296,14 +296,14 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
 
             {/* Priority inbox */}
             <section className="bg-card rounded-2xl border border-border/40 overflow-hidden">
-              <div className="flex items-center justify-between px-5 pt-5 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
+              <div className="flex items-center justify-between px-5 pt-5 pb-3 gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
                     <Mail className="w-4 h-4 text-accent" />
                   </div>
-                  <h2 className="text-sm font-semibold text-foreground">Priority Inbox</h2>
+                  <h2 className="text-sm font-semibold text-foreground truncate">Priority Inbox</h2>
                   {unreadCount > 0 && (
-                    <span className="text-[10px] font-medium text-accent">{unreadCount} unread</span>
+                    <span className="text-[10px] font-medium text-accent shrink-0">{unreadCount} unread</span>
                   )}
                 </div>
                 <button
