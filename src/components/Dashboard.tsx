@@ -180,8 +180,8 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
   const unreadCount = emails.filter((e) => e.isUnread).length;
 
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden">
-      <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 md:py-10 space-y-8">
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 md:py-10 space-y-8 min-w-0">
         {/* Greeting */}
         <div className="animate-fade-up">
           <h1 className="font-display text-3xl md:text-4xl text-foreground">
@@ -223,23 +223,23 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
           />
         </div>
 
-        <div className="grid md:grid-cols-5 gap-6 animate-fade-up" style={{ animationDelay: "0.1s" }}>
+        <div className="grid md:grid-cols-5 gap-6 animate-fade-up min-w-0" style={{ animationDelay: "0.1s" }}>
           {/* Schedule — left column */}
-          <div className="md:col-span-3 space-y-6">
+          <div className="md:col-span-3 space-y-6 min-w-0">
             {/* Today's schedule */}
             <section className="bg-card rounded-2xl border border-border/40 overflow-hidden">
-              <div className="flex items-center justify-between px-5 pt-5 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <div className="flex items-center justify-between px-5 pt-5 pb-3 gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                     <Calendar className="w-4 h-4 text-primary" />
                   </div>
-                  <h2 className="text-sm font-semibold text-foreground">Today's Schedule</h2>
+                  <h2 className="text-sm font-semibold text-foreground truncate">Today's Schedule</h2>
                 </div>
                 <button
                   onClick={() =>
                     onNavigateToChat("Prepare me for all of today's meetings. Pull context from recent emails with each attendee and suggest talking points.")
                   }
-                  className="text-[11px] font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent/5"
+                  className="text-[11px] font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent/5 shrink-0 whitespace-nowrap"
                 >
                   Prep all <ArrowUpRight className="w-3 h-3" />
                 </button>
@@ -296,21 +296,21 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
 
             {/* Priority inbox */}
             <section className="bg-card rounded-2xl border border-border/40 overflow-hidden">
-              <div className="flex items-center justify-between px-5 pt-5 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
+              <div className="flex items-center justify-between px-5 pt-5 pb-3 gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
                     <Mail className="w-4 h-4 text-accent" />
                   </div>
-                  <h2 className="text-sm font-semibold text-foreground">Priority Inbox</h2>
+                  <h2 className="text-sm font-semibold text-foreground truncate">Priority Inbox</h2>
                   {unreadCount > 0 && (
-                    <span className="text-[10px] font-medium text-accent">{unreadCount} unread</span>
+                    <span className="text-[10px] font-medium text-accent shrink-0">{unreadCount} unread</span>
                   )}
                 </div>
                 <button
                   onClick={() =>
                     onNavigateToChat("Triage my inbox. Categorize recent emails as Urgent, Needs Reply, FYI, or Newsletter. Draft responses for anything that needs attention.")
                   }
-                  className="text-[11px] font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent/5"
+                  className="text-[11px] font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent/5 shrink-0 whitespace-nowrap"
                 >
                   Triage all <ArrowUpRight className="w-3 h-3" />
                 </button>
@@ -368,7 +368,7 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
           </div>
 
           {/* Activity feed — right column */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 min-w-0">
             <section className="bg-card rounded-2xl border border-border/40 overflow-hidden">
               <div className="flex items-center justify-between px-5 pt-5 pb-3">
                 <div className="flex items-center gap-2.5">
