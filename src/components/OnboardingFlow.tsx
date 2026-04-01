@@ -24,7 +24,7 @@ export const OnboardingFlow = ({ onComplete, onSkip }: OnboardingFlowProps) => {
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex items-start md:items-center justify-center p-4 md:p-6 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-background flex items-start md:items-center justify-center p-4 md:p-6 overflow-y-auto overflow-x-hidden">
       {/* Ambient background */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full bg-accent/[0.04] blur-3xl -translate-y-1/3 translate-x-1/4" />
