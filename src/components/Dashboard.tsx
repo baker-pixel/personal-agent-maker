@@ -223,9 +223,9 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
           />
         </div>
 
-        <div className="grid md:grid-cols-5 gap-6 animate-fade-up" style={{ animationDelay: "0.1s" }}>
+        <div className="grid md:grid-cols-5 gap-6 animate-fade-up min-w-0" style={{ animationDelay: "0.1s" }}>
           {/* Schedule — left column */}
-          <div className="md:col-span-3 space-y-6">
+          <div className="md:col-span-3 space-y-6 min-w-0">
             {/* Today's schedule */}
             <section className="bg-card rounded-2xl border border-border/40 overflow-hidden">
               <div className="flex items-center justify-between px-5 pt-5 pb-3 gap-2">
