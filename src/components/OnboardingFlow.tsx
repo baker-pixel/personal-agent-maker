@@ -31,7 +31,7 @@ export const OnboardingFlow = ({ onComplete, onSkip }: OnboardingFlowProps) => {
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full bg-primary/[0.03] blur-3xl translate-y-1/3 -translate-x-1/4" />
       </div>
 
-      <div className="w-full max-w-md relative z-10">
+      <div className="w-full max-w-md relative z-10 my-auto py-4">
         {/* Step indicator */}
         <div className="flex justify-center gap-2 mb-10">
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
