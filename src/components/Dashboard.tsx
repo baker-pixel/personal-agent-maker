@@ -180,7 +180,7 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
   const unreadCount = emails.filter((e) => e.isUnread).length;
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto overflow-x-hidden">
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 md:py-10 space-y-8">
         {/* Greeting */}
         <div className="animate-fade-up">
