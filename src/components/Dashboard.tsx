@@ -239,7 +239,7 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
                   onClick={() =>
                     onNavigateToChat("Prepare me for all of today's meetings. Pull context from recent emails with each attendee and suggest talking points.")
                   }
-                  className="text-[11px] font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent/5"
+                  className="text-[11px] font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent/5 shrink-0 whitespace-nowrap"
                 >
                   Prep all <ArrowUpRight className="w-3 h-3" />
                 </button>
