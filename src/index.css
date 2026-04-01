@@ -68,8 +68,15 @@
     @apply border-border;
   }
 
-  html, body {
+  html {
     overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
+
+  body {
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   body {
