@@ -34,7 +34,7 @@ export const OnboardingWelcome = ({ onNext, onSkip }: Props) => (
     </div>
 
     {/* What I do cards */}
-    <div className="space-y-2 mb-8 animate-fade-up" style={{ animationDelay: "0.3s" }}>
+    <div className="space-y-2 mb-6 md:mb-8 animate-fade-up" style={{ animationDelay: "0.3s" }}>
       <p className="text-xs font-medium text-muted-foreground/50 uppercase tracking-widest mb-3">Here's what I do for you</p>
       {[
         { emoji: "📬", label: "Triage your inbox", desc: "I read, categorize, and draft replies" },
