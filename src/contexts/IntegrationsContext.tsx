@@ -17,6 +17,7 @@ interface IntegrationsContextType {
   toggleConnection: (id: string) => void;
   isConnected: (id: string) => boolean;
   refreshConnections: () => Promise<void>;
+  removeAccount: (provider: string, email: string) => Promise<void>;
 }
 
 const defaultIntegrations: Integration[] = [
@@ -108,6 +109,7 @@ const IntegrationsContext = createContext<IntegrationsContextType>({
   toggleConnection: () => {},
   isConnected: () => false,
   refreshConnections: async () => {},
+  removeAccount: async () => {},
 });
 
 export const useIntegrations = () => useContext(IntegrationsContext);
@@ -171,13 +173,24 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
   }, []);
 
+  const removeAccount = useCallback(async (provider: string, email: string) => {
+    const { error } = await supabase
+      .from("google_oauth_tokens")
+      .delete()
+      .eq("provider", provider)
+      .eq("email", email);
+    if (!error) {
+      await fetchConnected();
+    }
+  }, [fetchConnected]);
+
   const isConnected = useCallback(
     (id: string) => integrations.find((i) => i.id === id)?.connected ?? false,
     [integrations]
   );
 
   return (
-    <IntegrationsContext.Provider value={{ integrations, toggleConnection, isConnected, refreshConnections: fetchConnected }}>
+    <IntegrationsContext.Provider value={{ integrations, toggleConnection, isConnected, refreshConnections: fetchConnected, removeAccount }}>
       {children}
     </IntegrationsContext.Provider>
   );
