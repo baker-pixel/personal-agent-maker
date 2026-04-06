@@ -161,8 +161,8 @@ function detectConflicts(events: any[]) {
 // --- Detect if user is asking about real data ---
 function needsRealData(latestMessage: string): { emails: boolean; calendar: boolean } {
   const lower = latestMessage.toLowerCase();
-  const emailKeywords = ["email", "inbox", "mail", "triage", "follow-up", "follow up", "reply", "replies", "unread", "urgent email", "briefing", "brief me", "fill me in", "catch me up", "what did i miss", "what's new", "update me", "morning briefing", "what's going on", "what happened", "draft", "auto-draft", "snooze", "remind me"];
-  const calKeywords = ["meeting", "calendar", "schedule", "agenda", "today", "briefing", "brief me", "fill me in", "catch me up", "what's next", "morning briefing", "what's going on", "prep me", "conflict", "double-book", "reschedule", "availability", "free slot", "open time"];
+  const emailKeywords = ["email", "emial", "emal", "inbox", "mail", "triage", "follow-up", "follow up", "reply", "replies", "unread", "urgent", "briefing", "brief me", "fill me in", "catch me up", "what did i miss", "missed", "what's new", "update me", "morning briefing", "what's going on", "what happened", "draft", "auto-draft", "snooze", "remind me", "important", "messages", "correspondence"];
+  const calKeywords = ["meeting", "calendar", "schedule", "agenda", "today", "briefing", "brief me", "fill me in", "catch me up", "what's next", "morning briefing", "what's going on", "prep me", "conflict", "double-book", "reschedule", "availability", "free slot", "open time", "appointment", "event", "busy", "tomorrow"];
 
   return {
     emails: emailKeywords.some((k) => lower.includes(k)),
