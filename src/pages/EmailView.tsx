@@ -6,9 +6,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Sparkles, Check, X, Edit2, Send, Mic, MicOff, ChevronDown, ChevronUp, Inbox, GripVertical } from "lucide-react";
+import { ArrowLeft, Sparkles, Check, X, Edit2, Send, Mic, MicOff, ChevronDown, ChevronUp, Inbox, GripVertical, Loader2, RefreshCw, Mail } from "lucide-react";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
 import AppMenu from "@/components/AppMenu";
+import { supabase } from "@/integrations/supabase/client";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
 
 type Priority = "urgent" | "important" | "low" | "noise";
 
@@ -24,48 +26,9 @@ interface Email {
   needsAction: boolean;
   agentDraft?: string;
   handled: boolean;
+  isUnread: boolean;
+  threadId?: string;
 }
-
-const mockEmails: Email[] = [
-  {
-    id: "1", sender: "Sarah Chen", senderEmail: "sarah@acmedesign.co",
-    subject: "Contract revision — needs your approval",
-    preview: "Hi, I've updated the contract terms as discussed. The new payment schedule...",
-    body: "Hi,\n\nI've updated the contract terms as discussed in our last meeting. The new payment schedule reflects the 60/40 split we agreed on.\n\nThe deadline for signing is this Friday. Could you review and confirm?\n\nBest,\nSarah",
-    time: "9:15 AM", priority: "urgent", needsAction: true, handled: false,
-    agentDraft: "Hi Sarah,\n\nThank you for sending the updated contract. I've reviewed the terms and the 60/40 payment schedule looks good.\n\nI'll have the signed copy back to you by Thursday.\n\nBest regards",
-  },
-  {
-    id: "2", sender: "Tom Rivera", senderEmail: "tom@supplierco.com",
-    subject: "Invoice #4521 — payment received",
-    preview: "Just confirming we received your payment for invoice #4521...",
-    body: "Hi,\n\nJust confirming we received your payment for invoice #4521. Everything is settled.\n\nThanks for the prompt payment!\n\nTom",
-    time: "8:42 AM", priority: "low", needsAction: false, handled: true,
-  },
-  {
-    id: "3", sender: "Maria Lopez", senderEmail: "maria@clientfirm.com",
-    subject: "Meeting reschedule — Thursday?",
-    preview: "Could we move our meeting from Wednesday to Thursday at 2 PM?",
-    body: "Hi,\n\nSomething came up and I won't be available Wednesday. Could we move our meeting to Thursday at 2 PM instead?\n\nLet me know if that works.\n\nMaria",
-    time: "8:20 AM", priority: "important", needsAction: true, handled: false,
-    agentDraft: "Hi Maria,\n\nThursday at 2 PM works perfectly. I've updated my calendar.\n\nSee you then!",
-  },
-  {
-    id: "4", sender: "Newsletter", senderEmail: "news@techdigest.io",
-    subject: "This week in AI — March 31 roundup",
-    preview: "Top stories: GPT-5 launch, AI regulation updates, new tools for SMBs...",
-    body: "This week in AI:\n\n1. GPT-5 launches with improved reasoning\n2. EU AI Act enters enforcement phase\n3. New tools making AI accessible for SMBs\n\nRead more at techdigest.io",
-    time: "7:00 AM", priority: "noise", needsAction: false, handled: true,
-  },
-  {
-    id: "5", sender: "James Park", senderEmail: "james@vendorx.com",
-    subject: "Proposal for Q2 partnership",
-    preview: "We'd love to explore a partnership for Q2. I've attached our proposal...",
-    body: "Hi,\n\nWe've been following your company's growth and would love to explore a partnership for Q2.\n\nI've attached our proposal with pricing and deliverables. Happy to hop on a call this week to discuss.\n\nBest,\nJames",
-    time: "Yesterday", priority: "important", needsAction: true, handled: false,
-    agentDraft: "Hi James,\n\nThanks for reaching out — the proposal looks interesting. I'd like to review the details more carefully before committing to a call.\n\nCould you send over the full deliverables breakdown? I'll get back to you by end of week.",
-  },
-];
 
 const priorityColor: Record<Priority, string> = {
   urgent: "bg-priority-urgent",
@@ -74,17 +37,59 @@ const priorityColor: Record<Priority, string> = {
   noise: "bg-priority-noise",
 };
 
+function formatTime(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHrs = Math.floor(diffMins / 60);
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    const diffDays = Math.floor(diffHrs / 24);
+    if (diffDays === 1) return "Yesterday";
+    return d.toLocaleDateString();
+  } catch {
+    return dateStr;
+  }
+}
+
+function extractEmail(from: string): string {
+  const match = from.match(/<(.+?)>/);
+  return match ? match[1] : from;
+}
+
+function extractName(from: string): string {
+  return from.replace(/<.*>/, "").replace(/"/g, "").trim() || from;
+}
+
+function guessPriority(email: { isUnread: boolean; subject: string; from: string }): Priority {
+  const subj = email.subject.toLowerCase();
+  if (subj.includes("urgent") || subj.includes("asap") || subj.includes("immediately")) return "urgent";
+  if (subj.includes("action") || subj.includes("approval") || subj.includes("review") || subj.includes("confirm")) return "important";
+  if (subj.includes("newsletter") || subj.includes("digest") || subj.includes("unsubscribe") || subj.includes("promo")) return "noise";
+  if (email.isUnread) return "important";
+  return "low";
+}
+
 export default function EmailView() {
   const navigate = useNavigate();
+  const { isConnected } = useIntegrations();
   const [agentName, setAgentName] = useState("Annie");
   const [desk, setDesk] = useState<"agent" | "my">("agent");
+  const [emails, setEmails] = useState<Email[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [loadingBody, setLoadingBody] = useState(false);
   const [agentSheetOpen, setAgentSheetOpen] = useState(false);
   const [agentInput, setAgentInput] = useState("");
   const annieChat = useAnnieChat(agentName);
   const speech = useSpeechRecognition({
     onResult: (text) => setAgentInput((prev) => (prev ? prev + " " : "") + text),
   });
+
+  const gmailConnected = isConnected("gmail");
 
   const handleAgentSend = () => {
     if (!agentInput.trim()) return;
@@ -96,13 +101,7 @@ export default function EmailView() {
   const [autoHandledOpen, setAutoHandledOpen] = useState(false);
   const [editingDraft, setEditingDraft] = useState(false);
   const [draftText, setDraftText] = useState("");
-  const [deskAssignments, setDeskAssignments] = useState<Record<string, "agent" | "my">>(() => {
-    const assignments: Record<string, "agent" | "my"> = {};
-    mockEmails.forEach((e) => {
-      assignments[e.id] = e.needsAction ? "my" : "agent";
-    });
-    return assignments;
-  });
+  const [deskAssignments, setDeskAssignments] = useState<Record<string, "agent" | "my">>({});
   const [dragOverDesk, setDragOverDesk] = useState<"agent" | "my" | null>(null);
 
   useEffect(() => {
@@ -112,14 +111,109 @@ export default function EmailView() {
     }
   }, []);
 
-  const agentDeskEmails = mockEmails.filter((e) => deskAssignments[e.id] === "agent");
-  const myDeskEmails = mockEmails.filter((e) => deskAssignments[e.id] === "my");
-  const autoHandledEmails = mockEmails.filter((e) => e.handled && !e.needsAction && deskAssignments[e.id] === "agent");
+  const fetchEmails = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("gmail-fetch", {
+        body: null,
+      });
+      if (fnError) throw fnError;
+      if (data?.error) throw new Error(data.error);
+
+      const fetched: Email[] = (data?.emails || []).map((e: any) => {
+        const priority = guessPriority({ isUnread: e.isUnread, subject: e.subject, from: e.from });
+        const needsAction = priority === "urgent" || priority === "important";
+        return {
+          id: e.id,
+          sender: extractName(e.from),
+          senderEmail: extractEmail(e.from),
+          subject: e.subject || "(no subject)",
+          preview: e.snippet || "",
+          body: "",
+          time: formatTime(e.date),
+          priority,
+          needsAction,
+          handled: !needsAction,
+          isUnread: e.isUnread,
+          threadId: e.threadId,
+        };
+      });
+
+      setEmails(fetched);
+
+      // Initialize desk assignments
+      const assignments: Record<string, "agent" | "my"> = {};
+      fetched.forEach((e) => {
+        assignments[e.id] = e.needsAction ? "my" : "agent";
+      });
+      setDeskAssignments(assignments);
+    } catch (err: any) {
+      console.error("Failed to fetch emails:", err);
+      setError(err.message || "Failed to load emails");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (gmailConnected) fetchEmails();
+  }, [gmailConnected, fetchEmails]);
+
+  const agentDeskEmails = emails.filter((e) => deskAssignments[e.id] === "agent");
+  const myDeskEmails = emails.filter((e) => deskAssignments[e.id] === "my");
+  const autoHandledEmails = emails.filter((e) => e.handled && !e.needsAction && deskAssignments[e.id] === "agent");
   const currentEmails = desk === "agent" ? agentDeskEmails : myDeskEmails;
 
   const moveToDesk = useCallback((emailId: string, targetDesk: "agent" | "my") => {
     setDeskAssignments((prev) => ({ ...prev, [emailId]: targetDesk }));
   }, []);
+
+  const openEmail = async (email: Email) => {
+    setSelectedEmail(email);
+    setDraftText(email.agentDraft || "");
+    setEditingDraft(false);
+
+    // Fetch full body if not loaded yet
+    if (!email.body) {
+      setLoadingBody(true);
+      try {
+        const { data, error: fnError } = await supabase.functions.invoke("gmail-fetch", {
+          body: null,
+          headers: {},
+        });
+        // Use query params via URL - invoke doesn't support query params directly,
+        // so we'll use fetch directly
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("Not authenticated");
+
+        const resp = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-fetch?messageId=${email.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            },
+          }
+        );
+        const msgData = await resp.json();
+        if (msgData.error) throw new Error(msgData.error);
+
+        const bodyText = msgData.isHtml
+          ? msgData.body.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim()
+          : msgData.body;
+
+        setEmails((prev) =>
+          prev.map((e) => (e.id === email.id ? { ...e, body: bodyText } : e))
+        );
+        setSelectedEmail((prev) => prev ? { ...prev, body: bodyText } : prev);
+      } catch (err: any) {
+        console.error("Failed to fetch email body:", err);
+      } finally {
+        setLoadingBody(false);
+      }
+    }
+  };
 
   const DeskEmpty = ({ message, sub }: { message: string; sub: string }) => (
     <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -165,12 +259,6 @@ export default function EmailView() {
     </div>
   );
 
-  const openEmail = (email: Email) => {
-    setSelectedEmail(email);
-    setDraftText(email.agentDraft || "");
-    setEditingDraft(false);
-  };
-
   const EmailCard = ({ email }: { email: Email }) => (
     <div
       draggable
@@ -187,7 +275,10 @@ export default function EmailView() {
           <div className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${priorityColor[email.priority]}`} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between mb-1">
-              <p className="font-medium text-sm truncate">{email.sender}</p>
+              <p className="font-medium text-sm truncate">
+                {email.sender}
+                {email.isUnread && <span className="ml-2 w-2 h-2 inline-block rounded-full bg-accent" />}
+              </p>
               <span className="text-xs text-muted-foreground shrink-0 ml-2">{email.time}</span>
             </div>
             <p className="text-sm font-medium mb-1 truncate">{email.subject}</p>
@@ -195,13 +286,38 @@ export default function EmailView() {
           </div>
         </div>
       </div>
-      {email.agentDraft && (
-        <div className="absolute bottom-2 right-2 w-6 h-6 rounded-full bg-accent flex items-center justify-center text-accent-foreground text-xs font-bold">
-          {agentName.charAt(0)}
-        </div>
-      )}
     </div>
   );
+
+  // Not connected state
+  if (!gmailConnected) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <nav className="border-b bg-background sticky top-0 z-50">
+          <div className="container flex items-center justify-between h-14">
+            <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+              <span className="text-sm font-medium">Admin</span>
+            </button>
+            <h1 className="font-display font-semibold">Email</h1>
+            <AppMenu />
+          </div>
+        </nav>
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center max-w-md">
+            <Mail className="w-12 h-12 text-accent mx-auto mb-4" />
+            <h2 className="font-display text-2xl font-semibold mb-2">Connect Gmail</h2>
+            <p className="text-muted-foreground mb-4">
+              Connect your Gmail account in Settings to view and manage your emails here.
+            </p>
+            <Button onClick={() => navigate("/settings")} className="bg-accent text-accent-foreground hover:bg-accent/90">
+              Go to Settings
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -212,70 +328,106 @@ export default function EmailView() {
             <span className="text-sm font-medium">Admin</span>
           </button>
           <h1 className="font-display font-semibold">Email</h1>
-          <AppMenu />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchEmails}
+              disabled={loading}
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            </button>
+            <AppMenu />
+          </div>
         </div>
       </nav>
 
-      <div className="border-b bg-card md:hidden">
-        <div className="container flex">
-          {(["agent", "my"] as const).map((d) => (
-            <button
-              key={d}
-              onClick={() => setDesk(d)}
-              className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${
-                desk === d ? "border-accent text-accent" : "border-transparent text-muted-foreground"
-              }`}
-            >
-              {d === "agent" ? `${agentName}'s Desk` : "My Desk"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex-1 container py-4">
-        <div className="hidden md:grid md:grid-cols-2 gap-6">
-          <div
-            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverDesk("agent"); }}
-            onDragLeave={() => setDragOverDesk(null)}
-            onDrop={(e) => { e.preventDefault(); setDragOverDesk(null); const id = e.dataTransfer.getData("emailId"); if (id) moveToDesk(id, "agent"); }}
-            className={`rounded-2xl border-2 border-dashed p-4 transition-colors min-h-[200px] ${dragOverDesk === "agent" ? "border-accent bg-accent/5" : "border-transparent"}`}
-          >
-            <h2 className="font-display font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide">{agentName}'s Desk</h2>
-            {agentDeskEmails.length === 0 ? (
-              <DeskEmpty message={`${agentName} handled everything`} sub="All emails have been processed." />
-            ) : (
-              <div className="space-y-3">{agentDeskEmails.map((email) => <EmailCard key={email.id} email={email} />)}</div>
-            )}
-            {autoHandledEmails.length > 0 && <AutoHandledSection />}
-          </div>
-
-          <div
-            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverDesk("my"); }}
-            onDragLeave={() => setDragOverDesk(null)}
-            onDrop={(e) => { e.preventDefault(); setDragOverDesk(null); const id = e.dataTransfer.getData("emailId"); if (id) moveToDesk(id, "my"); }}
-            className={`rounded-2xl border-2 border-dashed p-4 transition-colors min-h-[200px] ${dragOverDesk === "my" ? "border-accent bg-accent/5" : "border-transparent"}`}
-          >
-            <h2 className="font-display font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide">My Desk</h2>
-            {myDeskEmails.length === 0 ? (
-              <DeskEmpty message="Nothing needs your attention" sub="Your agent is taking care of business." />
-            ) : (
-              <div className="space-y-3">{myDeskEmails.map((email) => <EmailCard key={email.id} email={email} />)}</div>
-            )}
+      {/* Loading */}
+      {loading && emails.length === 0 && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 text-accent animate-spin mx-auto mb-3" />
+            <p className="text-muted-foreground text-sm">Loading your inbox...</p>
           </div>
         </div>
+      )}
 
-        <div className="md:hidden max-w-2xl mx-auto">
-          {currentEmails.length === 0 ? (
-            <DeskEmpty
-              message={desk === "agent" ? `${agentName} handled everything` : "Nothing needs your attention"}
-              sub={desk === "agent" ? "All emails have been processed." : "Your agent is taking care of business."}
-            />
-          ) : (
-            <div className="space-y-3">{currentEmails.map((email) => <EmailCard key={email.id} email={email} />)}</div>
-          )}
-          {desk === "agent" && autoHandledEmails.length > 0 && <AutoHandledSection />}
+      {/* Error */}
+      {error && !loading && (
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center max-w-md">
+            <X className="w-10 h-10 text-destructive mx-auto mb-3" />
+            <p className="text-foreground font-medium mb-2">Failed to load emails</p>
+            <p className="text-muted-foreground text-sm mb-4">{error}</p>
+            <Button onClick={fetchEmails} variant="outline">Try again</Button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Content */}
+      {!loading && !error && (
+        <>
+          <div className="border-b bg-card md:hidden">
+            <div className="container flex">
+              {(["agent", "my"] as const).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDesk(d)}
+                  className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${
+                    desk === d ? "border-accent text-accent" : "border-transparent text-muted-foreground"
+                  }`}
+                >
+                  {d === "agent" ? `${agentName}'s Desk` : "My Desk"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 container py-4">
+            <div className="hidden md:grid md:grid-cols-2 gap-6">
+              <div
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverDesk("agent"); }}
+                onDragLeave={() => setDragOverDesk(null)}
+                onDrop={(e) => { e.preventDefault(); setDragOverDesk(null); const id = e.dataTransfer.getData("emailId"); if (id) moveToDesk(id, "agent"); }}
+                className={`rounded-2xl border-2 border-dashed p-4 transition-colors min-h-[200px] ${dragOverDesk === "agent" ? "border-accent bg-accent/5" : "border-transparent"}`}
+              >
+                <h2 className="font-display font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide">{agentName}'s Desk</h2>
+                {agentDeskEmails.length === 0 ? (
+                  <DeskEmpty message={`${agentName} handled everything`} sub="All emails have been processed." />
+                ) : (
+                  <div className="space-y-3">{agentDeskEmails.map((email) => <EmailCard key={email.id} email={email} />)}</div>
+                )}
+                {autoHandledEmails.length > 0 && <AutoHandledSection />}
+              </div>
+
+              <div
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverDesk("my"); }}
+                onDragLeave={() => setDragOverDesk(null)}
+                onDrop={(e) => { e.preventDefault(); setDragOverDesk(null); const id = e.dataTransfer.getData("emailId"); if (id) moveToDesk(id, "my"); }}
+                className={`rounded-2xl border-2 border-dashed p-4 transition-colors min-h-[200px] ${dragOverDesk === "my" ? "border-accent bg-accent/5" : "border-transparent"}`}
+              >
+                <h2 className="font-display font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide">My Desk</h2>
+                {myDeskEmails.length === 0 ? (
+                  <DeskEmpty message="Nothing needs your attention" sub="Your agent is taking care of business." />
+                ) : (
+                  <div className="space-y-3">{myDeskEmails.map((email) => <EmailCard key={email.id} email={email} />)}</div>
+                )}
+              </div>
+            </div>
+
+            <div className="md:hidden max-w-2xl mx-auto">
+              {currentEmails.length === 0 ? (
+                <DeskEmpty
+                  message={desk === "agent" ? `${agentName} handled everything` : "Nothing needs your attention"}
+                  sub={desk === "agent" ? "All emails have been processed." : "Your agent is taking care of business."}
+                />
+              ) : (
+                <div className="space-y-3">{currentEmails.map((email) => <EmailCard key={email.id} email={email} />)}</div>
+              )}
+              {desk === "agent" && autoHandledEmails.length > 0 && <AutoHandledSection />}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Email Modal */}
       <AnimatePresence>
@@ -309,7 +461,17 @@ export default function EmailView() {
                 <p className="text-sm text-muted-foreground mb-4">
                   From: {selectedEmail.sender} &lt;{selectedEmail.senderEmail}&gt; · {selectedEmail.time}
                 </p>
-                <div className="bg-card border rounded-xl p-4 mb-6 whitespace-pre-line text-sm">{selectedEmail.body}</div>
+
+                {loadingBody ? (
+                  <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">Loading email...</span>
+                  </div>
+                ) : (
+                  <div className="bg-card border rounded-xl p-4 mb-6 whitespace-pre-line text-sm">
+                    {selectedEmail.body || selectedEmail.preview}
+                  </div>
+                )}
 
                 {selectedEmail.agentDraft && (
                   <div className="space-y-3">
