@@ -1,18 +1,17 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight } from "lucide-react";
+import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import AppMenu from "@/components/AppMenu";
+import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface AgentSettings {
   agentName: string;
   phoneNumber: string;
-  email: boolean;
-  calendar: boolean;
-  gmailConnected: boolean;
-  calendarConnected: boolean;
   tone: string;
   emailLength: string;
   priorityVisibility: string;
@@ -25,10 +24,6 @@ interface AgentSettings {
 const defaults: AgentSettings = {
   agentName: "Annie",
   phoneNumber: "",
-  email: true,
-  calendar: true,
-  gmailConnected: false,
-  calendarConnected: false,
   tone: "friendly",
   emailLength: "balanced",
   priorityVisibility: "important",
@@ -42,6 +37,14 @@ export default function Settings() {
   const navigate = useNavigate();
   const [settings, setSettings] = useState<AgentSettings>(defaults);
   const [saved, setSaved] = useState(false);
+  const { connecting, connect } = useGoogleOAuthPopup();
+  const { isConnected, integrations } = useIntegrations();
+  const { toast } = useToast();
+
+  const gmailConnected = isConnected("gmail");
+  const calendarConnected = isConnected("google-calendar");
+  const gmailAccounts = integrations.find(i => i.id === "gmail")?.connectedAccounts || [];
+  const calendarAccounts = integrations.find(i => i.id === "google-calendar")?.connectedAccounts || [];
 
   useEffect(() => {
     const stored = localStorage.getItem("normy_agent");
@@ -60,6 +63,18 @@ export default function Settings() {
     localStorage.setItem("normy_agent", JSON.stringify(settings));
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleConnect = async (service: string) => {
+    try {
+      await connect(service);
+    } catch (err: any) {
+      toast({
+        title: "Connection failed",
+        description: err.message || "Could not connect account",
+        variant: "destructive",
+      });
+    }
   };
 
   const OptionBtn = ({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) => (
@@ -157,23 +172,63 @@ export default function Settings() {
             <h2 className="font-display font-semibold">Connected Accounts</h2>
           </div>
           <div className="space-y-2">
+            {/* Gmail */}
             <div className="flex items-center justify-between border rounded-xl p-4">
               <div>
                 <p className="font-medium text-sm">Gmail / Outlook</p>
-                <p className="text-xs text-muted-foreground">{settings.gmailConnected ? "Connected" : "Not connected"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {gmailConnected
+                    ? gmailAccounts.length > 0
+                      ? `Connected · ${gmailAccounts.join(", ")}`
+                      : "Connected"
+                    : "Not connected"}
+                </p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => update("gmailConnected", !settings.gmailConnected)}>
-                {settings.gmailConnected ? "Disconnect" : "Connect"}
-              </Button>
+              {gmailConnected ? (
+                <Button variant="outline" size="sm" disabled>Connected</Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleConnect("gmail")}
+                  disabled={connecting === "gmail"}
+                >
+                  {connecting === "gmail" ? (
+                    <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Connecting...</>
+                  ) : (
+                    "Connect"
+                  )}
+                </Button>
+              )}
             </div>
+            {/* Calendar */}
             <div className="flex items-center justify-between border rounded-xl p-4">
               <div>
                 <p className="font-medium text-sm">Calendar</p>
-                <p className="text-xs text-muted-foreground">{settings.calendarConnected ? "Connected" : "Not connected"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {calendarConnected
+                    ? calendarAccounts.length > 0
+                      ? `Connected · ${calendarAccounts.join(", ")}`
+                      : "Connected"
+                    : "Not connected"}
+                </p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => update("calendarConnected", !settings.calendarConnected)}>
-                {settings.calendarConnected ? "Disconnect" : "Connect"}
-              </Button>
+              {calendarConnected ? (
+                <Button variant="outline" size="sm" disabled>Connected</Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleConnect("google-calendar")}
+                  disabled={connecting === "google-calendar"}
+                >
+                  {connecting === "google-calendar" ? (
+                    <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Connecting...</>
+                  ) : (
+                    "Connect"
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         </section>
