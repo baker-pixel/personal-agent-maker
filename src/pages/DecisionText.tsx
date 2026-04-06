@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, Send, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useAnnieChat } from "@/hooks/useAnnieChat";
 import ReactMarkdown from "react-markdown";
@@ -47,7 +47,13 @@ export default function DecisionText() {
       </nav>
 
       <div className="flex-1 container max-w-lg py-6 px-4 overflow-y-auto">
-        {chat.messages.length === 0 && !chat.thinking && (
+        {chat.loading && (
+          <div className="flex items-center justify-center h-full pt-20">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {!chat.loading && chat.messages.length === 0 && !chat.thinking && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
