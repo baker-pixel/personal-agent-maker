@@ -38,7 +38,7 @@ export default function Settings() {
   const [settings, setSettings] = useState<AgentSettings>(defaults);
   const [saved, setSaved] = useState(false);
   const { connecting, connect } = useGoogleOAuthPopup();
-  const { isConnected, integrations } = useIntegrations();
+  const { isConnected, integrations, removeAccount } = useIntegrations();
   const { toast } = useToast();
 
   const gmailConnected = isConnected("gmail");
