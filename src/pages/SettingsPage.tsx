@@ -173,62 +173,78 @@ export default function Settings() {
           </div>
           <div className="space-y-2">
             {/* Gmail */}
-            <div className="flex items-center justify-between border rounded-xl p-4">
-              <div>
-                <p className="font-medium text-sm">Gmail / Outlook</p>
-                <p className="text-xs text-muted-foreground">
-                  {gmailConnected
-                    ? gmailAccounts.length > 0
-                      ? `Connected · ${gmailAccounts.join(", ")}`
-                      : "Connected"
-                    : "Not connected"}
-                </p>
+            <div className="border rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-sm">Gmail / Outlook</p>
+                  <p className="text-xs text-muted-foreground">
+                    {gmailAccounts.length > 0 ? `${gmailAccounts.length} account(s) connected` : "Not connected"}
+                  </p>
+                </div>
               </div>
-              {gmailConnected ? (
-                <Button variant="outline" size="sm" disabled>Connected</Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleConnect("gmail")}
-                  disabled={connecting === "gmail"}
-                >
-                  {connecting === "gmail" ? (
-                    <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Connecting...</>
-                  ) : (
-                    "Connect"
-                  )}
-                </Button>
-              )}
+              {gmailAccounts.map((email) => (
+                <div key={email} className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
+                  <span className="text-sm truncate">{email}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeAccount("gmail", email)}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => handleConnect("gmail")}
+                disabled={connecting === "gmail"}
+              >
+                {connecting === "gmail" ? (
+                  <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Connecting...</>
+                ) : (
+                  <><Plus className="w-3 h-3 mr-1" /> {gmailAccounts.length > 0 ? "Add another account" : "Connect Gmail"}</>
+                )}
+              </Button>
             </div>
             {/* Calendar */}
-            <div className="flex items-center justify-between border rounded-xl p-4">
-              <div>
-                <p className="font-medium text-sm">Calendar</p>
-                <p className="text-xs text-muted-foreground">
-                  {calendarConnected
-                    ? calendarAccounts.length > 0
-                      ? `Connected · ${calendarAccounts.join(", ")}`
-                      : "Connected"
-                    : "Not connected"}
-                </p>
+            <div className="border rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-sm">Calendar</p>
+                  <p className="text-xs text-muted-foreground">
+                    {calendarAccounts.length > 0 ? `${calendarAccounts.length} account(s) connected` : "Not connected"}
+                  </p>
+                </div>
               </div>
-              {calendarConnected ? (
-                <Button variant="outline" size="sm" disabled>Connected</Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleConnect("google-calendar")}
-                  disabled={connecting === "google-calendar"}
-                >
-                  {connecting === "google-calendar" ? (
-                    <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Connecting...</>
-                  ) : (
-                    "Connect"
-                  )}
-                </Button>
-              )}
+              {calendarAccounts.map((email) => (
+                <div key={email} className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
+                  <span className="text-sm truncate">{email}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeAccount("google-calendar", email)}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => handleConnect("google-calendar")}
+                disabled={connecting === "google-calendar"}
+              >
+                {connecting === "google-calendar" ? (
+                  <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Connecting...</>
+                ) : (
+                  <><Plus className="w-3 h-3 mr-1" /> {calendarAccounts.length > 0 ? "Add another account" : "Connect Calendar"}</>
+                )}
+              </Button>
             </div>
           </div>
         </section>
