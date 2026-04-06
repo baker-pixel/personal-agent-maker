@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Send, Loader2 } from "lucide-react";
+import { ArrowLeft, Send, Loader2, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useAnnieChat } from "@/hooks/useAnnieChat";
 import ReactMarkdown from "react-markdown";
@@ -43,6 +43,16 @@ export default function DecisionText() {
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm font-medium">Back</span>
           </button>
+          <div className="flex-1" />
+          {chat.messages.length > 0 && (
+            <button
+              onClick={chat.reset}
+              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-accent/50"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New chat
+            </button>
+          )}
         </div>
       </nav>
 
