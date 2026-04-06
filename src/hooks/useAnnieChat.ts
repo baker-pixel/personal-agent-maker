@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -9,10 +9,82 @@ export interface ChatMessage {
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
+async function getOrCreateConversation(userId: string): Promise<string | null> {
+  // Look for the most recent delegate conversation (last 24h) to resume
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: existing } = await supabase
+    .from("chat_conversations")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("title", "Delegate")
+    .gte("updated_at", cutoff)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+
+  if (existing && existing.length > 0) return existing[0].id;
+
+  const { data: created, error } = await supabase
+    .from("chat_conversations")
+    .insert({ user_id: userId, title: "Delegate" })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("Failed to create conversation:", error);
+    return null;
+  }
+  return created.id;
+}
+
+async function persistMessage(conversationId: string, role: string, content: string) {
+  await supabase.from("chat_messages").insert({
+    conversation_id: conversationId,
+    role,
+    content,
+  });
+  // Touch conversation updated_at
+  await supabase
+    .from("chat_conversations")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", conversationId);
+}
+
 export function useAnnieChat(agentName: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [thinking, setThinking] = useState(false);
+  const [loading, setLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
+  const convIdRef = useRef<string | null>(null);
+
+  // Load existing conversation on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user || cancelled) { setLoading(false); return; }
+
+      const convId = await getOrCreateConversation(session.user.id);
+      if (!convId || cancelled) { setLoading(false); return; }
+      convIdRef.current = convId;
+
+      const { data: msgs } = await supabase
+        .from("chat_messages")
+        .select("role, content")
+        .eq("conversation_id", convId)
+        .order("created_at", { ascending: true });
+
+      if (msgs && msgs.length > 0 && !cancelled) {
+        setMessages(
+          msgs.map((m) => ({
+            role: m.role === "user" ? "user" : "agent",
+            text: m.content,
+          })) as ChatMessage[]
+        );
+      }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const send = useCallback(
     async (input: string) => {
@@ -22,6 +94,11 @@ export function useAnnieChat(agentName: string) {
       const userMsg: ChatMessage = { role: "user", text: trimmed };
       setMessages((prev) => [...prev, userMsg]);
       setThinking(true);
+
+      // Persist user message
+      if (convIdRef.current) {
+        persistMessage(convIdRef.current, "user", trimmed);
+      }
 
       let assistantSoFar = "";
 
@@ -39,12 +116,16 @@ export function useAnnieChat(agentName: string) {
       };
 
       try {
-        // Get auth token so the edge function can access real user data
         const { data: { session } } = await supabase.auth.getSession();
         const authHeaders: Record<string, string> = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         };
+
+        // Ensure we have a conversation ID
+        if (!convIdRef.current && session?.user) {
+          convIdRef.current = await getOrCreateConversation(session.user.id);
+        }
 
         const apiMessages = [...messages, userMsg].map((m) => ({
           role: m.role === "user" ? ("user" as const) : ("assistant" as const),
@@ -100,6 +181,11 @@ export function useAnnieChat(agentName: string) {
             }
           }
         }
+
+        // Persist assistant response after streaming completes
+        if (convIdRef.current && assistantSoFar) {
+          persistMessage(convIdRef.current, "assistant", assistantSoFar);
+        }
       } catch (err: any) {
         if (err?.name === "AbortError") return;
         console.error("Agent chat error:", err);
@@ -114,11 +200,13 @@ export function useAnnieChat(agentName: string) {
     [messages, thinking, agentName]
   );
 
-  const reset = useCallback(() => {
+  const reset = useCallback(async () => {
     abortRef.current?.abort();
     setMessages([]);
     setThinking(false);
+    // Start a fresh conversation next time
+    convIdRef.current = null;
   }, []);
 
-  return { messages, thinking, send, reset };
+  return { messages, thinking, loading, send, reset };
 }
