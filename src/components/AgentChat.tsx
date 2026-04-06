@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { useAgent } from "@/contexts/AgentContext";
 import { Send, Loader2, Zap, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -44,11 +46,12 @@ export const AgentChat = () => {
     };
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
           messages: [...messages, userMsg],
@@ -171,9 +174,12 @@ export const AgentChat = () => {
               }`}
             >
               {msg.role === "assistant" ? (
-                <div className="prose prose-sm max-w-none text-foreground prose-headings:font-display prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-accent prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
-                </div>
+                <>
+                  <div className="prose prose-sm max-w-none text-foreground prose-headings:font-display prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-accent prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
+                    <ReactMarkdown>{msg.content.replace(/```draft-json[\s\S]*?```/g, "")}</ReactMarkdown>
+                  </div>
+                  <DraftJsonParser text={msg.content} />
+                </>
               ) : (
                 <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
               )}
