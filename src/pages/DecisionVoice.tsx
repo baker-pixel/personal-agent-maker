@@ -7,6 +7,7 @@ import { useAnnieChat } from "@/hooks/useAnnieChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
 import ReactMarkdown from "react-markdown";
+import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 
 export default function DecisionVoice() {
   const navigate = useNavigate();
@@ -84,9 +85,12 @@ export default function DecisionVoice() {
                 }`}
               >
                 {msg.role === "agent" ? (
-                  <div className="prose prose-sm max-w-none">
-                    <ReactMarkdown>{msg.text}</ReactMarkdown>
-                  </div>
+                  <>
+                    <div className="prose prose-sm max-w-none">
+                      <ReactMarkdown>{msg.text.replace(/```draft-json[\s\S]*?```/g, "")}</ReactMarkdown>
+                    </div>
+                    <DraftJsonParser text={msg.text} />
+                  </>
                 ) : (
                   msg.text
                 )}
