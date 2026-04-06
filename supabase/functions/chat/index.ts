@@ -184,13 +184,11 @@ serve(async (req) => {
     const timeOfDay = now.getHours() < 12 ? "morning" : now.getHours() < 17 ? "afternoon" : "evening";
     const today = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
-    const latestUserMsg = messages.filter((m: any) => m.role === "user").pop()?.content || "";
-    const dataNeeds = needsRealData(latestUserMsg);
-
     let realDataContext = "";
     const authHeader = req.headers.get("Authorization");
 
-    if (authHeader && (dataNeeds.emails || dataNeeds.calendar)) {
+    // Always fetch real data when user is authenticated — no keyword gating
+    if (authHeader) {
       const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -201,8 +199,8 @@ serve(async (req) => {
 
       if (user) {
         const [gmailToken, calToken] = await Promise.all([
-          dataNeeds.emails ? getValidToken(user.id, "gmail") : null,
-          dataNeeds.calendar ? getValidToken(user.id, "google-calendar") : null,
+          getValidToken(user.id, "gmail"),
+          getValidToken(user.id, "google-calendar"),
         ]);
 
         const [emails, events] = await Promise.all([
@@ -220,8 +218,6 @@ Date: ${e.date}
 Preview: ${e.snippet}\n`;
           });
           realDataContext += "\n--- END INBOX DATA ---\n";
-        } else if (dataNeeds.emails) {
-          realDataContext += "\n\n[Gmail is not connected. Let the user know they need to connect Gmail via Integrations (plug icon in the top right) to get real email data.]\n";
         }
 
         if (events.length > 0) {
@@ -234,7 +230,6 @@ Attendees: ${e.attendees?.map((a: any) => `${a.name} (${a.status})`).join(", ") 
 Location: ${e.location || "None"}\n`;
           });
 
-          // Add conflict detection
           const conflicts = detectConflicts(events);
           if (conflicts.length > 0) {
             realDataContext += "\n\n--- ⚠️ SCHEDULING CONFLICTS DETECTED ---\n";
@@ -243,8 +238,10 @@ Location: ${e.location || "None"}\n`;
           }
 
           realDataContext += "\n--- END CALENDAR DATA ---\n";
-        } else if (dataNeeds.calendar) {
-          realDataContext += "\n\n[Google Calendar is not connected. Let the user know they need to connect Google Calendar via Integrations (plug icon in the top right) to get real calendar data.]\n";
+        }
+
+        if (!gmailToken && !calToken) {
+          realDataContext += "\n\n[No accounts connected. If the user asks about emails or calendar, let them know they can connect via Integrations (plug icon in the top right).]\n";
         }
       }
     }
