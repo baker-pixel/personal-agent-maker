@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { Send, Loader2, Zap, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -171,9 +172,12 @@ export const AgentChat = () => {
               }`}
             >
               {msg.role === "assistant" ? (
-                <div className="prose prose-sm max-w-none text-foreground prose-headings:font-display prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-accent prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
-                </div>
+                <>
+                  <div className="prose prose-sm max-w-none text-foreground prose-headings:font-display prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-accent prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
+                    <ReactMarkdown>{msg.content.replace(/```draft-json[\s\S]*?```/g, "")}</ReactMarkdown>
+                  </div>
+                  <DraftJsonParser text={msg.content} />
+                </>
               ) : (
                 <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
               )}
