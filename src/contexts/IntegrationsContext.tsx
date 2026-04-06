@@ -17,6 +17,7 @@ interface IntegrationsContextType {
   toggleConnection: (id: string) => void;
   isConnected: (id: string) => boolean;
   refreshConnections: () => Promise<void>;
+  removeAccount: (provider: string, email: string) => Promise<void>;
 }
 
 const defaultIntegrations: Integration[] = [
