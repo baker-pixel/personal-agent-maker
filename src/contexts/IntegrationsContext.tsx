@@ -109,6 +109,7 @@ const IntegrationsContext = createContext<IntegrationsContextType>({
   toggleConnection: () => {},
   isConnected: () => false,
   refreshConnections: async () => {},
+  removeAccount: async () => {},
 });
 
 export const useIntegrations = () => useContext(IntegrationsContext);
