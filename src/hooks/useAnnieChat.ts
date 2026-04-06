@@ -7,34 +7,13 @@ export interface ChatMessage {
   text: string;
 }
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
-
-async function getOrCreateConversation(userId: string): Promise<string | null> {
-  // Look for the most recent delegate conversation (last 24h) to resume
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data: existing } = await supabase
-    .from("chat_conversations")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("title", "Delegate")
-    .gte("updated_at", cutoff)
-    .order("updated_at", { ascending: false })
-    .limit(1);
-
-  if (existing && existing.length > 0) return existing[0].id;
-
-  const { data: created, error } = await supabase
-    .from("chat_conversations")
-    .insert({ user_id: userId, title: "Delegate" })
-    .select("id")
-    .single();
-
-  if (error) {
-    console.error("Failed to create conversation:", error);
-    return null;
-  }
-  return created.id;
+export interface DelegateConversation {
+  id: string;
+  title: string;
+  updated_at: string;
 }
+
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
 async function persistMessage(conversationId: string, role: string, content: string) {
   await supabase.from("chat_messages").insert({
@@ -42,7 +21,6 @@ async function persistMessage(conversationId: string, role: string, content: str
     role,
     content,
   });
-  // Touch conversation updated_at
   await supabase
     .from("chat_conversations")
     .update({ updated_at: new Date().toISOString() })
@@ -53,33 +31,94 @@ export function useAnnieChat(agentName: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [thinking, setThinking] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [conversations, setConversations] = useState<DelegateConversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const convIdRef = useRef<string | null>(null);
 
-  // Load existing conversation on mount
+  const fetchConversations = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    const { data } = await supabase
+      .from("chat_conversations")
+      .select("id, title, updated_at")
+      .eq("user_id", session.user.id)
+      .eq("title", "Delegate")
+      .order("updated_at", { ascending: false })
+      .limit(50);
+    if (data) setConversations(data);
+  }, []);
+
+  const loadConversation = useCallback(async (conversationId: string) => {
+    setLoading(true);
+    convIdRef.current = conversationId;
+    setActiveConversationId(conversationId);
+    const { data: msgs } = await supabase
+      .from("chat_messages")
+      .select("role, content")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true });
+    if (msgs && msgs.length > 0) {
+      setMessages(
+        msgs.map((m) => ({
+          role: m.role === "user" ? "user" as const : "agent" as const,
+          text: m.content,
+        }))
+      );
+    } else {
+      setMessages([]);
+    }
+    setLoading(false);
+  }, []);
+
+  const deleteConversation = useCallback(async (id: string) => {
+    await supabase.from("chat_conversations").delete().eq("id", id);
+    if (convIdRef.current === id) {
+      convIdRef.current = null;
+      setActiveConversationId(null);
+      setMessages([]);
+    }
+    fetchConversations();
+  }, [fetchConversations]);
+
+  // Load most recent conversation on mount
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user || cancelled) { setLoading(false); return; }
 
-      const convId = await getOrCreateConversation(session.user.id);
-      if (!convId || cancelled) { setLoading(false); return; }
-      convIdRef.current = convId;
+      await fetchConversations();
 
-      const { data: msgs } = await supabase
-        .from("chat_messages")
-        .select("role, content")
-        .eq("conversation_id", convId)
-        .order("created_at", { ascending: true });
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: existing } = await supabase
+        .from("chat_conversations")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .eq("title", "Delegate")
+        .gte("updated_at", cutoff)
+        .order("updated_at", { ascending: false })
+        .limit(1);
 
-      if (msgs && msgs.length > 0 && !cancelled) {
-        setMessages(
-          msgs.map((m) => ({
-            role: m.role === "user" ? "user" : "agent",
-            text: m.content,
-          })) as ChatMessage[]
-        );
+      if (existing && existing.length > 0 && !cancelled) {
+        const convId = existing[0].id;
+        convIdRef.current = convId;
+        setActiveConversationId(convId);
+
+        const { data: msgs } = await supabase
+          .from("chat_messages")
+          .select("role, content")
+          .eq("conversation_id", convId)
+          .order("created_at", { ascending: true });
+
+        if (msgs && msgs.length > 0 && !cancelled) {
+          setMessages(
+            msgs.map((m) => ({
+              role: m.role === "user" ? "user" as const : "agent" as const,
+              text: m.content,
+            }))
+          );
+        }
       }
       if (!cancelled) setLoading(false);
     })();
@@ -94,6 +133,23 @@ export function useAnnieChat(agentName: string) {
       const userMsg: ChatMessage = { role: "user", text: trimmed };
       setMessages((prev) => [...prev, userMsg]);
       setThinking(true);
+
+      // Create conversation if needed
+      if (!convIdRef.current) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const { data: created } = await supabase
+            .from("chat_conversations")
+            .insert({ user_id: session.user.id, title: "Delegate" })
+            .select("id")
+            .single();
+          if (created) {
+            convIdRef.current = created.id;
+            setActiveConversationId(created.id);
+            fetchConversations();
+          }
+        }
+      }
 
       // Persist user message
       if (convIdRef.current) {
@@ -121,11 +177,6 @@ export function useAnnieChat(agentName: string) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         };
-
-        // Ensure we have a conversation ID
-        if (!convIdRef.current && session?.user) {
-          convIdRef.current = await getOrCreateConversation(session.user.id);
-        }
 
         const apiMessages = [...messages, userMsg].map((m) => ({
           role: m.role === "user" ? ("user" as const) : ("assistant" as const),
@@ -182,7 +233,7 @@ export function useAnnieChat(agentName: string) {
           }
         }
 
-        // Persist assistant response after streaming completes
+        // Persist assistant response
         if (convIdRef.current && assistantSoFar) {
           persistMessage(convIdRef.current, "assistant", assistantSoFar);
         }
@@ -197,16 +248,27 @@ export function useAnnieChat(agentName: string) {
         setThinking(false);
       }
     },
-    [messages, thinking, agentName]
+    [messages, thinking, agentName, fetchConversations]
   );
 
   const reset = useCallback(async () => {
     abortRef.current?.abort();
     setMessages([]);
     setThinking(false);
-    // Start a fresh conversation next time
     convIdRef.current = null;
+    setActiveConversationId(null);
   }, []);
 
-  return { messages, thinking, loading, send, reset };
+  return {
+    messages,
+    thinking,
+    loading,
+    send,
+    reset,
+    conversations,
+    activeConversationId,
+    loadConversation,
+    deleteConversation,
+    fetchConversations,
+  };
 }
