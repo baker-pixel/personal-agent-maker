@@ -349,6 +349,31 @@ export default function Office() {
         </div>
       </header>
 
+      {/* Status legend */}
+      <div className="relative z-10 flex items-center justify-center gap-5 mb-2 px-4">
+        <div className="flex items-center gap-4 px-4 py-2 rounded-xl bg-card/60 border border-border/30 backdrop-blur-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-[11px] text-muted-foreground">Online / Ready</span>
+          </div>
+          <div className="w-px h-3 bg-border/50" />
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-orange-500" />
+            <span className="text-[11px] text-muted-foreground">Needs Attention</span>
+          </div>
+          <div className="w-px h-3 bg-border/50" />
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-destructive" />
+            <span className="text-[11px] text-muted-foreground">Urgent</span>
+          </div>
+          <div className="w-px h-3 bg-border/50" />
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-blue-500" />
+            <span className="text-[11px] text-muted-foreground">Scheduled</span>
+          </div>
+        </div>
+      </div>
+
       <div className="relative z-10 max-w-5xl mx-auto px-5 pb-10">
         {/* Agent greeting */}
         <AnimatePresence>
