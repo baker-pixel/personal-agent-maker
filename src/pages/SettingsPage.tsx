@@ -108,7 +108,7 @@ export default function Settings() {
             <h2 className="font-display font-semibold">Phone Number</h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            Your primary interactions with {settings.agentName} are designed to be on the go. Give {settings.agentName} your phone so she can recognize you when you text.
+            Your primary interactions with {settings.agentName} are designed to be on the go. Add your phone so {settings.agentName} can recognize you when you text.
           </p>
           <Input type="tel" value={settings.phoneNumber} onChange={(e) => update("phoneNumber", e.target.value)} placeholder="+1 (555) 123-4567" className="rounded-xl" />
         </section>

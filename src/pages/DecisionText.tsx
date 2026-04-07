@@ -92,7 +92,7 @@ export default function DecisionText() {
               </div>
               <p className="font-display text-lg font-semibold text-foreground mb-1">What do you need?</p>
               <p className="text-sm text-muted-foreground max-w-xs">
-                Tell {agentName} what's on your mind. She'll think it through and give you a recommendation.
+                Tell {agentName} what's on your mind. {agentName} will think it through and give you a recommendation.
               </p>
             </motion.div>
           )}
