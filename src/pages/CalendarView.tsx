@@ -10,6 +10,7 @@ import { VoiceWaveform } from "@/components/VoiceWaveform";
 import AppMenu from "@/components/AppMenu";
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { PriorityLegend } from "@/components/PriorityLegend";
 
 interface CalendarEvent {
   id: string;
@@ -242,6 +243,9 @@ export default function CalendarView() {
           </div>
         </div>
       </nav>
+
+      {/* Priority legend */}
+      {!loading && !error && events.length > 0 && <PriorityLegend />}
 
       <div className="border-b bg-card">
         <div className="container flex items-center justify-between py-3">
