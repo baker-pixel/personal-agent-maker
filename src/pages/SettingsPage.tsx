@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus } from "lucide-react";
+import EmailTriageSettings from "@/components/EmailTriageSettings";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -248,6 +249,8 @@ export default function Settings() {
             </div>
           </div>
         </section>
+
+        <EmailTriageSettings />
 
         <section className="space-y-3">
           <div className="flex items-center gap-2">
