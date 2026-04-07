@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus } from "lucide-react";
+import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, MessageSquare } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import EmailTriageSettings from "@/components/EmailTriageSettings";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -60,8 +61,39 @@ export default function Settings() {
   const update = <K extends keyof AgentSettings>(key: K, val: AgentSettings[K]) =>
     setSettings((s) => ({ ...s, [key]: val }));
 
-  const save = () => {
+  const save = async () => {
     localStorage.setItem("normy_agent", JSON.stringify(settings));
+
+    // Register phone number for SMS if provided
+    if (settings.phoneNumber) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const normalizedPhone = settings.phoneNumber.replace(/[^+\d]/g, "");
+          
+          // Upsert SMS conversation for this phone
+          const { error: smsError } = await supabase
+            .from("sms_conversations" as any)
+            .upsert(
+              { user_id: user.id, phone_number: normalizedPhone, messages: [] },
+              { onConflict: "phone_number" }
+            );
+          
+          if (smsError) console.error("SMS registration error:", smsError);
+
+          // Also update user_preferences
+          await supabase
+            .from("user_preferences")
+            .upsert(
+              { user_id: user.id, phone_number: normalizedPhone } as any,
+              { onConflict: "user_id" }
+            );
+        }
+      } catch (err) {
+        console.error("Failed to register phone for SMS:", err);
+      }
+    }
+
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -105,13 +137,16 @@ export default function Settings() {
       <div className="container py-8 max-w-lg space-y-8">
         <section className="space-y-3">
           <div className="flex items-center gap-2">
-            <Phone className="w-5 h-5 text-accent" />
-            <h2 className="font-display font-semibold">Phone Number</h2>
+            <MessageSquare className="w-5 h-5 text-accent" />
+            <h2 className="font-display font-semibold">SMS Access</h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            Your primary interactions with {settings.agentName} are designed to be on the go. Add your phone so {settings.agentName} can recognize you when you text.
+            Text {settings.agentName} at <span className="font-mono font-semibold text-foreground">+1 (844) 392-6449</span> from this number. {settings.agentName} will recognize you and respond with AI-powered assistance.
           </p>
           <Input type="tel" value={settings.phoneNumber} onChange={(e) => update("phoneNumber", e.target.value)} placeholder="+1 (555) 123-4567" className="rounded-xl" />
+          <p className="text-xs text-muted-foreground">
+            Enter your mobile number in E.164 format (e.g. +15551234567) and save to activate SMS.
+          </p>
         </section>
 
         <section className="space-y-3">
