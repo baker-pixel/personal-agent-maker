@@ -34,7 +34,7 @@ export default function ModeSelect() {
             transition={{ delay: 0.15 }}
             className="rounded-2xl border-2 border-accent/20 bg-card p-6 shadow-sm hover:shadow-md transition-shadow"
           >
-            <h2 className="font-display text-xl font-semibold text-foreground mb-1">Delegate</h2>
+            <h2 className="font-display text-xl font-semibold text-foreground mb-1">Decision Mode–Delegate</h2>
             <p className="text-sm text-muted-foreground mb-5">
               Tell {agentName} what you need. She'll handle the thinking.
             </p>
