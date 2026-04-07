@@ -60,7 +60,7 @@ export default function ModeSelect() {
             transition={{ delay: 0.3 }}
             className="rounded-2xl border border-border bg-card p-6 shadow-sm hover:shadow-md transition-shadow"
           >
-            <h2 className="font-display text-xl font-semibold text-foreground mb-1">Collaborate</h2>
+            <h2 className="font-display text-xl font-semibold text-foreground mb-1">Detail Mode–Collaborate</h2>
             <p className="text-sm text-muted-foreground mb-5">
               Open your workspace and work side-by-side with {agentName}.
             </p>
