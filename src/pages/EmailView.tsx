@@ -11,6 +11,7 @@ import { VoiceWaveform } from "@/components/VoiceWaveform";
 import AppMenu from "@/components/AppMenu";
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { PriorityLegend } from "@/components/PriorityLegend";
 
 type Priority = "urgent" | "important" | "low" | "noise";
 
