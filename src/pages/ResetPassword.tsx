@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ export default function ResetPassword() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  const [resetComplete, setResetComplete] = useState(false);
 
   useEffect(() => {
     // Wait for the recovery session to be fully established
@@ -53,8 +54,9 @@ export default function ResetPassword() {
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
+      await supabase.auth.signOut();
+      setResetComplete(true);
       toast({ title: "Password updated", description: "You can now sign in with your new password." });
-      navigate("/auth");
     }
   };
 
@@ -65,19 +67,31 @@ export default function ResetPassword() {
           <img src={normyLogo} alt="Normy" className="h-10 w-auto" />
           <span className="font-display text-2xl font-bold" style={{ color: "#1e3a5f" }}>Agent</span>
         </div>
-        <form onSubmit={handleReset} className="space-y-4">
-          <h2 className="font-display text-xl font-semibold text-center mb-2">Set new password</h2>
-          {!sessionReady && (
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <div className="w-4 h-4 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
-              Verifying reset link…
-            </div>
-          )}
-          <Input type="password" placeholder="New password (min 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} disabled={!sessionReady} />
-          <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={loading || !sessionReady}>
-            {loading ? "Updating…" : "Update Password"}
-          </Button>
-        </form>
+        {resetComplete ? (
+          <div className="text-center space-y-4">
+            <h2 className="font-display text-xl font-semibold">Password updated!</h2>
+            <p className="text-sm text-muted-foreground">Your password has been successfully reset.</p>
+            <Link to="/auth">
+              <Button className="w-full bg-accent text-accent-foreground hover:bg-accent/90 mt-2">
+                Sign in with new password
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          <form onSubmit={handleReset} className="space-y-4">
+            <h2 className="font-display text-xl font-semibold text-center mb-2">Set new password</h2>
+            {!sessionReady && (
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <div className="w-4 h-4 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+                Verifying reset link…
+              </div>
+            )}
+            <Input type="password" placeholder="New password (min 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} disabled={!sessionReady} />
+            <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={loading || !sessionReady}>
+              {loading ? "Updating…" : "Update Password"}
+            </Button>
+          </form>
+        )}
       </motion.div>
     </div>
   );
