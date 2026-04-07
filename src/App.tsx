@@ -31,6 +31,7 @@ const ProtectedRoute = ({ session, children }: { session: Session | null; childr
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRecovery, setIsRecovery] = useState(false);
   const recoveryRedirected = useRef(false);
 
   useEffect(() => {
@@ -40,7 +41,7 @@ const App = () => {
         setLoading(false);
         if (event === "PASSWORD_RECOVERY" && !recoveryRedirected.current) {
           recoveryRedirected.current = true;
-          window.location.href = "/reset-password#type=recovery";
+          setIsRecovery(true);
         }
       }
     );
@@ -70,7 +71,7 @@ const App = () => {
           <BrowserRouter>
             <Routes>
               <Route path="/" element={session ? <Navigate to="/mode-select" replace /> : <Landing />} />
-              <Route path="/auth" element={!session ? <Auth /> : <Navigate to="/mode-select" replace />} />
+              <Route path="/auth" element={!session ? <Auth /> : isRecovery ? <Navigate to="/reset-password" replace /> : <Navigate to="/mode-select" replace />} />
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/onboarding" element={<Onboarding />} />
