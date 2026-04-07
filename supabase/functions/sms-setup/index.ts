@@ -11,12 +11,20 @@ serve(async (req) => {
   }
 
   try {
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const DB_URL = Deno.env.get("SUPABASE_DB_URL");
+    if (!DB_URL) {
+      return new Response(JSON.stringify({ error: "SUPABASE_DB_URL not available" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // Use PostgREST to check if table exists, if not we create via pg_net or management API
-    // Actually, let's use the SQL endpoint available in Supabase
-    const sql = `
+    // Connect via Deno's postgres
+    const { Client } = await import("https://deno.land/x/postgres@v0.19.3/mod.ts");
+    const client = new Client(DB_URL);
+    await client.connect();
+
+    await client.queryObject(`
       CREATE TABLE IF NOT EXISTS public.sms_conversations (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id uuid NOT NULL,
@@ -25,7 +33,11 @@ serve(async (req) => {
         created_at timestamptz NOT NULL DEFAULT now(),
         updated_at timestamptz NOT NULL DEFAULT now()
       );
-      ALTER TABLE public.sms_conversations ENABLE ROW LEVEL SECURITY;
+    `);
+
+    await client.queryObject(`ALTER TABLE public.sms_conversations ENABLE ROW LEVEL SECURITY;`);
+
+    await client.queryObject(`
       DO $$ BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='sms_conversations' AND policyname='Users can manage own sms conversations') THEN
           CREATE POLICY "Users can manage own sms conversations"
@@ -33,32 +45,19 @@ serve(async (req) => {
             USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
         END IF;
       END $$;
+    `);
+
+    await client.queryObject(`
       DO $$ BEGIN
         IF NOT EXISTS (SELECT column_name FROM information_schema.columns WHERE table_name='user_preferences' AND column_name='phone_number') THEN
           ALTER TABLE public.user_preferences ADD COLUMN phone_number text;
         END IF;
       END $$;
-    `;
+    `);
 
-    const response = await fetch(`${SUPABASE_URL}/pg/query`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ query: sql }),
-    });
+    await client.end();
 
-    if (!response.ok) {
-      const text = await response.text();
-      return new Response(JSON.stringify({ error: `SQL failed [${response.status}]: ${text}` }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const data = await response.json();
-    return new Response(JSON.stringify({ success: true, data }), {
+    return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
