@@ -27,7 +27,12 @@ const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ session, children }: { session: Session | null; children: React.ReactNode }) => {
   if (!session) return <Navigate to="/auth" replace />;
-  return <>{children}</>;
+  return (
+    <>
+      <AppHeader />
+      {children}
+    </>
+  );
 };
 
 const App = () => {
