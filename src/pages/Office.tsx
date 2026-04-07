@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +15,119 @@ import {
   AlertCircle,
   ChevronRight,
 } from "lucide-react";
+
+/* ── Floating particles ── */
+const PARTICLE_COUNT = 18;
+
+interface Particle {
+  id: number;
+  x: number;      // % from left
+  y: number;      // % from top
+  size: number;    // px
+  dur: number;     // seconds
+  delay: number;   // seconds
+  drift: number;   // horizontal drift px
+}
+
+function useParticles(): Particle[] {
+  return useMemo(() =>
+    Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: 2 + Math.random() * 4,
+      dur: 12 + Math.random() * 18,
+      delay: Math.random() * -20,
+      drift: -30 + Math.random() * 60,
+    })),
+  []);
+}
+
+/* ── Live clock ── */
+function useLiveClock() {
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return time;
+}
+
+function AnalogClock({ size = 48 }: { size?: number }) {
+  const time = useLiveClock();
+  const s = time.getSeconds();
+  const m = time.getMinutes();
+  const h = time.getHours() % 12;
+  const secDeg = s * 6;
+  const minDeg = m * 6 + s * 0.1;
+  const hrDeg = h * 30 + m * 0.5;
+  const r = size / 2;
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="drop-shadow-sm">
+      <circle cx={r} cy={r} r={r - 1} className="fill-card stroke-border" strokeWidth={1.5} />
+      {/* hour marks */}
+      {Array.from({ length: 12 }, (_, i) => {
+        const angle = (i * 30 - 90) * (Math.PI / 180);
+        const outer = r - 4;
+        const inner = r - 7;
+        return (
+          <line
+            key={i}
+            x1={r + Math.cos(angle) * inner}
+            y1={r + Math.sin(angle) * inner}
+            x2={r + Math.cos(angle) * outer}
+            y2={r + Math.sin(angle) * outer}
+            className="stroke-muted-foreground/40"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+          />
+        );
+      })}
+      {/* hour hand */}
+      <line
+        x1={r} y1={r}
+        x2={r + Math.cos((hrDeg - 90) * Math.PI / 180) * (r * 0.45)}
+        y2={r + Math.sin((hrDeg - 90) * Math.PI / 180) * (r * 0.45)}
+        className="stroke-foreground" strokeWidth={2.5} strokeLinecap="round"
+      />
+      {/* minute hand */}
+      <line
+        x1={r} y1={r}
+        x2={r + Math.cos((minDeg - 90) * Math.PI / 180) * (r * 0.65)}
+        y2={r + Math.sin((minDeg - 90) * Math.PI / 180) * (r * 0.65)}
+        className="stroke-foreground" strokeWidth={1.5} strokeLinecap="round"
+      />
+      {/* second hand */}
+      <line
+        x1={r} y1={r}
+        x2={r + Math.cos((secDeg - 90) * Math.PI / 180) * (r * 0.7)}
+        y2={r + Math.sin((secDeg - 90) * Math.PI / 180) * (r * 0.7)}
+        className="stroke-accent" strokeWidth={0.8} strokeLinecap="round"
+      />
+      <circle cx={r} cy={r} r={2} className="fill-accent" />
+    </svg>
+  );
+}
+
+/* ── Steaming coffee ── */
+function SteamingCoffee() {
+  return (
+    <div className="relative inline-block">
+      <span className="text-2xl">☕</span>
+      <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-[3px]">
+        {[0, 0.4, 0.8].map((delay, i) => (
+          <motion.div
+            key={i}
+            className="w-[2px] rounded-full bg-muted-foreground/20"
+            animate={{ height: [4, 10, 4], opacity: [0.3, 0.6, 0.3], y: [0, -6, 0] }}
+            transition={{ duration: 2, delay, repeat: Infinity, ease: "easeInOut" }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface BriefingData {
   unreadEmails: number;
@@ -176,13 +289,44 @@ export default function Office() {
     return "Good evening";
   };
 
+  const particles = useParticles();
+
   return (
     <div className="min-h-screen bg-background overflow-hidden relative">
-      {/* Ambient background */}
+      {/* Ambient background blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-primary/5 rounded-full blur-3xl" />
+        <motion.div
+          animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
+          transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute top-0 left-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{ x: [0, -20, 0], y: [0, 30, 0] }}
+          transition={{ duration: 30, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute bottom-0 right-1/4 w-80 h-80 bg-primary/5 rounded-full blur-3xl"
+        />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/3 rounded-full blur-3xl" />
+
+        {/* Floating particles */}
+        {particles.map((p) => (
+          <motion.div
+            key={p.id}
+            className="absolute rounded-full bg-accent/15"
+            style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size }}
+            animate={{
+              y: [0, -60, 0],
+              x: [0, p.drift, 0],
+              opacity: [0, 0.6, 0],
+              scale: [0.5, 1, 0.5],
+            }}
+            transition={{
+              duration: p.dur,
+              delay: p.delay,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+        ))}
       </div>
 
       {/* Top bar */}
@@ -193,9 +337,15 @@ export default function Office() {
         >
           ← Back
         </button>
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-xs text-muted-foreground">{agentName} is online</span>
+        <div className="flex items-center gap-4">
+          {/* Live clock */}
+          <AnalogClock size={36} />
+          {/* Coffee */}
+          <SteamingCoffee />
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs text-muted-foreground">{agentName} is online</span>
+          </div>
         </div>
       </header>
 
