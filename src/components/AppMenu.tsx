@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { Menu, Mail, Calendar, LayoutDashboard, Settings, LogOut } from "lucide-react";
+import { Menu, Mail, Calendar, LayoutDashboard, Settings, LogOut, Home } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   DropdownMenu,
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const navItems = [
+  { label: "Home", path: "/mode-select", icon: Home },
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Email", path: "/email", icon: Mail },
   { label: "Calendar", path: "/calendar", icon: Calendar },
