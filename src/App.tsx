@@ -20,13 +20,19 @@ import CalendarView from "./pages/CalendarView";
 import SettingsPage from "./pages/SettingsPage";
 import GoogleCallback from "./pages/GoogleCallback";
 import Office from "./pages/Office";
+import AppHeader from "./components/AppHeader";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ session, children }: { session: Session | null; children: React.ReactNode }) => {
   if (!session) return <Navigate to="/auth" replace />;
-  return <>{children}</>;
+  return (
+    <>
+      <AppHeader />
+      {children}
+    </>
+  );
 };
 
 const App = () => {
