@@ -342,6 +342,9 @@ export default function EmailView() {
         </div>
       </nav>
 
+      {/* Priority legend */}
+      {!loading && !error && emails.length > 0 && <PriorityLegend />}
+
       {/* Loading */}
       {loading && emails.length === 0 && (
         <div className="flex-1 flex items-center justify-center">
