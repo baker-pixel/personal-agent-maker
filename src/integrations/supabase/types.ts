@@ -397,11 +397,39 @@ export type Database = {
         }
         Relationships: []
       }
+      sms_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          messages: Json
+          phone_number: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          messages?: Json
+          phone_number: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          messages?: Json
+          phone_number?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_preferences: {
         Row: {
           agent_name: string
           created_at: string
           id: string
+          phone_number: string | null
           slack_notification_channel_id: string | null
           slack_notification_channel_name: string | null
           updated_at: string
@@ -411,6 +439,7 @@ export type Database = {
           agent_name?: string
           created_at?: string
           id?: string
+          phone_number?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
           updated_at?: string
@@ -420,6 +449,7 @@ export type Database = {
           agent_name?: string
           created_at?: string
           id?: string
+          phone_number?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
           updated_at?: string
