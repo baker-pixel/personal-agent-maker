@@ -20,6 +20,7 @@ import CalendarView from "./pages/CalendarView";
 import SettingsPage from "./pages/SettingsPage";
 import GoogleCallback from "./pages/GoogleCallback";
 import Office from "./pages/Office";
+import AppHeader from "./components/AppHeader";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
