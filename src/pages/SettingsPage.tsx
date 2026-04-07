@@ -137,13 +137,16 @@ export default function Settings() {
       <div className="container py-8 max-w-lg space-y-8">
         <section className="space-y-3">
           <div className="flex items-center gap-2">
-            <Phone className="w-5 h-5 text-accent" />
-            <h2 className="font-display font-semibold">Phone Number</h2>
+            <MessageSquare className="w-5 h-5 text-accent" />
+            <h2 className="font-display font-semibold">SMS Access</h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            Your primary interactions with {settings.agentName} are designed to be on the go. Add your phone so {settings.agentName} can recognize you when you text.
+            Text {settings.agentName} at <span className="font-mono font-semibold text-foreground">+1 (844) 392-6449</span> from this number. {settings.agentName} will recognize you and respond with AI-powered assistance.
           </p>
           <Input type="tel" value={settings.phoneNumber} onChange={(e) => update("phoneNumber", e.target.value)} placeholder="+1 (555) 123-4567" className="rounded-xl" />
+          <p className="text-xs text-muted-foreground">
+            Enter your mobile number in E.164 format (e.g. +15551234567) and save to activate SMS.
+          </p>
         </section>
 
         <section className="space-y-3">
