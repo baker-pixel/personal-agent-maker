@@ -143,10 +143,10 @@ export default function EmailView() {
 
       setEmails(fetched);
 
-      // Initialize desk assignments
+      // Initialize desk assignments: only urgent goes to user's desk
       const assignments: Record<string, "agent" | "my"> = {};
       fetched.forEach((e) => {
-        assignments[e.id] = e.needsAction ? "my" : "agent";
+        assignments[e.id] = e.priority === "urgent" ? "my" : "agent";
       });
       setDeskAssignments(assignments);
     } catch (err: any) {
