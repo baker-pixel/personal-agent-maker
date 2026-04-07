@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus } from "lucide-react";
+import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, MessageSquare } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import EmailTriageSettings from "@/components/EmailTriageSettings";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -60,8 +61,39 @@ export default function Settings() {
   const update = <K extends keyof AgentSettings>(key: K, val: AgentSettings[K]) =>
     setSettings((s) => ({ ...s, [key]: val }));
 
-  const save = () => {
+  const save = async () => {
     localStorage.setItem("normy_agent", JSON.stringify(settings));
+
+    // Register phone number for SMS if provided
+    if (settings.phoneNumber) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const normalizedPhone = settings.phoneNumber.replace(/[^+\d]/g, "");
+          
+          // Upsert SMS conversation for this phone
+          const { error: smsError } = await supabase
+            .from("sms_conversations" as any)
+            .upsert(
+              { user_id: user.id, phone_number: normalizedPhone, messages: [] },
+              { onConflict: "phone_number" }
+            );
+          
+          if (smsError) console.error("SMS registration error:", smsError);
+
+          // Also update user_preferences
+          await supabase
+            .from("user_preferences")
+            .upsert(
+              { user_id: user.id, phone_number: normalizedPhone } as any,
+              { onConflict: "user_id" }
+            );
+        }
+      } catch (err) {
+        console.error("Failed to register phone for SMS:", err);
+      }
+    }
+
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
