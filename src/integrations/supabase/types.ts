@@ -280,6 +280,45 @@ export type Database = {
         }
         Relationships: []
       }
+      email_triage_preferences: {
+        Row: {
+          created_at: string
+          custom_instructions: string | null
+          dismiss_keywords: string[]
+          dismiss_senders: string[]
+          id: string
+          learned_patterns: Json | null
+          priority_keywords: string[]
+          updated_at: string
+          user_id: string
+          vip_senders: string[]
+        }
+        Insert: {
+          created_at?: string
+          custom_instructions?: string | null
+          dismiss_keywords?: string[]
+          dismiss_senders?: string[]
+          id?: string
+          learned_patterns?: Json | null
+          priority_keywords?: string[]
+          updated_at?: string
+          user_id: string
+          vip_senders?: string[]
+        }
+        Update: {
+          created_at?: string
+          custom_instructions?: string | null
+          dismiss_keywords?: string[]
+          dismiss_senders?: string[]
+          id?: string
+          learned_patterns?: Json | null
+          priority_keywords?: string[]
+          updated_at?: string
+          user_id?: string
+          vip_senders?: string[]
+        }
+        Relationships: []
+      }
       google_oauth_tokens: {
         Row: {
           access_token: string
