@@ -71,6 +71,24 @@ export default function ModeSelect() {
               Enter Workspace
             </button>
           </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45 }}
+            className="rounded-2xl border-2 border-primary/20 bg-gradient-to-br from-card to-primary/5 p-6 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <h2 className="font-display text-xl font-semibold text-foreground mb-1">{agentName}'s Office</h2>
+            <p className="text-sm text-muted-foreground mb-5">
+              Step into {agentName}'s virtual office. Browse notifications, chat, and more.
+            </p>
+            <button
+              onClick={() => navigate("/office")}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-accent to-primary text-primary-foreground font-semibold text-sm hover:opacity-90 active:scale-[0.98] transition-all"
+            >
+              Enter Office
+            </button>
+          </motion.div>
         </div>
       </motion.div>
     </div>
