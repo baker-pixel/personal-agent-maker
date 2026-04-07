@@ -54,8 +54,9 @@ export default function ResetPassword() {
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
+      await supabase.auth.signOut();
+      setResetComplete(true);
       toast({ title: "Password updated", description: "You can now sign in with your new password." });
-      navigate("/auth");
     }
   };
 
