@@ -36,7 +36,7 @@ export default function ModeSelect() {
           >
             <h2 className="font-display text-xl font-semibold text-foreground mb-1">Decision Mode–Delegate</h2>
             <p className="text-sm text-muted-foreground mb-5">
-              Tell {agentName} what you need. She'll handle the thinking.
+              Tell {agentName} what you need. {agentName} will handle the thinking.
             </p>
             <div className="flex gap-3">
               <button

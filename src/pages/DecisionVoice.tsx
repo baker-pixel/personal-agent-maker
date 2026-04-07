@@ -98,7 +98,7 @@ export default function DecisionVoice() {
               </div>
               <p className="font-display text-lg font-semibold text-foreground mb-1">I'm listening</p>
               <p className="text-sm text-muted-foreground max-w-xs">
-                Tap the mic and tell {agentName} what you need. She'll think it through for you.
+                Tap the mic and tell {agentName} what you need. {agentName} will think it through for you.
               </p>
             </motion.div>
           )}

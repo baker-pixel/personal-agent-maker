@@ -170,7 +170,7 @@ export default function Onboarding() {
                     </div>
                     <h1 className="font-display text-3xl font-bold mb-2">Add your phone number</h1>
                     <p className="text-muted-foreground">
-                      Your primary interactions with {state.agentName} are designed to be on the go. Give {state.agentName} your phone so she can recognize you when you text.
+                      Your primary interactions with {state.agentName} are designed to be on the go. Add your phone so {state.agentName} can recognize you when you text.
                     </p>
                   </div>
                   <div className="space-y-2">
