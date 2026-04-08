@@ -31,7 +31,7 @@ const departments = [
     subtitle: "Your AI Executive Assistant",
     icon: Mail,
     available: true,
-    price: "$49",
+    price: "$20",
     period: "/month",
     desc: "Email, calendar, and daily operations handled by your AI agent. Interact with your Admin Agent via Voice/Email/SMS, all while you stay focused on growing your business.",
     features: adminFeatures,
@@ -43,7 +43,7 @@ const departments = [
     subtitle: "AI Marketing Manager",
     icon: BarChart3,
     available: false,
-    price: "$49",
+    price: "$20",
     period: "/month",
     desc: "Campaigns, content calendar, social media scheduling, and performance analytics — all managed by AI.",
     features: [
@@ -61,7 +61,7 @@ const departments = [
     subtitle: "AI People Operations",
     icon: Users,
     available: false,
-    price: "$49",
+    price: "$20",
     period: "/month",
     desc: "Hiring, onboarding, team management, and employee communications — streamlined with AI.",
     features: [
@@ -79,7 +79,7 @@ const departments = [
     subtitle: "AI Financial Assistant",
     icon: BookOpen,
     available: false,
-    price: "$49",
+    price: "$20",
     period: "/month",
     desc: "Invoices, expense tracking, financial reporting, and tax prep support — powered by AI.",
     features: [
@@ -97,7 +97,7 @@ const departments = [
     subtitle: "AI Operations Manager",
     icon: Settings,
     available: false,
-    price: "$49",
+    price: "$20",
     period: "/month",
     desc: "Vendor management, inventory, process optimization, and logistics — coordinated by AI.",
     features: [
@@ -114,7 +114,7 @@ const departments = [
 
 const faqs = [
   { q: "Can I cancel anytime?", a: "Yes — no contracts, no commitments. Cancel your subscription at any time with no penalties." },
-  { q: "How does the Admin Agent compare to a human EA?", a: "A part-time human EA costs $2,000–$4,000/month. Normy's Admin Agent handles the same daily tasks for $49/month — available 24/7." },
+  { q: "How does the Admin Agent compare to a human EA?", a: "A part-time human EA costs $2,000–$4,000/month. Normy's Admin Agent handles the same daily tasks for $20/month — available 24/7." },
   { q: "What happens to my data?", a: "Your data is encrypted and never shared. We use it only to power your agent's functionality." },
   { q: "Will more departments be added?", a: "Yes! Marketing, HR, Bookkeeping, and Operations agents are actively in development. Join the waitlist to get early access." },
 ];
@@ -230,7 +230,7 @@ export default function Pricing() {
             </motion.div>
             <motion.div variants={fadeUp} custom={3} className="rounded-xl border bg-background p-6 text-center ring-2 ring-accent/30">
               <p className="text-accent text-sm font-semibold mb-2">Normy Admin Agent</p>
-              <p className="font-display text-3xl font-bold text-foreground">$49</p>
+              <p className="font-display text-3xl font-bold text-foreground">$20</p>
               <p className="text-muted-foreground text-xs mt-1">/month · 24/7</p>
             </motion.div>
           </motion.div>
