@@ -97,8 +97,9 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       const path = `${session.user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
       const { error } = await supabase.storage.from("chat-attachments").upload(path, att.file);
       if (!error) {
-        const { data: { publicUrl } } = supabase.storage.from("chat-attachments").getPublicUrl(path);
-        uploaded.push({ name: att.file.name, type: att.file.type, url: publicUrl });
+        const { data: signedUrlData } = await supabase.storage.from("chat-attachments").createSignedUrl(path, 3600);
+        const url = signedUrlData?.signedUrl || "";
+        uploaded.push({ name: att.file.name, type: att.file.type, url, storagePath: path });
       }
     }
     return uploaded;
