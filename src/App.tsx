@@ -23,6 +23,7 @@ import Office from "./pages/Office";
 import EodWrapup from "./pages/EodWrapup";
 import AppHeader from "./components/AppHeader";
 import NotFound from "./pages/NotFound";
+import Pricing from "./pages/Pricing";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +83,7 @@ const App = () => {
               <Route path="/auth" element={!session ? <Auth /> : isRecovery ? <Navigate to="/reset-password" replace /> : <Navigate to="/mode-select" replace />} />
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/pricing" element={<Pricing />} />
               <Route path="/onboarding" element={<Onboarding />} />
               <Route path="/mode-select" element={<ProtectedRoute session={session}><ModeSelect /></ProtectedRoute>} />
               <Route path="/office" element={<ProtectedRoute session={session}><Office /></ProtectedRoute>} />

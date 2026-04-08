@@ -37,6 +37,7 @@ export default function Landing() {
             <img src={normyLogo} alt="Normy" className="h-8 w-auto" />
           </div>
           <div className="flex items-center gap-3">
+            <Button onClick={() => navigate("/pricing")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">Pricing</Button>
             <Button onClick={() => navigate("/auth")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">Log In</Button>
             <Button onClick={goOnboard} variant="default" size="sm">Get Started <ArrowRight className="w-4 h-4 ml-1" /></Button>
           </div>
