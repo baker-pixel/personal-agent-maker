@@ -28,6 +28,7 @@ interface AgentSettings {
 const defaults: AgentSettings = {
   agentName: "Annie",
   phoneNumber: "",
+  smsConsent: false,
   tone: "friendly",
   emailLength: "balanced",
   priorityVisibility: "important",
@@ -106,8 +107,8 @@ export default function Settings() {
       setAgentName(settings.agentName);
     }
 
-    // Register phone number for SMS if provided
-    if (settings.phoneNumber) {
+    // Register phone number for SMS if provided and consent given
+    if (settings.phoneNumber && settings.smsConsent) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
