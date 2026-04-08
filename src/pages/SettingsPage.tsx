@@ -161,6 +161,38 @@ export default function Settings() {
       </nav>
 
       <div className="container py-8 max-w-lg space-y-8">
+        {/* Account / Login Info */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Mail className="w-5 h-5 text-accent" />
+            <h2 className="font-display font-semibold">Account</h2>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Email</label>
+            <Input value={userEmail} readOnly className="rounded-xl bg-muted cursor-default" />
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Change Password</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New password (min 6 chars)"
+                  className="rounded-xl pr-10"
+                />
+                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <Button onClick={handleChangePassword} disabled={changingPassword || !newPassword.trim()} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl">
+                {changingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : passwordChanged ? <><Check className="w-4 h-4" /> Done</> : "Update"}
+              </Button>
+            </div>
+          </div>
+        </section>
+
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-accent" />
