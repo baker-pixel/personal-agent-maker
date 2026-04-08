@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
 
 Meeting: "${event.summary}"
 Time: ${event.start} - ${event.end}
-Attendees: ${event.attendees.map((a: any) => a.displayName || a.email).join(", ")}
+Attendees: ${event.attendees.map((a: any) => `${a.displayName || "Unknown"} <${a.email}> (RSVP: ${a.responseStatus})`).join(", ")}
 Description: ${event.description || "None"}
 Location: ${event.location || "Not specified"}
 ${emailContext}
@@ -218,7 +218,7 @@ Generate a concise meeting prep card with:
 1. **Key Context** - 2-3 bullet points summarizing what this meeting is about based on available info
 2. **Talking Points** - 3-5 specific talking points or questions to raise
 3. **Action Items to Follow Up** - Any pending items from email threads that should be addressed
-4. **Attendee Notes** - Brief note about each attendee's recent interactions
+4. **Attendee Research** - For EACH attendee, infer their likely role/seniority from their email domain and display name. Note their RSVP status. Mention any recent email interactions you see in the data. If their email domain is a known company, mention the company. Do NOT fabricate LinkedIn URLs or any links.
 
 Keep it actionable and concise. Use markdown formatting.`;
 
@@ -232,7 +232,7 @@ Keep it actionable and concise. Use markdown formatting.`;
             body: JSON.stringify({
               model: "google/gemini-2.5-flash",
               messages: [
-                { role: "system", content: "You are a sharp executive assistant. Be concise and actionable." },
+                { role: "system", content: "You are a sharp executive assistant. Be concise and actionable. NEVER fabricate URLs or links of any kind." },
                 { role: "user", content: prompt },
               ],
               tools: [
@@ -240,7 +240,7 @@ Keep it actionable and concise. Use markdown formatting.`;
                   type: "function",
                   function: {
                     name: "meeting_prep_with_actions",
-                    description: "Return meeting prep content and extracted action items",
+                    description: "Return meeting prep content, extracted action items, and attendee research",
                     parameters: {
                       type: "object",
                       properties: {
@@ -259,8 +259,25 @@ Keep it actionable and concise. Use markdown formatting.`;
                             additionalProperties: false,
                           },
                         },
+                        attendee_research: {
+                          type: "array",
+                          description: "Research profile for each attendee",
+                          items: {
+                            type: "object",
+                            properties: {
+                              name: { type: "string", description: "Display name or email" },
+                              email: { type: "string" },
+                              company: { type: "string", description: "Inferred company from email domain" },
+                              likely_role: { type: "string", description: "Inferred role/seniority from name and context" },
+                              rsvp: { type: "string", description: "RSVP status" },
+                              recent_interactions: { type: "string", description: "Summary of recent email threads with this person, or 'None found'" },
+                            },
+                            required: ["name", "email", "company", "rsvp"],
+                            additionalProperties: false,
+                          },
+                        },
                       },
-                      required: ["prep_markdown", "action_items"],
+                      required: ["prep_markdown", "action_items", "attendee_research"],
                       additionalProperties: false,
                     },
                   },
