@@ -12,6 +12,7 @@ import {
   X,
   Sparkles,
   Clock,
+  Moon,
   AlertCircle,
   ChevronRight,
 } from "lucide-react";
@@ -209,6 +210,18 @@ const officeItems = [
     position: "",
     emoji: "⚙️",
   },
+  {
+    id: "eod-wrapup",
+    label: "EOD Wrap-Up",
+    description: "Summarize your day",
+    icon: Moon,
+    color: "from-violet-500/15 to-violet-500/5",
+    borderColor: "border-violet-500/25",
+    iconColor: "text-violet-500",
+    action: "eod",
+    position: "",
+    emoji: "🌙",
+  },
 ];
 
 export default function Office() {
@@ -275,6 +288,9 @@ export default function Office() {
         break;
       case "email":
         navigate("/email");
+        break;
+      case "eod":
+        navigate("/eod-wrapup");
         break;
       case "settings":
         navigate("/settings");
