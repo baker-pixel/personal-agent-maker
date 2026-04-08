@@ -32,6 +32,15 @@ interface RelatedEmail {
   snippet: string;
 }
 
+interface AttendeeResearch {
+  name: string;
+  email: string;
+  company: string;
+  likely_role?: string;
+  rsvp: string;
+  recent_interactions?: string;
+}
+
 interface Meeting {
   id: string;
   summary: string;
@@ -44,6 +53,7 @@ interface Meeting {
   relatedEmails: RelatedEmail[];
   prep: string;
   error: boolean;
+  attendeeResearch?: AttendeeResearch[];
 }
 
 export const MeetingPrep = () => {
