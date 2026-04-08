@@ -5,6 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { IntegrationsProvider } from "@/contexts/IntegrationsContext";
+import { AgentProvider } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import Landing from "./pages/Landing";
@@ -75,6 +76,7 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <IntegrationsProvider>
+          <AgentProvider>
           <Toaster />
           <Sonner />
           <BrowserRouter>
@@ -97,6 +99,7 @@ const App = () => {
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
+          </AgentProvider>
         </IntegrationsProvider>
       </TooltipProvider>
     </QueryClientProvider>
