@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, MessageSquare, Mail, Lock, Eye, EyeOff, Check, Building2 } from "lucide-react";
+import { ArrowLeft, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, MessageSquare, Mail, Eye, EyeOff, Check, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import EmailTriageSettings from "@/components/EmailTriageSettings";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import AppMenu from "@/components/AppMenu";
 import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
@@ -15,6 +16,7 @@ import { useAgent } from "@/contexts/AgentContext";
 interface AgentSettings {
   agentName: string;
   phoneNumber: string;
+  smsConsent: boolean;
   tone: string;
   emailLength: string;
   priorityVisibility: string;
@@ -27,6 +29,7 @@ interface AgentSettings {
 const defaults: AgentSettings = {
   agentName: "Annie",
   phoneNumber: "",
+  smsConsent: false,
   tone: "friendly",
   emailLength: "balanced",
   priorityVisibility: "important",
@@ -105,8 +108,8 @@ export default function Settings() {
       setAgentName(settings.agentName);
     }
 
-    // Register phone number for SMS if provided
-    if (settings.phoneNumber) {
+    // Register phone number for SMS if provided and consent given
+    if (settings.phoneNumber && settings.smsConsent) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -216,9 +219,20 @@ export default function Settings() {
           <p className="text-sm text-muted-foreground">
             Text {settings.agentName} at <span className="font-mono font-semibold text-foreground">+1 (844) 392-6449</span> from this number. {settings.agentName} will recognize you and respond with AI-powered assistance.
           </p>
+          <div className="flex items-start gap-2 mt-1">
+            <Checkbox
+              id="sms-consent"
+              checked={settings.smsConsent}
+              onCheckedChange={(checked) => update("smsConsent", checked === true)}
+              className="mt-0.5"
+            />
+            <label htmlFor="sms-consent" className="text-sm text-muted-foreground cursor-pointer leading-snug">
+              I consent to receive SMS messages from {settings.agentName} at the number I provide. Standard messaging rates may apply. You can revoke consent at any time by unchecking this box.
+            </label>
+          </div>
           <div className="flex gap-2">
-            <Input type="tel" value={settings.phoneNumber} onChange={(e) => update("phoneNumber", e.target.value)} placeholder="+1 (555) 123-4567" className="rounded-xl flex-1" />
-            <Button onClick={save} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl">
+            <Input type="tel" value={settings.phoneNumber} onChange={(e) => update("phoneNumber", e.target.value)} placeholder="+1 (555) 123-4567" className="rounded-xl flex-1" disabled={!settings.smsConsent} />
+            <Button onClick={save} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl" disabled={!settings.smsConsent || !settings.phoneNumber}>
               {saved ? "Saved ✓" : "Save"}
             </Button>
           </div>
