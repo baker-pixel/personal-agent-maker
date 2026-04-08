@@ -141,7 +141,7 @@ export default function Pricing() {
         <div className="container max-w-5xl text-center">
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-accent font-medium text-sm tracking-widest uppercase mb-4">Pricing</motion.p>
           <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="font-display text-4xl md:text-6xl font-bold tracking-tight mb-4">Your AI team, one department at a time</motion.h1>
-          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }} className="text-muted-foreground text-lg md:text-xl max-w-2xl mx-auto">Start with the Admin Agent today. Add more departments as they launch — each one a specialist that works around the clock.</motion.p>
+          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }} className="text-muted-foreground text-lg md:text-xl max-w-2xl mx-auto">Leverage the power of artificial intelligence built specifically for you, the SMB owner/Operator. Start with the Admin Agent today. Zero contract. Add more departments as they launch, each one a specialist that works around the clock to support you.</motion.p>
         </div>
       </section>
 
