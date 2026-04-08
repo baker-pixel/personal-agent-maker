@@ -16,6 +16,7 @@ import {
   Moon,
   AlertCircle,
   ChevronRight,
+  Smartphone,
 } from "lucide-react";
 
 /* ── Floating particles ── */
@@ -223,6 +224,18 @@ const officeItems = [
     position: "",
     emoji: "🌙",
   },
+  {
+    id: "sms-log",
+    label: "SMS Log",
+    description: "Text conversation history",
+    icon: Smartphone,
+    color: "from-teal-500/15 to-teal-500/5",
+    borderColor: "border-teal-500/25",
+    iconColor: "text-teal-500",
+    action: "sms",
+    position: "",
+    emoji: "📱",
+  },
 ];
 
 export default function Office() {
@@ -290,6 +303,9 @@ export default function Office() {
         break;
       case "settings":
         navigate("/settings");
+        break;
+      case "sms":
+        navigate("/sms-log");
         break;
     }
   }, [navigate]);
