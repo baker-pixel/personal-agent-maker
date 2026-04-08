@@ -299,12 +299,14 @@ Keep it actionable and concise. Use markdown formatting.`;
 
           let prep = "No prep generated.";
           let actionItems: any[] = [];
+          let attendeeResearch: any[] = [];
 
           if (toolCall?.function?.arguments) {
             try {
               const parsed = JSON.parse(toolCall.function.arguments);
               prep = parsed.prep_markdown || prep;
               actionItems = parsed.action_items || [];
+              attendeeResearch = parsed.attendee_research || [];
             } catch {
               // Fallback to plain content
               prep = aiData.choices?.[0]?.message?.content || prep;
