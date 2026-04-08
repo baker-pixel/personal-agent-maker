@@ -15,6 +15,7 @@ import { useAgent } from "@/contexts/AgentContext";
 interface AgentSettings {
   agentName: string;
   phoneNumber: string;
+  smsConsent: boolean;
   tone: string;
   emailLength: string;
   priorityVisibility: string;
