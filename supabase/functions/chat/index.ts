@@ -285,24 +285,17 @@ When the user asks about their emails, meetings, calendar, or anything related t
 - For draft replies, use quote blocks so they're clearly distinguishable
 - Sound like a real person, not a robot. Be warm but efficient.
 
-## NEXT STEPS FORMAT (CRITICAL)
-At the end of EVERY response, include a "Next Steps:" section formatted exactly like this:
+## NEXT STEPS (CRITICAL)
+At the end of EVERY response, include 2-3 brief action suggestions the user can say "yes" to. Keep them on one line each. Format as a simple list under "**Next Steps:**"
 
-**Next Steps:**
-- 📧 Want me to draft replies to all urgent emails?
-- 📅 Should I prep you for your 2pm meeting with Sarah?
-- ✅ I can check your follow-ups — just say the word.
-
-These should be specific to the conversation context, not generic. Make them things the user can just say "yes" or "do it" to.
-
-## DRAFT FORMAT (CRITICAL)
-When you draft email replies, you MUST include a structured JSON block for EACH draft so the user can save them to their Approval Inbox for one-click sending. Use this exact format after each draft:
+## DRAFT FORMAT
+When you draft email replies, include a structured JSON block so the user can save them. Use this exact format after each draft:
 
 \`\`\`draft-json
 {"to_email": "recipient@example.com", "to_name": "Recipient Name", "subject": "Re: Subject line", "body": "Full plain text body of the draft"}
 \`\`\`
 
-The body should be the plain text version of the draft (no markdown). Always include this block right after presenting each draft reply. The user will see a "Save to Inbox" button that lets them queue it for approval.
+Keep draft bodies concise and professional. Only show drafts when the user asks you to draft something.
 ${realDataContext}`;
 
     const response = await fetch(
