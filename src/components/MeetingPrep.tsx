@@ -273,6 +273,34 @@ export const MeetingPrep = () => {
                     <ReactMarkdown>{meeting.prep}</ReactMarkdown>
                   </div>
 
+                  {/* Attendee Research */}
+                  {meeting.attendeeResearch && meeting.attendeeResearch.length > 0 && (
+                    <div className="border-t border-border pt-4">
+                      <h4 className="text-sm font-medium text-foreground flex items-center gap-2 mb-3">
+                        <Users className="w-4 h-4 text-primary" />
+                        Attendee Research
+                      </h4>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {meeting.attendeeResearch.map((ar, i) => (
+                          <div key={i} className="p-3 rounded-lg bg-muted/30 border border-border text-sm space-y-1">
+                            <div className="font-medium text-foreground">{ar.name}</div>
+                            <div className="text-xs text-muted-foreground">{ar.email}</div>
+                            {ar.company && <div className="text-xs text-primary">{ar.company}</div>}
+                            {ar.likely_role && <div className="text-xs text-muted-foreground">{ar.likely_role}</div>}
+                            <Badge variant="outline" className={`text-xs mt-1 ${getStatusColor(ar.rsvp)}`}>
+                              {ar.rsvp}
+                            </Badge>
+                            {ar.recent_interactions && ar.recent_interactions !== "None found" && (
+                              <div className="text-xs text-muted-foreground mt-1 pt-1 border-t border-border">
+                                💬 {ar.recent_interactions}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Email summary to attendees */}
                   {meeting.attendees.length > 0 && !meeting.error && (
                     <button
