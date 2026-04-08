@@ -11,13 +11,20 @@ Deno.serve(async (req) => {
 
   try {
     const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
-    const redirectUri = Deno.env.get("GOOGLE_REDIRECT_URI");
 
-    if (!clientId || !redirectUri) {
-      throw new Error("Missing GOOGLE_CLIENT_ID or GOOGLE_REDIRECT_URI environment variables");
+    if (!clientId) {
+      throw new Error("Missing GOOGLE_CLIENT_ID environment variable");
     }
 
-    const { service } = await req.json();
+    const { service, origin } = await req.json();
+
+    // Use the caller's origin to build the redirect URI dynamically
+    // This ensures it works from any domain (preview, published, custom)
+    const callerOrigin = origin || Deno.env.get("GOOGLE_REDIRECT_URI")?.replace("/auth/google/callback", "");
+    if (!callerOrigin) {
+      throw new Error("Missing origin in request body and no GOOGLE_REDIRECT_URI fallback");
+    }
+    const redirectUri = `${callerOrigin}/auth/google/callback`;
 
     const scopes = [
       "openid",
@@ -36,7 +43,7 @@ Deno.serve(async (req) => {
     authUrl.searchParams.set("prompt", "consent");
     authUrl.searchParams.set("state", service ?? "gmail");
 
-    console.log("Generated auth URL:", authUrl.toString());
+    console.log("Generated auth URL with redirect_uri:", redirectUri);
 
     return new Response(
       JSON.stringify({ url: authUrl.toString() }),
