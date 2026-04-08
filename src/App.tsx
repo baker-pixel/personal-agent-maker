@@ -20,6 +20,7 @@ import CalendarView from "./pages/CalendarView";
 import SettingsPage from "./pages/SettingsPage";
 import GoogleCallback from "./pages/GoogleCallback";
 import Office from "./pages/Office";
+import EodWrapup from "./pages/EodWrapup";
 import AppHeader from "./components/AppHeader";
 import NotFound from "./pages/NotFound";
 
@@ -89,6 +90,7 @@ const App = () => {
               <Route path="/decision/voice" element={<ProtectedRoute session={session}><DecisionVoice /></ProtectedRoute>} />
               <Route path="/email" element={<ProtectedRoute session={session}><EmailView /></ProtectedRoute>} />
               <Route path="/calendar" element={<ProtectedRoute session={session}><CalendarView /></ProtectedRoute>} />
+              <Route path="/eod-wrapup" element={<ProtectedRoute session={session}><EodWrapup /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute session={session}><SettingsPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
