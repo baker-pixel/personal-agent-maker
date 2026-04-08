@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, ChevronLeft, ChevronRight, X, Send, Mic, MicOff, Sparkles, Loader2, Calendar, RefreshCw, ExternalLink } from "lucide-react";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
 import AppMenu from "@/components/AppMenu";
+import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { PriorityLegend } from "@/components/PriorityLegend";
@@ -80,7 +81,7 @@ function getDayOfMonth(iso: string): number {
 export default function CalendarView() {
   const navigate = useNavigate();
   const { isConnected } = useIntegrations();
-  const [agentName, setAgentName] = useState("Annie");
+  const { agentName } = useAgent();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,12 +103,6 @@ export default function CalendarView() {
     setAgentInput("");
   };
 
-  useEffect(() => {
-    const stored = localStorage.getItem("normy_agent");
-    if (stored) {
-      try { setAgentName(JSON.parse(stored).agentName || "Annie"); } catch {}
-    }
-  }, []);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);

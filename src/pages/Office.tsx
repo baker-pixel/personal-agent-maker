@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useAgent } from "@/contexts/AgentContext";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -226,16 +227,11 @@ const officeItems = [
 
 export default function Office() {
   const navigate = useNavigate();
-  const [agentName, setAgentName] = useState("Normy");
+  const { agentName } = useAgent();
   const [briefing, setBriefing] = useState<BriefingData | null>(null);
   const [showGreeting, setShowGreeting] = useState(true);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [entered, setEntered] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("agent-name");
-    if (stored) setAgentName(stored);
-  }, []);
 
   // Fetch quick stats for briefing
   useEffect(() => {

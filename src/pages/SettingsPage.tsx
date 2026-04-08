@@ -10,6 +10,7 @@ import AppMenu from "@/components/AppMenu";
 import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useToast } from "@/hooks/use-toast";
+import { useAgent } from "@/contexts/AgentContext";
 
 interface AgentSettings {
   agentName: string;
@@ -37,7 +38,8 @@ const defaults: AgentSettings = {
 
 export default function Settings() {
   const navigate = useNavigate();
-  const [settings, setSettings] = useState<AgentSettings>(defaults);
+  const { agentName, setAgentName } = useAgent();
+  const [settings, setSettings] = useState<AgentSettings>({ ...defaults, agentName });
   const [saved, setSaved] = useState(false);
   const { connecting, connect } = useGoogleOAuthPopup();
   const { isConnected, integrations, removeAccount } = useIntegrations();
@@ -58,13 +60,13 @@ export default function Settings() {
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        setSettings((prev) => ({ ...prev, ...parsed }));
+        setSettings((prev) => ({ ...prev, ...parsed, agentName }));
       } catch {}
     }
     supabase.auth.getUser().then(({ data }) => {
       if (data.user?.email) setUserEmail(data.user.email);
     });
-  }, []);
+  }, [agentName]);
 
   const handleChangePassword = async () => {
     if (newPassword.length < 6) {
@@ -89,6 +91,9 @@ export default function Settings() {
 
   const save = async () => {
     localStorage.setItem("normy_agent", JSON.stringify(settings));
+    if (settings.agentName && settings.agentName !== agentName) {
+      setAgentName(settings.agentName);
+    }
 
     // Register phone number for SMS if provided
     if (settings.phoneNumber) {
