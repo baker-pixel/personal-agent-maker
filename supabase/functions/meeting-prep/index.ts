@@ -329,7 +329,7 @@ Keep it actionable and concise. Use markdown formatting.`;
             await adminClient.from("action_items").insert(rows);
           }
 
-          return { ...event, relatedEmails, prep, error: false, actionItemsCreated: actionItems.length };
+          return { ...event, relatedEmails, prep, error: false, actionItemsCreated: actionItems.length, attendeeResearch };
         } catch {
           return { ...event, relatedEmails, prep: "Failed to generate prep.", error: true };
         }
