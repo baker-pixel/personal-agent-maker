@@ -435,6 +435,12 @@ export default function Settings() {
         <Button onClick={save} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
           {saved ? "Saved ✓" : "Save Changes"}
         </Button>
+
+        <div className="mt-8 pt-6 border-t text-center">
+          <a href="/privacy" className="text-xs text-muted-foreground hover:text-foreground underline">
+            Privacy Policy
+          </a>
+        </div>
       </div>
     </div>
   );
