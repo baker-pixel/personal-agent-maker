@@ -32,7 +32,7 @@ export default function ModeSelect() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="rounded-2xl border-2 border-accent/20 bg-card p-6 shadow-sm hover:shadow-md transition-shadow"
+            className="rounded-2xl border-[3px] border-accent bg-card p-6 shadow-lg shadow-accent/10 hover:shadow-xl transition-shadow relative"
           >
             <h2 className="font-display text-xl font-semibold text-foreground mb-1">Decision Mode–Delegate</h2>
             <p className="text-sm text-muted-foreground mb-5">
@@ -53,6 +53,7 @@ export default function ModeSelect() {
               </button>
             </div>
           </motion.div>
+          <p className="text-center text-xs font-semibold uppercase tracking-widest text-accent mt-3">★ Recommended</p>
 
           <div className="pt-24 md:pt-32 space-y-4">
             <motion.div
