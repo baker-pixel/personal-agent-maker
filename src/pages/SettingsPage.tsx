@@ -38,8 +38,18 @@ const defaults: AgentSettings = {
 
 export default function Settings() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { agentName, setAgentName } = useAgent();
   const [settings, setSettings] = useState<AgentSettings>({ ...defaults, agentName });
+
+  // Scroll to hash section (e.g. #departments)
+  useEffect(() => {
+    if (location.hash) {
+      setTimeout(() => {
+        document.querySelector(location.hash)?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+  }, [location.hash]);
   const [saved, setSaved] = useState(false);
   const { connecting, connect } = useGoogleOAuthPopup();
   const { isConnected, integrations, removeAccount } = useIntegrations();
