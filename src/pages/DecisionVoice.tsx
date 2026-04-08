@@ -147,11 +147,15 @@ export default function DecisionVoice() {
             />
             <VoiceWaveform isActive={speech.isListening} />
             <button
-              onClick={speech.toggleListening}
+              onClick={speech.isSupported ? speech.toggleListening : undefined}
+              disabled={!speech.isSupported}
+              title={!speech.isSupported ? "Voice input is not supported in this browser. Try Chrome or Edge." : speech.isListening ? "Stop listening" : "Start listening"}
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 ${
-                speech.isListening
-                  ? "bg-destructive text-destructive-foreground animate-pulse shadow-lg shadow-destructive/30"
-                  : "bg-accent text-accent-foreground shadow-md shadow-accent/20"
+                !speech.isSupported
+                  ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
+                  : speech.isListening
+                    ? "bg-destructive text-destructive-foreground animate-pulse shadow-lg shadow-destructive/30"
+                    : "bg-accent text-accent-foreground shadow-md shadow-accent/20"
               }`}
             >
               {speech.isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
