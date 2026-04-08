@@ -54,6 +54,8 @@ export default function ModeSelect() {
             </div>
           </motion.div>
 
+          <div className="w-full border-t border-border/50 my-4" />
+
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
