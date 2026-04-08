@@ -12,6 +12,7 @@ import {
   X,
   Sparkles,
   Clock,
+  Moon,
   AlertCircle,
   ChevronRight,
 } from "lucide-react";
@@ -208,6 +209,18 @@ const officeItems = [
     action: "settings",
     position: "",
     emoji: "⚙️",
+  },
+  {
+    id: "eod-wrapup",
+    label: "EOD Wrap-Up",
+    description: "Summarize your day",
+    icon: Moon,
+    color: "from-violet-500/15 to-violet-500/5",
+    borderColor: "border-violet-500/25",
+    iconColor: "text-violet-500",
+    action: "eod",
+    position: "",
+    emoji: "🌙",
   },
 ];
 
