@@ -44,7 +44,7 @@ export default function Landing() {
         </div>
       </nav>
 
-      <section className="pt-32 pb-20 md:pt-44 md:pb-32">
+      <section className="pt-32 pb-10 md:pt-44 md:pb-16">
         <div className="container max-w-4xl text-center">
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }} className="flex items-center justify-center gap-3 mb-8">
             <img src={normyLogo} alt="Normy Agent" className="h-24 md:h-32 lg:h-40 w-auto" />
