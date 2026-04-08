@@ -211,7 +211,7 @@ export const IntegrationsSetup = () => {
                               <span className="text-sm text-foreground truncate">{email}</span>
                             </div>
                             <button
-                              onClick={() => handleDisconnect(integration.id, email)}
+                              onClick={(e) => { e.stopPropagation(); handleDisconnect(integration.id, email); }}
                               className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0 flex items-center gap-1"
                             >
                               <Unplug className="w-3 h-3" />
