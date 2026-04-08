@@ -31,7 +31,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b">
+      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b pt-[env(safe-area-inset-top)]">
         <div className="container flex items-center justify-between h-16">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("/")}>
             <img src={normyLogo} alt="Normy" className="h-8 w-auto" />
