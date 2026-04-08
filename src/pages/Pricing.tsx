@@ -32,7 +32,7 @@ const departments = [
     available: true,
     price: "$49",
     period: "/month",
-    desc: "Email, calendar, and daily operations handled by your AI agent — so you can focus on growing your business.",
+    desc: "Email, calendar, and daily operations handled by your AI agent. Interact with your Admin Agent via Voice/Email/SMS, all while you stay focused on growing your business.",
     features: adminFeatures,
     cta: "Get Started",
     highlight: true,
