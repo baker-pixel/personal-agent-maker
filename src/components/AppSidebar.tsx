@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Plug,
   Sun,
+  Moon,
   MailSearch,
   Clock,
   CalendarClock,
@@ -20,7 +21,7 @@ import {
   FileText,
 } from "lucide-react";
 
-type View = "briefing" | "agenda" | "triage" | "followups" | "meetings" | "inbox" | "contacts" | "projects" | "delegation" | "travel" | "decisions" | "weekly" | "scheduling" | "summarizer" | "chat" | "integrations" | "settings";
+type View = "briefing" | "agenda" | "triage" | "followups" | "meetings" | "inbox" | "contacts" | "projects" | "delegation" | "travel" | "decisions" | "weekly" | "eod" | "scheduling" | "summarizer" | "chat" | "integrations" | "settings";
 
 interface AppSidebarProps {
   currentView: View;
@@ -41,6 +42,7 @@ const navItems: { id: View; label: string; icon: React.ElementType }[] = [
   { id: "decisions", label: "Decision Log", icon: Gavel },
   { id: "travel", label: "Travel & Expenses", icon: Plane },
   { id: "weekly", label: "Weekly Report", icon: FileBarChart },
+  { id: "eod", label: "EOD Wrap-Up", icon: Moon },
   { id: "summarizer", label: "Doc Summarizer", icon: FileText },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "integrations", label: "Integrations", icon: Plug },
