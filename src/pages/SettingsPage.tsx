@@ -42,6 +42,11 @@ export default function Settings() {
   const { connecting, connect } = useGoogleOAuthPopup();
   const { isConnected, integrations, removeAccount } = useIntegrations();
   const { toast } = useToast();
+  const [userEmail, setUserEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordChanged, setPasswordChanged] = useState(false);
 
   const gmailConnected = isConnected("gmail");
   const calendarConnected = isConnected("google-calendar");
