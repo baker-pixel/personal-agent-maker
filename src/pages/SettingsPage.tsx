@@ -436,10 +436,47 @@ export default function Settings() {
           {saved ? "Saved ✓" : "Save Changes"}
         </Button>
 
-        <div className="mt-8 pt-6 border-t text-center">
-          <a href="/privacy" className="text-xs text-muted-foreground hover:text-foreground underline">
-            Privacy Policy
-          </a>
+        <div className="mt-10 pt-6 border-t space-y-4 text-xs text-muted-foreground">
+          <h3 className="text-sm font-semibold text-foreground">Privacy Policy</h3>
+          <p className="leading-relaxed"><strong className="text-foreground">Last updated:</strong> April 8, 2026</p>
+
+          <p className="leading-relaxed">Normy Agent ("we", "our", "us") is committed to protecting your privacy. This policy describes what data we collect, how we use it, and your rights.</p>
+
+          <h4 className="text-xs font-semibold text-foreground pt-2">1. Information We Collect</h4>
+          <ul className="list-disc pl-5 space-y-1">
+            <li><strong className="text-foreground">Account info:</strong> Email address and password when you create an account.</li>
+            <li><strong className="text-foreground">Google account data:</strong> When you connect Gmail or Google Calendar, we access your emails and calendar events to provide triage and scheduling features. We store OAuth tokens securely.</li>
+            <li><strong className="text-foreground">Phone number:</strong> If you opt in to SMS, we store your mobile number to enable text-based communication with your agent.</li>
+          </ul>
+
+          <h4 className="text-xs font-semibold text-foreground pt-2">2. How We Use Your Information</h4>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>To read and categorize your emails for inbox triage</li>
+            <li>To read your calendar events for scheduling optimization</li>
+            <li>To draft email replies for your review and approval</li>
+            <li>To send and receive SMS messages on your behalf (with consent)</li>
+          </ul>
+          <p>We <strong className="text-foreground">never</strong> send emails, modify calendar events, or send texts without your explicit approval.</p>
+
+          <h4 className="text-xs font-semibold text-foreground pt-2">3. Data Storage & Security</h4>
+          <p>Your OAuth tokens are stored securely in an encrypted database. We do not store the full content of your emails or calendar events — we access them in real time and do not retain copies.</p>
+
+          <h4 className="text-xs font-semibold text-foreground pt-2">4. Third-Party Services</h4>
+          <p>We use Google APIs to access Gmail and Google Calendar. Our use complies with the <a href="https://developers.google.com/terms/api-services-user-data-policy" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>, including Limited Use requirements. SMS is powered by Twilio.</p>
+
+          <h4 className="text-xs font-semibold text-foreground pt-2">5. Data Sharing</h4>
+          <p>We do not sell, trade, or share your personal data with third parties. Your data is only used to provide the Normy Agent service.</p>
+
+          <h4 className="text-xs font-semibold text-foreground pt-2">6. Your Rights</h4>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>Disconnect your Google account at any time from Integrations</li>
+            <li>Delete your account and all associated data at any time</li>
+            <li>Revoke access from your <a href="https://myaccount.google.com/permissions" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">Google Account permissions</a></li>
+            <li>Opt out of SMS at any time by unchecking consent above</li>
+          </ul>
+
+          <h4 className="text-xs font-semibold text-foreground pt-2">7. Contact</h4>
+          <p>Questions about this policy? Reach out through the app or email us at support@normyagent.com.</p>
         </div>
       </div>
     </div>
