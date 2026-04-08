@@ -481,6 +481,9 @@ export default function Office() {
             {agentName}'s Office
           </h1>
           <p className="text-sm text-muted-foreground">Click on anything to get started</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Text {agentName} at <span className="font-mono font-semibold text-foreground">+1 (844) 392-6449</span>
+          </p>
         </motion.div>
 
         {/* Office grid */}
