@@ -122,8 +122,8 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (!session) return;
 
     const { data: tokens } = await supabase
-      .from("google_oauth_tokens")
-      .select("provider, email");
+      .from("google_oauth_token_metadata" as any)
+      .select("provider, email") as { data: { provider: string; email: string | null }[] | null };
 
     if (tokens && tokens.length > 0) {
       // Group emails by provider
