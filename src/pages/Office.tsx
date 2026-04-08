@@ -289,6 +289,9 @@ export default function Office() {
       case "email":
         navigate("/email");
         break;
+      case "eod":
+        navigate("/eod-wrapup");
+        break;
       case "settings":
         navigate("/settings");
         break;
