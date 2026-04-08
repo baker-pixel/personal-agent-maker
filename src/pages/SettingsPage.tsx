@@ -6,6 +6,7 @@ import EmailTriageSettings from "@/components/EmailTriageSettings";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import AppMenu from "@/components/AppMenu";
 import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
