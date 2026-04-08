@@ -91,6 +91,9 @@ export default function Settings() {
 
   const save = async () => {
     localStorage.setItem("normy_agent", JSON.stringify(settings));
+    if (settings.agentName && settings.agentName !== agentName) {
+      setAgentName(settings.agentName);
+    }
 
     // Register phone number for SMS if provided
     if (settings.phoneNumber) {
