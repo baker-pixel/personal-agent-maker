@@ -94,7 +94,7 @@ export default function Landing() {
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="text-center mb-14">
             <motion.p variants={fadeUp} custom={0} className="text-accent font-medium text-sm tracking-widest uppercase mb-4">The Solution</motion.p>
             <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl md:text-5xl font-bold tracking-tight mb-4">AI agents organized by department</motion.h2>
-            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground text-lg max-w-2xl mx-auto">Normy Agent gives you a team of AI agents, each one a specialist in a key area of your business. Operate like a big enterprise, without the necessary capital, by leveraging the power of AI.</motion.p>
+            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground text-lg max-w-2xl mx-auto">Normy Agent gives you a team of AI agents, each one a specialist in a key area of your business. Operate like a big enterprise without the necessary capital by leveraging AI, designed for non-techies.</motion.p>
           </motion.div>
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {departments.map((dept, i) => (
