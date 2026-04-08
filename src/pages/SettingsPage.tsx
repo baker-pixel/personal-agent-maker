@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, MessageSquare, Mail, Lock, Eye, EyeOff, Check } from "lucide-react";
+import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, MessageSquare, Mail, Lock, Eye, EyeOff, Check, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import EmailTriageSettings from "@/components/EmailTriageSettings";
 import { Input } from "@/components/ui/input";
@@ -350,6 +350,37 @@ export default function Settings() {
                 )}
               </Button>
             </div>
+          </div>
+        </section>
+
+        <section id="departments" className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-accent" />
+            <h2 className="font-display font-semibold">Departments</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">Activate agent departments to expand your team's capabilities. Each department is $20/month.</p>
+          <div className="space-y-2">
+            {[
+              { name: "Admin", description: "Email, calendar, scheduling & task management", active: true },
+              { name: "HR", description: "Hiring, onboarding, policy & employee relations", active: false },
+              { name: "Marketing", description: "Content, social media, campaigns & analytics", active: false },
+              { name: "Bookkeeping", description: "Invoices, expenses, reports & reconciliation", active: false },
+              { name: "Operations", description: "Workflows, vendors, inventory & logistics", active: false },
+            ].map((dept) => (
+              <div key={dept.name} className="flex items-center justify-between border rounded-xl p-4">
+                <div>
+                  <p className="font-medium text-sm">{dept.name}</p>
+                  <p className="text-xs text-muted-foreground">{dept.description}</p>
+                </div>
+                {dept.active ? (
+                  <span className="text-xs font-medium text-accent bg-accent/10 px-3 py-1 rounded-full">Active</span>
+                ) : (
+                  <Button variant="outline" size="sm" className="text-xs" disabled>
+                    Coming Soon
+                  </Button>
+                )}
+              </div>
+            ))}
           </div>
         </section>
 
