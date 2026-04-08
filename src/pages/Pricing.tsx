@@ -42,8 +42,8 @@ const departments = [
     subtitle: "AI Marketing Manager",
     icon: BarChart3,
     available: false,
-    price: "TBD",
-    period: "",
+    price: "$49",
+    period: "/month",
     desc: "Campaigns, content calendar, social media scheduling, and performance analytics — all managed by AI.",
     features: [
       "Social media content & scheduling",
@@ -60,8 +60,8 @@ const departments = [
     subtitle: "AI People Operations",
     icon: Users,
     available: false,
-    price: "TBD",
-    period: "",
+    price: "$49",
+    period: "/month",
     desc: "Hiring, onboarding, team management, and employee communications — streamlined with AI.",
     features: [
       "Job posting & candidate screening",
@@ -78,8 +78,8 @@ const departments = [
     subtitle: "AI Financial Assistant",
     icon: BookOpen,
     available: false,
-    price: "TBD",
-    period: "",
+    price: "$49",
+    period: "/month",
     desc: "Invoices, expense tracking, financial reporting, and tax prep support — powered by AI.",
     features: [
       "Invoice creation & tracking",
@@ -96,8 +96,8 @@ const departments = [
     subtitle: "AI Operations Manager",
     icon: Settings,
     available: false,
-    price: "TBD",
-    period: "",
+    price: "$49",
+    period: "/month",
     desc: "Vendor management, inventory, process optimization, and logistics — coordinated by AI.",
     features: [
       "Vendor communication & tracking",
