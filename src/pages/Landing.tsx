@@ -105,6 +105,7 @@ export default function Landing() {
                 </div>
                 <h3 className="font-display text-xl font-semibold mb-1">{dept.name}</h3>
                 <p className="text-muted-foreground text-sm">{dept.desc}</p>
+                {dept.available && <p className="text-accent font-semibold text-sm mt-2">$49/month, no contract</p>}
               </motion.div>
             ))}
           </motion.div>
