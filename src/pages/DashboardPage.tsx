@@ -35,14 +35,17 @@ export default function Dashboard() {
             {tabs.map((tab) => (
               <button
                 key={tab.name}
-                disabled={!tab.active}
+                onClick={() => {
+                  if (!tab.active) navigate("/settings#departments");
+                }}
                 className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                   tab.active
                     ? "text-foreground bg-secondary"
-                    : "text-muted-foreground/50 cursor-not-allowed"
+                    : "text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary/50 cursor-pointer"
                 }`}
               >
                 {tab.name}
+                {!tab.active && <span className="ml-1 text-[10px] align-super text-accent">+</span>}
               </button>
             ))}
           </div>
