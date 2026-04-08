@@ -528,7 +528,7 @@ export default function Office() {
                     <ChevronRight className={`w-4 h-4 text-muted-foreground/30 transition-all duration-300 ${isHovered ? "translate-x-1 text-foreground/50" : ""}`} />
                   </div>
                   <h3 className="font-display text-base sm:text-lg font-semibold text-foreground mb-0.5">
-                    {item.id === "desk" ? `Chat with ${agentName}` : item.label}
+                    {item.id === "desk" ? `Chat with ${agentName}` : item.id === "sms-log" ? `${agentName} SMS Log` : item.label}
                   </h3>
                   <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                     {item.description}
