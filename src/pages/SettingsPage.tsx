@@ -143,7 +143,12 @@ export default function Settings() {
           <p className="text-sm text-muted-foreground">
             Text {settings.agentName} at <span className="font-mono font-semibold text-foreground">+1 (844) 392-6449</span> from this number. {settings.agentName} will recognize you and respond with AI-powered assistance.
           </p>
-          <Input type="tel" value={settings.phoneNumber} onChange={(e) => update("phoneNumber", e.target.value)} placeholder="+1 (555) 123-4567" className="rounded-xl" />
+          <div className="flex gap-2">
+            <Input type="tel" value={settings.phoneNumber} onChange={(e) => update("phoneNumber", e.target.value)} placeholder="+1 (555) 123-4567" className="rounded-xl flex-1" />
+            <Button onClick={save} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl">
+              {saved ? "Saved ✓" : "Save"}
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground">
             Enter your mobile number in E.164 format (e.g. +15551234567) and save to activate SMS.
           </p>
