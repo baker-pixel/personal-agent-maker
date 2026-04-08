@@ -1,19 +1,10 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useAgent } from "@/contexts/AgentContext";
 
 export default function ModeSelect() {
   const navigate = useNavigate();
-  const [agentName, setAgentName] = useState("Annie");
-
-  useEffect(() => {
-    const stored = localStorage.getItem("normy_agent");
-    if (stored) {
-      try {
-        setAgentName(JSON.parse(stored).agentName || "Annie");
-      } catch {}
-    }
-  }, []);
+  const { agentName } = useAgent();
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-5">

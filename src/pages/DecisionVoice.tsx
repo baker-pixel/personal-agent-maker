@@ -9,20 +9,14 @@ import { VoiceWaveform } from "@/components/VoiceWaveform";
 import { DelegateSidebar } from "@/components/chat/DelegateSidebar";
 import ReactMarkdown from "react-markdown";
 import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
+import { useAgent } from "@/contexts/AgentContext";
 
 export default function DecisionVoice() {
   const navigate = useNavigate();
-  const [agentName, setAgentName] = useState("Annie");
+  const { agentName } = useAgent();
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("normy_agent");
-    if (stored) {
-      try { setAgentName(JSON.parse(stored).agentName || "Annie"); } catch {}
-    }
-  }, []);
 
   const chat = useAnnieChat(agentName);
   const speech = useSpeechRecognition({

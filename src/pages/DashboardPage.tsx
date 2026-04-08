@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, Calendar, FileText, Contact, ListTodo } from "lucide-react";
 import AppMenu from "@/components/AppMenu";
 import normyLogo from "@/assets/normy-logo.png";
+import { useAgent } from "@/contexts/AgentContext";
 
 const tabs = [
   { name: "Admin", active: true },
@@ -21,14 +22,7 @@ const capabilities = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [agentName, setAgentName] = useState("Annie");
-
-  useEffect(() => {
-    const stored = localStorage.getItem("normy_agent");
-    if (stored) {
-      try { setAgentName(JSON.parse(stored).agentName || "Annie"); } catch {}
-    }
-  }, []);
+  const { agentName } = useAgent();
 
   return (
     <div className="min-h-screen bg-background">

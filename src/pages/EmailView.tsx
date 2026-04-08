@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Sparkles, Check, X, Edit2, Send, Mic, MicOff, ChevronDown, ChevronUp, Inbox, GripVertical, Loader2, RefreshCw, Mail } from "lucide-react";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
+import { useAgent } from "@/contexts/AgentContext";
 import AppMenu from "@/components/AppMenu";
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
@@ -76,7 +77,7 @@ function guessPriority(email: { isUnread: boolean; subject: string; from: string
 export default function EmailView() {
   const navigate = useNavigate();
   const { isConnected } = useIntegrations();
-  const [agentName, setAgentName] = useState("Annie");
+  const { agentName } = useAgent();
   const [desk, setDesk] = useState<"agent" | "my">("agent");
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,12 +106,6 @@ export default function EmailView() {
   const [deskAssignments, setDeskAssignments] = useState<Record<string, "agent" | "my">>({});
   const [dragOverDesk, setDragOverDesk] = useState<"agent" | "my" | null>(null);
 
-  useEffect(() => {
-    const stored = localStorage.getItem("normy_agent");
-    if (stored) {
-      try { setAgentName(JSON.parse(stored).agentName || "Annie"); } catch {}
-    }
-  }, []);
 
   const fetchEmails = useCallback(async () => {
     setLoading(true);
