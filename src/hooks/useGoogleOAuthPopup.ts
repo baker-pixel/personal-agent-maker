@@ -13,7 +13,7 @@ export const useGoogleOAuthPopup = () => {
     setConnecting(service);
     try {
       const response = await supabase.functions.invoke("google-auth", {
-        body: { service },
+        body: { service, origin: window.location.origin },
       });
       if (response.error) throw response.error;
       const { url } = response.data;
