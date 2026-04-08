@@ -61,7 +61,28 @@ export default function Settings() {
         setSettings((prev) => ({ ...prev, ...parsed }));
       } catch {}
     }
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email) setUserEmail(data.user.email);
+    });
   }, []);
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 6) {
+      toast({ title: "Password too short", description: "Use at least 6 characters.", variant: "destructive" });
+      return;
+    }
+    setChangingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setChangingPassword(false);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      setPasswordChanged(true);
+      setNewPassword("");
+      toast({ title: "Password updated" });
+      setTimeout(() => setPasswordChanged(false), 2000);
+    }
+  };
 
   const update = <K extends keyof AgentSettings>(key: K, val: AgentSettings[K]) =>
     setSettings((s) => ({ ...s, [key]: val }));
