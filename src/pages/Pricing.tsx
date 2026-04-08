@@ -31,7 +31,7 @@ const departments = [
     subtitle: "Your AI Executive Assistant",
     icon: Mail,
     available: true,
-    price: "$49",
+    price: "$20",
     period: "/month",
     desc: "Email, calendar, and daily operations handled by your AI agent. Interact with your Admin Agent via Voice/Email/SMS, all while you stay focused on growing your business.",
     features: adminFeatures,
