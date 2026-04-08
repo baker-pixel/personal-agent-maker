@@ -22,6 +22,7 @@ const adminFeatures = [
   "Contact intelligence",
   "Morning briefing",
   "Document summarization",
+  "The world's first behavioral agentic reasoning system.",
 ];
 
 const departments = [
