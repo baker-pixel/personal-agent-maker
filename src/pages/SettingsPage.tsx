@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, MessageSquare } from "lucide-react";
+import { ArrowLeft, Phone, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, MessageSquare, Mail, Lock, Eye, EyeOff, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import EmailTriageSettings from "@/components/EmailTriageSettings";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,11 @@ export default function Settings() {
   const { connecting, connect } = useGoogleOAuthPopup();
   const { isConnected, integrations, removeAccount } = useIntegrations();
   const { toast } = useToast();
+  const [userEmail, setUserEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordChanged, setPasswordChanged] = useState(false);
 
   const gmailConnected = isConnected("gmail");
   const calendarConnected = isConnected("google-calendar");
@@ -56,7 +61,28 @@ export default function Settings() {
         setSettings((prev) => ({ ...prev, ...parsed }));
       } catch {}
     }
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email) setUserEmail(data.user.email);
+    });
   }, []);
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 6) {
+      toast({ title: "Password too short", description: "Use at least 6 characters.", variant: "destructive" });
+      return;
+    }
+    setChangingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setChangingPassword(false);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      setPasswordChanged(true);
+      setNewPassword("");
+      toast({ title: "Password updated" });
+      setTimeout(() => setPasswordChanged(false), 2000);
+    }
+  };
 
   const update = <K extends keyof AgentSettings>(key: K, val: AgentSettings[K]) =>
     setSettings((s) => ({ ...s, [key]: val }));
@@ -135,6 +161,38 @@ export default function Settings() {
       </nav>
 
       <div className="container py-8 max-w-lg space-y-8">
+        {/* Account / Login Info */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Mail className="w-5 h-5 text-accent" />
+            <h2 className="font-display font-semibold">Account</h2>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Email</label>
+            <Input value={userEmail} readOnly className="rounded-xl bg-muted cursor-default" />
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Change Password</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New password (min 6 chars)"
+                  className="rounded-xl pr-10"
+                />
+                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <Button onClick={handleChangePassword} disabled={changingPassword || !newPassword.trim()} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl">
+                {changingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : passwordChanged ? <><Check className="w-4 h-4" /> Done</> : "Update"}
+              </Button>
+            </div>
+          </div>
+        </section>
+
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-accent" />
