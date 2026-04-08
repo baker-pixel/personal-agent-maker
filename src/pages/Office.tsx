@@ -16,6 +16,7 @@ import {
   Moon,
   AlertCircle,
   ChevronRight,
+  Smartphone,
 } from "lucide-react";
 
 /* ── Floating particles ── */
@@ -223,6 +224,18 @@ const officeItems = [
     position: "",
     emoji: "🌙",
   },
+  {
+    id: "sms-log",
+    label: "SMS Log",
+    description: "Text conversation history",
+    icon: Smartphone,
+    color: "from-teal-500/15 to-teal-500/5",
+    borderColor: "border-teal-500/25",
+    iconColor: "text-teal-500",
+    action: "sms",
+    position: "",
+    emoji: "📱",
+  },
 ];
 
 export default function Office() {
@@ -290,6 +303,9 @@ export default function Office() {
         break;
       case "settings":
         navigate("/settings");
+        break;
+      case "sms":
+        navigate("/sms-log");
         break;
     }
   }, [navigate]);
@@ -512,7 +528,7 @@ export default function Office() {
                     <ChevronRight className={`w-4 h-4 text-muted-foreground/30 transition-all duration-300 ${isHovered ? "translate-x-1 text-foreground/50" : ""}`} />
                   </div>
                   <h3 className="font-display text-base sm:text-lg font-semibold text-foreground mb-0.5">
-                    {item.id === "desk" ? `Chat with ${agentName}` : item.label}
+                    {item.id === "desk" ? `Chat with ${agentName}` : item.id === "sms-log" ? `${agentName} SMS Log` : item.label}
                   </h3>
                   <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                     {item.description}
