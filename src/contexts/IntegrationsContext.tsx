@@ -139,8 +139,8 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
           const emails = providerEmails.get(i.id) || [];
           return {
             ...i,
-            connected: emails.length > 0 || i.connected,
-            connectedAccounts: emails.length > 0 ? emails : i.connectedAccounts,
+            connected: emails.length > 0,
+            connectedAccounts: emails,
           };
         })
       );
