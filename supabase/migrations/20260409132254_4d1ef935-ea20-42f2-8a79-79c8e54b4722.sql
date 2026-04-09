@@ -1,0 +1,1 @@
+GRANT SELECT ON public.google_oauth_token_metadata TO authenticated;
