@@ -199,25 +199,25 @@ function Room() {
   return (
     <group>
       {/* Floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
         <planeGeometry args={[12, 12]} />
         <meshStandardMaterial color="#1C2333" roughness={0.8} metalness={0.05} />
       </mesh>
 
       {/* Back wall */}
-      <mesh position={[0, 2.5, -4]} receiveShadow>
+      <mesh position={[0, 2.5, -4]}>
         <planeGeometry args={[12, 5]} />
         <meshStandardMaterial color="#232D3F" roughness={0.9} />
       </mesh>
 
       {/* Left wall */}
-      <mesh position={[-5, 2.5, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+      <mesh position={[-5, 2.5, 0]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[12, 5]} />
         <meshStandardMaterial color="#1F2937" roughness={0.9} />
       </mesh>
 
       {/* Right wall */}
-      <mesh position={[5, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
+      <mesh position={[5, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]}>
         <planeGeometry args={[12, 5]} />
         <meshStandardMaterial color="#1F2937" roughness={0.9} />
       </mesh>
