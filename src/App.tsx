@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -21,7 +21,7 @@ import CalendarView from "./pages/CalendarView";
 import SettingsPage from "./pages/SettingsPage";
 import GoogleCallback from "./pages/GoogleCallback";
 import Office from "./pages/Office";
-import Office3D from "./pages/Office3D";
+const Office3D = lazy(() => import("./pages/Office3D"));
 import EodWrapup from "./pages/EodWrapup";
 import SmsLog from "./pages/SmsLog";
 import AppHeader from "./components/AppHeader";
@@ -91,7 +91,7 @@ const App = () => {
               <Route path="/onboarding" element={<Onboarding />} />
               <Route path="/mode-select" element={<ProtectedRoute session={session}><ModeSelect /></ProtectedRoute>} />
               <Route path="/office" element={<ProtectedRoute session={session}><Office /></ProtectedRoute>} />
-              <Route path="/office-3d" element={<ProtectedRoute session={session}><Office3D /></ProtectedRoute>} />
+              <Route path="/office-3d" element={<ProtectedRoute session={session}><Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin" /></div>}><Office3D /></Suspense></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute session={session}><DashboardPage /></ProtectedRoute>} />
               <Route path="/decision/text" element={<ProtectedRoute session={session}><DecisionText /></ProtectedRoute>} />
               <Route path="/decision/voice" element={<ProtectedRoute session={session}><DecisionVoice /></ProtectedRoute>} />
