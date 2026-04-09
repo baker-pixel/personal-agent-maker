@@ -178,24 +178,6 @@ function AnalogClock({ size = 48 }: { size?: number }) {
   );
 }
 
-/* ── Steaming coffee ── */
-function SteamingCoffee() {
-  return (
-    <div className="relative inline-block">
-      <span className="text-2xl">☕</span>
-      <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-[3px]">
-        {[0, 0.4, 0.8].map((delay, i) => (
-          <motion.div
-            key={i}
-            className="w-[2px] rounded-full bg-muted-foreground/20"
-            animate={{ height: [4, 10, 4], opacity: [0.3, 0.6, 0.3], y: [0, -6, 0] }}
-            transition={{ duration: 2, delay, repeat: Infinity, ease: "easeInOut" }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
 
 interface BriefingData {
   unreadEmails: number;
