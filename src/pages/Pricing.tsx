@@ -262,21 +262,87 @@ export default function Pricing() {
                   </ul>
                 </div>
 
-                {/* CTA */}
-                <div className="p-6 pt-2">
+                {/* Learn More / CTA */}
+                <div className="p-6 pt-2 space-y-2">
                   {dept.available ? (
                     <Button onClick={() => navigate("/onboarding")} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
                       {dept.cta} <ArrowRight className="w-4 h-4 ml-1" />
                     </Button>
                   ) : (
-                    <Button variant="outline" className="w-full" disabled>
-                      {dept.cta}
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        className="w-full text-accent hover:text-accent/80 hover:bg-accent/5"
+                        onClick={() => setExpandedDept(expandedDept === dept.name ? null : dept.name)}
+                      >
+                        {expandedDept === dept.name ? "Show Less" : "Learn More"}
+                        {expandedDept === dept.name ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+                      </Button>
+                      <Button variant="outline" className="w-full" disabled>
+                        {dept.cta}
+                      </Button>
+                    </>
                   )}
                 </div>
               </motion.div>
             ))}
           </motion.div>
+
+          {/* Expanded Detail Panel */}
+          <AnimatePresence>
+            {expandedDept && (() => {
+              const dept = departments.find(d => d.name === expandedDept);
+              if (!dept || !dept.detail) return null;
+              return (
+                <motion.div
+                  key={dept.name}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-6 rounded-2xl border bg-card p-8 md:p-10">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center">
+                        <dept.icon className="w-5 h-5 text-accent" />
+                      </div>
+                      <div>
+                        <h3 className="font-display text-xl font-bold">{dept.name} Agent</h3>
+                        <p className="text-muted-foreground text-sm">{dept.subtitle}</p>
+                      </div>
+                      <button
+                        onClick={() => setExpandedDept(null)}
+                        className="ml-auto p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <ChevronUp className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <h4 className="font-display text-2xl font-bold mb-4">{dept.detail.headline}</h4>
+
+                    <div className="space-y-4 mb-8">
+                      {dept.detail.paragraphs.map((p, idx) => (
+                        <p key={idx} className="text-muted-foreground leading-relaxed">{p}</p>
+                      ))}
+                    </div>
+
+                    <div>
+                      <h5 className="font-display font-semibold text-lg mb-3">Additional capabilities</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {dept.detail.extras.map((e) => (
+                          <div key={e} className="flex items-start gap-2 text-sm">
+                            <Check className="w-4 h-4 mt-0.5 flex-shrink-0 text-accent" />
+                            <span className="text-foreground">{e}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })()}
+          </AnimatePresence>
         </div>
       </section>
 
