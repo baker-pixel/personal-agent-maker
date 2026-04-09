@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import AppMenu from "@/components/AppMenu";
+
 import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useToast } from "@/hooks/use-toast";
@@ -174,7 +174,7 @@ export default function Settings() {
             <span className="text-sm font-medium">Back</span>
           </button>
           <h1 className="font-display font-semibold">Settings</h1>
-          <AppMenu />
+          <div className="w-8" />
         </div>
       </nav>
 

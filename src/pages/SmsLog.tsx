@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Smartphone, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAgent } from "@/contexts/AgentContext";
-import AppMenu from "@/components/AppMenu";
+
 
 interface SmsMessage {
   role: string;
@@ -60,7 +60,7 @@ export default function SmsLog() {
             <span className="text-sm font-medium">Back</span>
           </button>
           <h1 className="font-display font-semibold">{agentName} SMS Log</h1>
-          <AppMenu />
+          <div className="w-8" />
         </div>
       </nav>
 

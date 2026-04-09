@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Mail, Calendar, FileText, Contact, ListTodo, Shield, Users, Megaphone, BookOpen, Cog } from "lucide-react";
-import AppMenu from "@/components/AppMenu";
+
 import normyLogo from "@/assets/normy-logo.png";
 import { useAgent } from "@/contexts/AgentContext";
 

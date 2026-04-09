@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, ChevronLeft, ChevronRight, X, Send, Mic, MicOff, Sparkles, Loader2, Calendar, RefreshCw, ExternalLink } from "lucide-react";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
-import AppMenu from "@/components/AppMenu";
+
 import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
@@ -202,7 +202,7 @@ export default function CalendarView() {
               <span className="text-sm font-medium">Admin</span>
             </button>
             <h1 className="font-display font-semibold">Calendar</h1>
-            <AppMenu />
+            <div className="w-8" />
           </div>
         </nav>
         <div className="flex-1 flex items-center justify-center p-6">
@@ -234,7 +234,6 @@ export default function CalendarView() {
             <button onClick={fetchEvents} disabled={loading} className="p-2 text-muted-foreground hover:text-foreground transition-colors">
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             </button>
-            <AppMenu />
           </div>
         </div>
       </nav>
