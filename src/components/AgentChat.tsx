@@ -142,18 +142,25 @@ export const AgentChat = () => {
             <p className="text-muted-foreground text-sm max-w-md">
               Ask {agentName} to draft emails, organize tasks, summarize documents, plan your day, or anything else an executive assistant would handle.
             </p>
-            <div className="flex flex-wrap gap-2 mt-6 justify-center">
+            <div className="w-full max-w-sm space-y-2 mt-6">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-3">
+                Things {agentName} can handle for you
+              </p>
               {[
-                "Draft a follow-up email to a client",
-                "Help me plan my week",
-                "Summarize my active projects",
-              ].map((suggestion) => (
+                { emoji: "📧", label: "Triage my inbox", prompt: "Go through my inbox and tell me what's urgent, what needs a reply, and what I can ignore." },
+                { emoji: "📅", label: "Prep me for my next meeting", prompt: "Look at my upcoming meetings and prepare a brief with context, talking points, and anything I should know about the attendees." },
+                { emoji: "✍️", label: "Draft a follow-up email", prompt: "Help me draft a professional follow-up email. I'll give you the context." },
+                { emoji: "📋", label: "Summarize my action items", prompt: "Review my tasks and action items, then give me a prioritized summary of what I should focus on today." },
+                { emoji: "📰", label: "Catch me up on industry news", prompt: "Give me a quick brief on the latest news relevant to my industry and interests." },
+                { emoji: "🗓️", label: "Plan my week", prompt: "Help me plan and organize my upcoming week based on my calendar and priorities." },
+              ].map((item) => (
                 <button
-                  key={suggestion}
-                  onClick={() => setInput(suggestion)}
-                  className="px-3 py-2 text-xs rounded-xl bg-muted text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                  key={item.label}
+                  onClick={() => { setInput(item.prompt); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border/40 text-left text-sm text-muted-foreground hover:text-foreground hover:border-accent/30 hover:bg-accent/[0.03] transition-all duration-200"
                 >
-                  {suggestion}
+                  <span className="text-base">{item.emoji}</span>
+                  <span className="font-medium">{item.label}</span>
                 </button>
               ))}
             </div>
