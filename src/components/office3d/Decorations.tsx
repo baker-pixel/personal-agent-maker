@@ -1,13 +1,80 @@
+import { useRef, useMemo } from "react";
+import { useFrame, useLoader } from "@react-three/fiber";
 import { RoundedBox } from "@react-three/drei";
+import * as THREE from "three";
+import citySkyline from "@/assets/city-skyline.jpg";
 
-/* ─── Window with night city glow ─── */
+/* ─── Twinkling city lights ─── */
+function TwinklingLights({ count = 40 }: { count?: number }) {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const phases = useMemo(() => Array.from({ length: count }, () => Math.random() * Math.PI * 2), [count]);
+  const speeds = useMemo(() => Array.from({ length: count }, () => 0.5 + Math.random() * 2), [count]);
+
+  const positions = useMemo(() => {
+    return Array.from({ length: count }, () => [
+      (Math.random() - 0.5) * 1.8,
+      -0.3 + Math.random() * 0.7,
+      0,
+    ] as [number, number, number]);
+  }, [count]);
+
+  useFrame(({ clock }) => {
+    if (!meshRef.current) return;
+    const t = clock.getElapsedTime();
+    for (let i = 0; i < count; i++) {
+      dummy.position.set(...positions[i]);
+      const s = 0.004 + 0.003 * (0.5 + 0.5 * Math.sin(t * speeds[i] + phases[i]));
+      dummy.scale.set(s * 20, s * 20, 1);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial color="#FDE68A" transparent opacity={0.9} depthWrite={false} blending={THREE.AdditiveBlending} />
+    </instancedMesh>
+  );
+}
+
+/* ─── Window with city skyline ─── */
 export function Window() {
+  const texture = useLoader(THREE.TextureLoader, citySkyline);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
   return (
     <group position={[-4.9, 2.2, -1.5]} rotation={[0, Math.PI / 2, 0]}>
       {/* Frame */}
       <RoundedBox args={[2.2, 1.6, 0.12]} radius={0.04}>
         <meshStandardMaterial color="#2A3548" roughness={0.4} metalness={0.35} />
       </RoundedBox>
+
+      {/* City skyline backdrop */}
+      <mesh position={[0, 0, -0.02]}>
+        <planeGeometry args={[2.0, 1.4]} />
+        <meshBasicMaterial map={texture} />
+      </mesh>
+
+      {/* Twinkling lights layer */}
+      <group position={[0, 0, 0.01]}>
+        <TwinklingLights count={50} />
+      </group>
+
+      {/* Glass overlay for reflection effect */}
+      <mesh position={[0, 0, 0.065]}>
+        <planeGeometry args={[2.0, 1.4]} />
+        <meshStandardMaterial
+          color="#1a2540"
+          transparent
+          opacity={0.15}
+          roughness={0.05}
+          metalness={0.7}
+        />
+      </mesh>
+
       {/* Window divider vertical */}
       <mesh position={[0, 0, 0.07]}>
         <boxGeometry args={[0.03, 1.45, 0.02]} />
@@ -18,21 +85,7 @@ export function Window() {
         <boxGeometry args={[2.05, 0.03, 0.02]} />
         <meshStandardMaterial color="#2A3548" roughness={0.4} metalness={0.3} />
       </mesh>
-      {/* Glass panes with city glow */}
-      {[[-0.52, 0.45], [0.52, 0.45], [-0.52, -0.35], [0.52, -0.35]].map(([x, y], i) => (
-        <mesh key={i} position={[x, y, 0.065]}>
-          <planeGeometry args={[0.95, 0.65]} />
-          <meshStandardMaterial
-            color="#0F1729"
-            emissive={["#1E3A5F", "#2D1B4E", "#1E3A5F", "#0F2B1F"][i]}
-            emissiveIntensity={0.4}
-            transparent
-            opacity={0.8}
-            roughness={0.05}
-            metalness={0.6}
-          />
-        </mesh>
-      ))}
+
       {/* Window sill */}
       <RoundedBox args={[2.3, 0.06, 0.2]} position={[0, -0.85, 0.1]} radius={0.015}>
         <meshStandardMaterial color="#374151" roughness={0.4} metalness={0.3} />
