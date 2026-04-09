@@ -1,7 +1,8 @@
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Mail, BarChart3, Users, BookOpen, Settings, Check, Sparkles } from "lucide-react";
+import { ArrowRight, Mail, BarChart3, Users, BookOpen, Settings, Check, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
 import normyLogo from "@/assets/normy-logo.png";
 
 const fadeUp = {
@@ -35,6 +36,7 @@ const departments = [
     period: "/month",
     desc: "Email, calendar, and daily operations handled by your AI agent. Interact with your Admin Agent via Voice/Email/SMS, all while you stay focused on growing your business.",
     features: adminFeatures,
+    detail: null,
     cta: "Get Started",
     highlight: true,
   },
@@ -53,6 +55,21 @@ const departments = [
       "Competitor monitoring",
       "Email marketing automation",
     ],
+    detail: {
+      headline: "Your always-on marketing department",
+      paragraphs: [
+        "Normy's Marketing Agent acts as a dedicated marketing manager who never sleeps. It drafts and schedules social media posts across platforms, monitors engagement metrics, and suggests content optimizations based on what's performing — so you stay visible without spending hours on social media.",
+        "Need an email campaign? Describe your goal and the agent drafts the copy, segments your audience, and schedules the send. It tracks open rates, click-throughs, and conversions — then summarizes results in a plain-English report each week.",
+        "The agent also monitors your competitors' public activity — new product launches, social campaigns, pricing changes — and flags anything relevant so you can respond quickly. Think of it as a marketing team that fits in your pocket.",
+      ],
+      extras: [
+        "AI-generated social captions & hashtags",
+        "Automated A/B test suggestions",
+        "Weekly marketing performance digest",
+        "Brand voice consistency enforcement",
+        "SEO keyword tracking & content recommendations",
+      ],
+    },
     cta: "Join Waitlist",
     highlight: false,
   },
@@ -71,6 +88,22 @@ const departments = [
       "Time-off & schedule management",
       "Performance review prep",
     ],
+    detail: {
+      headline: "Hire, onboard, and manage — hands-free",
+      paragraphs: [
+        "Normy's HR Agent handles the full employee lifecycle for small teams. It drafts job descriptions tailored to your industry, posts to job boards, and screens incoming resumes against your criteria — surfacing only the top candidates for your review.",
+        "Once you hire, the agent creates a personalized onboarding checklist: welcome emails, document collection, tool access setup, and first-week introductions — all triggered automatically. No more scrambling on day one.",
+        "For ongoing management, the agent tracks PTO requests, sends reminders for performance reviews, and drafts company-wide communications. It ensures nothing falls through the cracks — even when your team is growing fast.",
+      ],
+      extras: [
+        "AI-scored resume screening",
+        "Custom onboarding checklists per role",
+        "Automated new-hire welcome sequences",
+        "PTO balance tracking & approval routing",
+        "Performance review question generation",
+        "Employee satisfaction pulse surveys",
+      ],
+    },
     cta: "Join Waitlist",
     highlight: false,
   },
@@ -89,6 +122,22 @@ const departments = [
       "Cash flow monitoring",
       "Tax prep document organization",
     ],
+    detail: {
+      headline: "Financial clarity without the spreadsheet headaches",
+      paragraphs: [
+        "Normy's Bookkeeping Agent automatically categorizes your transactions, flags unusual expenses, and generates clean monthly financial summaries — no accounting degree required. It reads receipts, matches them to transactions, and keeps your books organized year-round.",
+        "Need to send an invoice? Describe the work and the agent creates a professional invoice, tracks payment status, and sends polite follow-ups for overdue balances. It also monitors your cash flow and alerts you before potential shortfalls.",
+        "When tax season arrives, the agent compiles all relevant documents — categorized expenses, income summaries, deduction candidates — and packages them for your accountant. What used to take days of prep now takes minutes.",
+      ],
+      extras: [
+        "Receipt scanning & auto-categorization",
+        "Overdue invoice reminders",
+        "Cash flow forecasting alerts",
+        "Profit & loss statement generation",
+        "Tax-deductible expense flagging",
+        "Quarterly estimated tax reminders",
+      ],
+    },
     cta: "Join Waitlist",
     highlight: false,
   },
@@ -107,6 +156,22 @@ const departments = [
       "Quality control checklists",
       "Logistics coordination",
     ],
+    detail: {
+      headline: "Run tighter operations on autopilot",
+      paragraphs: [
+        "Normy's Operations Agent keeps your business running smoothly behind the scenes. It tracks vendor contracts, sends renewal reminders, and drafts follow-up communications — so you never miss a deadline or overpay on a lapsed agreement.",
+        "For product-based businesses, the agent monitors inventory levels, predicts when you'll need to reorder based on sales velocity, and drafts purchase orders for your approval. It also coordinates shipping logistics and tracks deliveries in real time.",
+        "The agent automates recurring operational workflows — equipment maintenance schedules, quality control checklists, compliance deadlines — and reports exceptions so you only deal with what actually needs your attention.",
+      ],
+      extras: [
+        "Vendor contract renewal tracking",
+        "Reorder point predictions",
+        "Automated purchase order drafts",
+        "Shipment tracking & delivery alerts",
+        "Maintenance schedule automation",
+        "Compliance deadline monitoring",
+      ],
+    },
     cta: "Join Waitlist",
     highlight: false,
   },
@@ -121,7 +186,7 @@ const faqs = [
 
 export default function Pricing() {
   const navigate = useNavigate();
-
+  const [expandedDept, setExpandedDept] = useState<string | null>(null);
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
@@ -197,21 +262,87 @@ export default function Pricing() {
                   </ul>
                 </div>
 
-                {/* CTA */}
-                <div className="p-6 pt-2">
+                {/* Learn More / CTA */}
+                <div className="p-6 pt-2 space-y-2">
                   {dept.available ? (
                     <Button onClick={() => navigate("/onboarding")} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
                       {dept.cta} <ArrowRight className="w-4 h-4 ml-1" />
                     </Button>
                   ) : (
-                    <Button variant="outline" className="w-full" disabled>
-                      {dept.cta}
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        className="w-full text-accent hover:text-accent/80 hover:bg-accent/5"
+                        onClick={() => setExpandedDept(expandedDept === dept.name ? null : dept.name)}
+                      >
+                        {expandedDept === dept.name ? "Show Less" : "Learn More"}
+                        {expandedDept === dept.name ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+                      </Button>
+                      <Button variant="outline" className="w-full" disabled>
+                        {dept.cta}
+                      </Button>
+                    </>
                   )}
                 </div>
               </motion.div>
             ))}
           </motion.div>
+
+          {/* Expanded Detail Panel */}
+          <AnimatePresence>
+            {expandedDept && (() => {
+              const dept = departments.find(d => d.name === expandedDept);
+              if (!dept || !dept.detail) return null;
+              return (
+                <motion.div
+                  key={dept.name}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-6 rounded-2xl border bg-card p-8 md:p-10">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center">
+                        <dept.icon className="w-5 h-5 text-accent" />
+                      </div>
+                      <div>
+                        <h3 className="font-display text-xl font-bold">{dept.name} Agent</h3>
+                        <p className="text-muted-foreground text-sm">{dept.subtitle}</p>
+                      </div>
+                      <button
+                        onClick={() => setExpandedDept(null)}
+                        className="ml-auto p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <ChevronUp className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <h4 className="font-display text-2xl font-bold mb-4">{dept.detail.headline}</h4>
+
+                    <div className="space-y-4 mb-8">
+                      {dept.detail.paragraphs.map((p, idx) => (
+                        <p key={idx} className="text-muted-foreground leading-relaxed">{p}</p>
+                      ))}
+                    </div>
+
+                    <div>
+                      <h5 className="font-display font-semibold text-lg mb-3">Additional capabilities</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {dept.detail.extras.map((e) => (
+                          <div key={e} className="flex items-start gap-2 text-sm">
+                            <Check className="w-4 h-4 mt-0.5 flex-shrink-0 text-accent" />
+                            <span className="text-foreground">{e}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })()}
+          </AnimatePresence>
         </div>
       </section>
 
