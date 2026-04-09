@@ -1,6 +1,6 @@
-import { Suspense, useState, useCallback, useRef } from "react";
+import { Suspense, useState, useCallback, useRef, lazy } from "react";
 import { Canvas, useFrame, ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, Text, RoundedBox, Environment, Float, ContactShadows } from "@react-three/drei";
+import { OrbitControls, Text, RoundedBox, Float } from "@react-three/drei";
 import { useNavigate } from "react-router-dom";
 import { useAgent } from "@/contexts/AgentContext";
 import * as THREE from "three";
@@ -389,14 +389,6 @@ function OfficeScene({ onNavigate }: { onNavigate: (route: string) => void }) {
       <Plant position={[-4, 0, 3]} />
       <Plant position={[4.2, 0, -3]} />
 
-      {/* Contact shadows on floor */}
-      <ContactShadows
-        position={[0, 0.01, 0]}
-        opacity={0.5}
-        scale={12}
-        blur={2}
-        far={4}
-      />
 
       {/* Clickable objects */}
       {OBJECTS.map((obj) => (
