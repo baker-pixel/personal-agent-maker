@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Sparkles, Check, X, Edit2, Send, Mic, MicOff, ChevronDown, ChevronUp, Inbox, GripVertical, Loader2, RefreshCw, Mail } from "lucide-react";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
 import { useAgent } from "@/contexts/AgentContext";
-import AppMenu from "@/components/AppMenu";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { PriorityLegend } from "@/components/PriorityLegend";
@@ -296,7 +296,7 @@ export default function EmailView() {
               <span className="text-sm font-medium">Admin</span>
             </button>
             <h1 className="font-display font-semibold">Email</h1>
-            <AppMenu />
+            <div className="w-8" />
           </div>
         </nav>
         <div className="flex-1 flex items-center justify-center p-6">
@@ -332,7 +332,6 @@ export default function EmailView() {
             >
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             </button>
-            <AppMenu />
           </div>
         </div>
       </nav>
