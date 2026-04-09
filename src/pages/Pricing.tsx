@@ -186,7 +186,7 @@ const faqs = [
 
 export default function Pricing() {
   const navigate = useNavigate();
-
+  const [expandedDept, setExpandedDept] = useState<string | null>(null);
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
