@@ -205,8 +205,29 @@ export const AgentChat = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="border-t border-border pt-4">
+      {/* Quick actions + Input */}
+      <div className="border-t border-border pt-3">
+        {!isLoading && (
+          <div className="flex gap-2 overflow-x-auto scrollbar-none pb-2 px-1">
+            {[
+              { emoji: "📧", label: "Triage inbox", prompt: "Go through my inbox and tell me what's urgent, what needs a reply, and what I can ignore." },
+              { emoji: "📅", label: "Meeting prep", prompt: "Look at my upcoming meetings and prepare a brief with context, talking points, and anything I should know about the attendees." },
+              { emoji: "✍️", label: "Draft email", prompt: "Help me draft a professional follow-up email. I'll give you the context." },
+              { emoji: "📋", label: "Action items", prompt: "Review my tasks and action items, then give me a prioritized summary of what I should focus on today." },
+              { emoji: "📰", label: "Industry news", prompt: "Give me a quick brief on the latest news relevant to my industry and interests." },
+              { emoji: "🗓️", label: "Plan my week", prompt: "Help me plan and organize my upcoming week based on my calendar and priorities." },
+            ].map((item) => (
+              <button
+                key={item.label}
+                onClick={() => setInput(item.prompt)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border/40 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-accent/30 hover:bg-accent/[0.03] transition-all duration-200 whitespace-nowrap shrink-0"
+              >
+                <span>{item.emoji}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="glass-card rounded-2xl flex items-end gap-2 p-2">
           <textarea
             ref={inputRef}
