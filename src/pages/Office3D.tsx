@@ -1,6 +1,6 @@
-import { Suspense, useState, useCallback, useRef } from "react";
+import { Suspense, useState, useCallback, useRef, lazy } from "react";
 import { Canvas, useFrame, ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, Text, RoundedBox, Environment, Float, ContactShadows } from "@react-three/drei";
+import { OrbitControls, Text, RoundedBox, Float } from "@react-three/drei";
 import { useNavigate } from "react-router-dom";
 import { useAgent } from "@/contexts/AgentContext";
 import * as THREE from "three";
@@ -199,25 +199,25 @@ function Room() {
   return (
     <group>
       {/* Floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
         <planeGeometry args={[12, 12]} />
         <meshStandardMaterial color="#1C2333" roughness={0.8} metalness={0.05} />
       </mesh>
 
       {/* Back wall */}
-      <mesh position={[0, 2.5, -4]} receiveShadow>
+      <mesh position={[0, 2.5, -4]}>
         <planeGeometry args={[12, 5]} />
         <meshStandardMaterial color="#232D3F" roughness={0.9} />
       </mesh>
 
       {/* Left wall */}
-      <mesh position={[-5, 2.5, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+      <mesh position={[-5, 2.5, 0]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[12, 5]} />
         <meshStandardMaterial color="#1F2937" roughness={0.9} />
       </mesh>
 
       {/* Right wall */}
-      <mesh position={[5, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
+      <mesh position={[5, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]}>
         <planeGeometry args={[12, 5]} />
         <meshStandardMaterial color="#1F2937" roughness={0.9} />
       </mesh>
@@ -375,11 +375,11 @@ function OfficeScene({ onNavigate }: { onNavigate: (route: string) => void }) {
   return (
     <>
       {/* Lighting */}
-      <ambientLight intensity={0.3} />
-      <pointLight position={[0, 4.5, 0]} intensity={1.5} color="#E8960D" castShadow />
+      <ambientLight intensity={0.4} />
+      <pointLight position={[0, 4.5, 0]} intensity={1.5} color="#E8960D" />
       <pointLight position={[-3, 3, 2]} intensity={0.5} color="#60A5FA" />
       <pointLight position={[3, 3, -2]} intensity={0.4} color="#F0AD3E" />
-      <directionalLight position={[5, 5, 5]} intensity={0.3} castShadow />
+      <directionalLight position={[5, 5, 5]} intensity={0.3} />
 
       {/* Room */}
       <Room />
@@ -389,14 +389,6 @@ function OfficeScene({ onNavigate }: { onNavigate: (route: string) => void }) {
       <Plant position={[-4, 0, 3]} />
       <Plant position={[4.2, 0, -3]} />
 
-      {/* Contact shadows on floor */}
-      <ContactShadows
-        position={[0, 0.01, 0]}
-        opacity={0.5}
-        scale={12}
-        blur={2}
-        far={4}
-      />
 
       {/* Clickable objects */}
       {OBJECTS.map((obj) => (
@@ -448,11 +440,11 @@ export default function Office3D() {
         }
       >
         <Canvas
-          shadows
           camera={{ position: [0, 4, 8], fov: 50 }}
-          dpr={[1, 2]}
-          gl={{ antialias: true, alpha: false }}
+          dpr={[1, 1.5]}
+          gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
           style={{ background: "#141A26" }}
+          frameloop="always"
         >
           <OfficeScene onNavigate={handleNavigate} />
         </Canvas>
