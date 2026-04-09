@@ -66,49 +66,114 @@ function AnalogClock({ size = 48 }: { size?: number }) {
   const hrDeg = h * 30 + m * 0.5;
   const r = size / 2;
 
+  // Roman numerals for the clock face
+  const numerals = ["XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"];
+
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="drop-shadow-sm">
-      <circle cx={r} cy={r} r={r - 1} className="fill-card stroke-border" strokeWidth={1.5} />
-      {/* hour marks */}
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="drop-shadow-lg" style={{ filter: "drop-shadow(0 2px 8px hsl(var(--accent) / 0.15))" }}>
+      {/* Outer ring with gradient */}
+      <defs>
+        <linearGradient id="clockRing" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="hsl(var(--border))" stopOpacity="0.8" />
+          <stop offset="50%" stopColor="hsl(var(--muted-foreground))" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="hsl(var(--border))" stopOpacity="0.8" />
+        </linearGradient>
+        <radialGradient id="clockFace" cx="40%" cy="35%">
+          <stop offset="0%" stopColor="hsl(var(--card))" stopOpacity="1" />
+          <stop offset="100%" stopColor="hsl(var(--secondary))" stopOpacity="1" />
+        </radialGradient>
+      </defs>
+      {/* Outer bezel */}
+      <circle cx={r} cy={r} r={r - 1} fill="url(#clockRing)" />
+      {/* Inner face */}
+      <circle cx={r} cy={r} r={r - 3} fill="url(#clockFace)" />
+      {/* Subtle inner ring */}
+      <circle cx={r} cy={r} r={r - 5} fill="none" stroke="hsl(var(--border))" strokeWidth={0.5} opacity={0.4} />
+
+      {/* Hour marks and numerals */}
       {Array.from({ length: 12 }, (_, i) => {
         const angle = (i * 30 - 90) * (Math.PI / 180);
-        const outer = r - 4;
-        const inner = r - 7;
+        const outer = r - 6;
+        const inner = i % 3 === 0 ? r - 12 : r - 9;
+        const textR = r - 17;
+        const showNumeral = size >= 60;
+        return (
+          <g key={i}>
+            <line
+              x1={r + Math.cos(angle) * inner}
+              y1={r + Math.sin(angle) * inner}
+              x2={r + Math.cos(angle) * outer}
+              y2={r + Math.sin(angle) * outer}
+              stroke="hsl(var(--foreground))"
+              strokeWidth={i % 3 === 0 ? 2 : 1}
+              strokeLinecap="round"
+              opacity={i % 3 === 0 ? 0.7 : 0.3}
+            />
+            {showNumeral && i % 3 === 0 && (
+              <text
+                x={r + Math.cos(angle) * textR}
+                y={r + Math.sin(angle) * textR}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill="hsl(var(--foreground))"
+                fontSize={size * 0.09}
+                fontFamily="'Fraunces', serif"
+                fontWeight={600}
+                opacity={0.6}
+              >
+                {numerals[i]}
+              </text>
+            )}
+          </g>
+        );
+      })}
+
+      {/* Minute tick marks */}
+      {Array.from({ length: 60 }, (_, i) => {
+        if (i % 5 === 0) return null;
+        const angle = (i * 6 - 90) * (Math.PI / 180);
+        const outer = r - 6;
+        const inner = r - 8;
         return (
           <line
-            key={i}
+            key={`m-${i}`}
             x1={r + Math.cos(angle) * inner}
             y1={r + Math.sin(angle) * inner}
             x2={r + Math.cos(angle) * outer}
             y2={r + Math.sin(angle) * outer}
-            className="stroke-muted-foreground/40"
-            strokeWidth={1.5}
+            stroke="hsl(var(--muted-foreground))"
+            strokeWidth={0.5}
             strokeLinecap="round"
+            opacity={0.25}
           />
         );
       })}
-      {/* hour hand */}
+
+      {/* Hour hand - tapered */}
       <line
         x1={r} y1={r}
-        x2={r + Math.cos((hrDeg - 90) * Math.PI / 180) * (r * 0.45)}
-        y2={r + Math.sin((hrDeg - 90) * Math.PI / 180) * (r * 0.45)}
-        className="stroke-foreground" strokeWidth={2.5} strokeLinecap="round"
+        x2={r + Math.cos((hrDeg - 90) * Math.PI / 180) * (r * 0.42)}
+        y2={r + Math.sin((hrDeg - 90) * Math.PI / 180) * (r * 0.42)}
+        stroke="hsl(var(--foreground))" strokeWidth={3} strokeLinecap="round"
       />
-      {/* minute hand */}
+      {/* Minute hand */}
       <line
         x1={r} y1={r}
-        x2={r + Math.cos((minDeg - 90) * Math.PI / 180) * (r * 0.65)}
-        y2={r + Math.sin((minDeg - 90) * Math.PI / 180) * (r * 0.65)}
-        className="stroke-foreground" strokeWidth={1.5} strokeLinecap="round"
+        x2={r + Math.cos((minDeg - 90) * Math.PI / 180) * (r * 0.62)}
+        y2={r + Math.sin((minDeg - 90) * Math.PI / 180) * (r * 0.62)}
+        stroke="hsl(var(--foreground))" strokeWidth={2} strokeLinecap="round"
       />
-      {/* second hand */}
+      {/* Second hand */}
       <line
-        x1={r} y1={r}
-        x2={r + Math.cos((secDeg - 90) * Math.PI / 180) * (r * 0.7)}
-        y2={r + Math.sin((secDeg - 90) * Math.PI / 180) * (r * 0.7)}
-        className="stroke-accent" strokeWidth={0.8} strokeLinecap="round"
+        x1={r + Math.cos((secDeg + 90) * Math.PI / 180) * (r * 0.15)}
+        y1={r + Math.sin((secDeg + 90) * Math.PI / 180) * (r * 0.15)}
+        x2={r + Math.cos((secDeg - 90) * Math.PI / 180) * (r * 0.72)}
+        y2={r + Math.sin((secDeg - 90) * Math.PI / 180) * (r * 0.72)}
+        stroke="hsl(var(--accent))" strokeWidth={1} strokeLinecap="round"
       />
-      <circle cx={r} cy={r} r={2} className="fill-accent" />
+      {/* Center cap */}
+      <circle cx={r} cy={r} r={3.5} fill="hsl(var(--accent))" />
+      <circle cx={r} cy={r} r={1.5} fill="hsl(var(--accent-foreground))" />
     </svg>
   );
 }
@@ -367,9 +432,7 @@ export default function Office() {
         </button>
         <div className="flex items-center gap-4">
           {/* Live clock */}
-          <AnalogClock size={36} />
-          {/* Coffee */}
-          <SteamingCoffee />
+          <AnalogClock size={56} />
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs text-muted-foreground">{agentName} is online</span>
