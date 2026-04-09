@@ -375,11 +375,11 @@ function OfficeScene({ onNavigate }: { onNavigate: (route: string) => void }) {
   return (
     <>
       {/* Lighting */}
-      <ambientLight intensity={0.3} />
-      <pointLight position={[0, 4.5, 0]} intensity={1.5} color="#E8960D" castShadow />
+      <ambientLight intensity={0.4} />
+      <pointLight position={[0, 4.5, 0]} intensity={1.5} color="#E8960D" />
       <pointLight position={[-3, 3, 2]} intensity={0.5} color="#60A5FA" />
       <pointLight position={[3, 3, -2]} intensity={0.4} color="#F0AD3E" />
-      <directionalLight position={[5, 5, 5]} intensity={0.3} castShadow />
+      <directionalLight position={[5, 5, 5]} intensity={0.3} />
 
       {/* Room */}
       <Room />
