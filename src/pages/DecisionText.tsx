@@ -131,6 +131,29 @@ export default function DecisionText() {
         </div>
 
         <div className="border-t bg-background sticky bottom-0 z-50">
+          {!chat.thinking && (
+            <div className="container max-w-lg px-4 pt-3 pb-1">
+              <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+                {[
+                  { emoji: "📧", label: "Triage inbox", prompt: "Go through my inbox and tell me what's urgent, what needs a reply, and what I can ignore." },
+                  { emoji: "📅", label: "Meeting prep", prompt: "Look at my upcoming meetings and prepare a brief with context, talking points, and anything I should know about the attendees." },
+                  { emoji: "✍️", label: "Draft email", prompt: "Help me draft a professional follow-up email. I'll give you the context." },
+                  { emoji: "📋", label: "Action items", prompt: "Review my tasks and action items, then give me a prioritized summary of what I should focus on today." },
+                  { emoji: "📰", label: "Industry news", prompt: "Give me a quick brief on the latest news relevant to my industry and interests." },
+                  { emoji: "🗓️", label: "Plan my week", prompt: "Help me plan and organize my upcoming week based on my calendar and priorities." },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={() => { setInput(""); chat.send(item.prompt); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border/40 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-accent/30 hover:bg-accent/[0.03] transition-all duration-200 whitespace-nowrap shrink-0"
+                  >
+                    <span>{item.emoji}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="container max-w-lg flex gap-2 py-3 px-4">
             <Input
               value={input}
