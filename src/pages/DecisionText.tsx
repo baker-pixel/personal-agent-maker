@@ -79,15 +79,38 @@ export default function DecisionText() {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center h-full text-center pt-20"
+              className="flex flex-col items-center justify-center h-full text-center pt-12"
             >
               <div className="w-14 h-14 rounded-full bg-accent flex items-center justify-center text-accent-foreground font-bold text-xl mb-4">
                 {agentName.charAt(0)}
               </div>
               <p className="font-display text-lg font-semibold text-foreground mb-1">What do you need?</p>
-              <p className="text-sm text-muted-foreground max-w-xs">
+              <p className="text-sm text-muted-foreground max-w-xs mb-8">
                 Tell {agentName} what's on your mind. {agentName} will think it through and give you a recommendation.
               </p>
+
+              <div className="w-full max-w-sm space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-3">
+                  Things {agentName} can handle for you
+                </p>
+                {[
+                  { emoji: "📧", label: "Triage my inbox", prompt: "Go through my inbox and tell me what's urgent, what needs a reply, and what I can ignore." },
+                  { emoji: "📅", label: "Prep me for my next meeting", prompt: "Look at my upcoming meetings and prepare a brief with context, talking points, and anything I should know about the attendees." },
+                  { emoji: "✍️", label: "Draft a follow-up email", prompt: "Help me draft a professional follow-up email. I'll give you the context." },
+                  { emoji: "📋", label: "Summarize my action items", prompt: "Review my tasks and action items, then give me a prioritized summary of what I should focus on today." },
+                  { emoji: "📰", label: "Catch me up on industry news", prompt: "Give me a quick brief on the latest news relevant to my industry and interests." },
+                  { emoji: "🗓️", label: "Plan my week", prompt: "Help me plan and organize my upcoming week based on my calendar and priorities." },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={() => { setInput(""); chat.send(item.prompt); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border/40 text-left text-sm text-muted-foreground hover:text-foreground hover:border-accent/30 hover:bg-accent/[0.03] transition-all duration-200"
+                  >
+                    <span className="text-base">{item.emoji}</span>
+                    <span className="font-medium">{item.label}</span>
+                  </button>
+                ))}
+              </div>
             </motion.div>
           )}
 
