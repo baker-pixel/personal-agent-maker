@@ -440,11 +440,11 @@ export default function Office3D() {
         }
       >
         <Canvas
-          shadows
           camera={{ position: [0, 4, 8], fov: 50 }}
-          dpr={[1, 2]}
-          gl={{ antialias: true, alpha: false }}
+          dpr={[1, 1.5]}
+          gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
           style={{ background: "#141A26" }}
+          frameloop="demand"
         >
           <OfficeScene onNavigate={handleNavigate} />
         </Canvas>
