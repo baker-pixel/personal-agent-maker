@@ -59,7 +59,6 @@ export default function Dashboard() {
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("/mode-select")}>
             <img src={normyLogo} alt="Normy Agent" className="h-7 w-auto" />
           </div>
-          <AppMenu />
         </div>
       </nav>
 
