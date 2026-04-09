@@ -75,7 +75,7 @@ export default function Dashboard() {
               <div
                 key={dept.name}
                 onClick={() => {
-                  if (!dept.active) navigate("/settings#departments");
+                  if (!dept.active) navigate("/pricing");
                 }}
                 className={`relative border rounded-2xl p-6 transition-all ${
                   dept.active
