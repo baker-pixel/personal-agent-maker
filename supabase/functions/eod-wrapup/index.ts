@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
       getValidToken(adminClient, user.id, "google-calendar"),
     ]);
 
-    const [sentEmails, todaysEvents, completedItems, openItems, overdueItems] = await Promise.all([
+    const [sentEmails, todaysEvents, completedItems, openItems, overdueItems, handledDrafts] = await Promise.all([
       gmailToken ? fetchTodaysSentEmails(gmailToken) : [],
       calToken ? fetchTodaysEvents(calToken) : [],
       supabase
@@ -171,6 +171,15 @@ Deno.serve(async (req) => {
         .lt("due_date", today)
         .limit(10)
         .then(r => r.data || []),
+      // Drafts handled today (approved or dismissed)
+      supabase
+        .from("draft_actions")
+        .select("type, subject, to_name, to_email, status, updated_at, body")
+        .in("status", ["approved", "sent", "dismissed"])
+        .gte("updated_at", `${today}T00:00:00`)
+        .order("updated_at", { ascending: false })
+        .limit(20)
+        .then(r => r.data || []),
     ]);
 
     // Tomorrow's date for urgency framing
@@ -180,29 +189,48 @@ Deno.serve(async (req) => {
 
     const dueTomorrow = openItems.filter((i: any) => i.due_date === tomorrowStr);
 
+    // Pending drafts still waiting for approval
+    const { data: pendingDrafts } = await supabase
+      .from("draft_actions")
+      .select("type, subject, to_name, to_email")
+      .eq("status", "pending")
+      .limit(10);
+
     // Generate AI summary
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("AI not configured");
 
     const dayOfWeek = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
+    const approvedDrafts = handledDrafts.filter((d: any) => d.status === "approved" || d.status === "sent");
+    const dismissedDrafts = handledDrafts.filter((d: any) => d.status === "dismissed");
+
     const prompt = `Today is ${dayOfWeek}. Generate an end-of-day wrap-up for an executive. Use markdown formatting with headers.
 
 ## Data for today:
 - Meetings attended: ${todaysEvents.length}${todaysEvents.length > 0 ? `. Including: ${todaysEvents.map((e: any) => e.summary).join(", ")}` : ""}
-- Emails sent: ${sentEmails.length}${sentEmails.length > 0 ? `. To: ${sentEmails.slice(0, 5).map((e: any) => e.subject || "no subject").join("; ")}` : ""}
+- Emails sent: ${sentEmails.length}${sentEmails.length > 0 ? `. Recipients & subjects: ${sentEmails.slice(0, 5).map((e: any) => `"${e.subject || "no subject"}" → ${e.to}`).join("; ")}` : ""}
 - Tasks completed today: ${completedItems.length}${completedItems.length > 0 ? `. Including: ${completedItems.map((t: any) => t.title).join(", ")}` : ""}
 - Tasks still open: ${openItems.length}${openItems.length > 0 ? `. Including: ${openItems.slice(0, 5).map((t: any) => `${t.title} (${t.priority})`).join(", ")}` : ""}
 - Overdue tasks: ${overdueItems.length}${overdueItems.length > 0 ? `. Including: ${overdueItems.map((t: any) => t.title).join(", ")}` : ""}
 - Tasks due tomorrow: ${dueTomorrow.length}${dueTomorrow.length > 0 ? `. Including: ${dueTomorrow.map((t: any) => t.title).join(", ")}` : ""}
+- Agent drafts approved/sent: ${approvedDrafts.length}${approvedDrafts.length > 0 ? `. Including: ${approvedDrafts.map((d: any) => `${d.type}: "${d.subject || "no subject"}" to ${d.to_name || d.to_email || "unknown"}`).join("; ")}` : ""}
+- Agent drafts dismissed: ${dismissedDrafts.length}
+- Agent drafts still pending approval: ${(pendingDrafts || []).length}${(pendingDrafts || []).length > 0 ? `. Including: ${(pendingDrafts || []).map((d: any) => `${d.type}: "${d.subject || "no subject"}" to ${d.to_name || d.to_email || "unknown"}`).join("; ")}` : ""}
 
 ## Format:
 Structure the response with these markdown sections:
 ### ✅ What Got Done
-Brief bullets of accomplishments (meetings, emails, completed tasks)
+Brief bullets of accomplishments (meetings, emails, completed tasks, agent drafts sent)
+
+### 🤖 Agent Activity
+What the agent handled today — drafts prepared and approved, emails sent on your behalf. Be specific about who received what.
+
+### 📧 Emails Sent
+List each email sent today with the recipient and subject line. If none, say so.
 
 ### 🔓 Still Open
-What's unfinished and needs attention
+What's unfinished and needs attention, including pending agent drafts awaiting approval
 
 ### 🔥 Urgent for Tomorrow
 What's overdue or due tomorrow — prioritized
@@ -212,7 +240,7 @@ One sentence on what to tackle first tomorrow
 
 Rules:
 - Be specific with numbers and names
-- Keep each section to 2-4 bullets max
+- Keep each section to 2-5 bullets max
 - Sound like a trusted chief of staff wrapping up the day
 - If there's nothing for a section, say "Nothing here — nice work!" or similar`;
 
@@ -249,7 +277,17 @@ Rules:
         tasks_open: openItems.length,
         tasks_overdue: overdueItems.length,
         tasks_due_tomorrow: dueTomorrow.length,
+        drafts_handled: approvedDrafts.length,
+        drafts_pending: (pendingDrafts || []).length,
       },
+      sent_emails: sentEmails,
+      handled_drafts: handledDrafts.map((d: any) => ({
+        type: d.type,
+        subject: d.subject,
+        to_name: d.to_name,
+        to_email: d.to_email,
+        status: d.status,
+      })),
       generated_at: new Date().toISOString(),
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
