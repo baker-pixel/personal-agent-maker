@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { Calendar, Mail, Clock, AlertTriangle, CheckCircle2, Loader2, Video, Users, FileText } from "lucide-react";
+import { ReconnectBanner } from "@/components/ReconnectBanner";
 
 interface AgendaItem {
   id: string;
@@ -46,7 +48,35 @@ const priorityBadge: Record<string, string> = {
 
 export const DailyAgenda = () => {
   const { agentName } = useAgent();
+  const { isConnected } = useIntegrations();
   const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
+  const [needsReconnect, setNeedsReconnect] = useState(false);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+
+  const calendarConnected = isConnected("google-calendar");
+
+  const fetchCalendarEvents = useCallback(async () => {
+    if (!calendarConnected) return;
+    setCalendarLoading(true);
+    setNeedsReconnect(false);
+    try {
+      const { data } = await supabase.functions.invoke("calendar-fetch");
+      if (data?.code === "RECONNECT_REQUIRED") {
+        setNeedsReconnect(true);
+        return;
+      }
+      if (data?.events) setCalendarEvents(data.events);
+    } catch (err) {
+      console.error("DailyAgenda calendar fetch error:", err);
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [calendarConnected]);
+
+  useEffect(() => {
+    fetchCalendarEvents();
+  }, [fetchCalendarEvents]);
 
   const toggleComplete = (id: string) => {
     setCompletedItems((prev) => {
@@ -65,6 +95,12 @@ export const DailyAgenda = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
+      {needsReconnect && (
+        <div className="mb-6">
+          <ReconnectBanner service="google-calendar" />
+        </div>
+      )}
+
       <div className="mb-8">
         <h1 className="font-display text-3xl text-foreground mb-2">Today's Agenda</h1>
         <p className="text-muted-foreground">

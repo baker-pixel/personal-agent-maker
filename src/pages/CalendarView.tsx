@@ -12,6 +12,7 @@ import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { PriorityLegend } from "@/components/PriorityLegend";
+import { ReconnectBanner } from "@/components/ReconnectBanner";
 
 interface CalendarEvent {
   id: string;
@@ -107,9 +108,14 @@ export default function CalendarView() {
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setNeedsReconnect(false);
     try {
       const { data, error: fnError } = await supabase.functions.invoke("calendar-fetch");
       if (fnError) throw fnError;
+      if (data?.code === "RECONNECT_REQUIRED") {
+        setNeedsReconnect(true);
+        return;
+      }
       if (data?.error) throw new Error(data.error);
       setEvents(data?.events || []);
     } catch (err: any) {
@@ -238,8 +244,15 @@ export default function CalendarView() {
         </div>
       </nav>
 
+      {/* Reconnect banner */}
+      {needsReconnect && (
+        <div className="container max-w-3xl py-4">
+          <ReconnectBanner service="google-calendar" />
+        </div>
+      )}
+
       {/* Priority legend */}
-      {!loading && !error && events.length > 0 && <PriorityLegend />}
+      {!loading && !error && !needsReconnect && events.length > 0 && <PriorityLegend />}
 
       <div className="border-b bg-card">
         <div className="container flex items-center justify-between py-3">
