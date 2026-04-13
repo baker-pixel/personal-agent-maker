@@ -253,7 +253,13 @@ export const EmailTriage = () => {
 
   return (
     <div className="max-w-3xl mx-auto">
-      {/* Header */}
+      {/* Reconnect Banner */}
+      {needsReconnect && (
+        <div className="mb-6" style={{ animation: "fade-up 0.3s ease-out both" }}>
+          <ReconnectBanner service="gmail" message={reconnectMessage} />
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6" style={{ animation: "fade-up 0.3s ease-out both" }}>
         <div>
           <h1 className="font-display text-3xl text-foreground flex items-center gap-3">
