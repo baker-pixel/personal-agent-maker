@@ -19,14 +19,22 @@ async function getValidToken(userId: string) {
     .eq("provider", "gmail")
     .single();
 
-  if (error || !tokenRow) throw new Error("Gmail not connected");
+  if (error || !tokenRow) {
+    const e = new Error("Gmail not connected");
+    (e as any).code = "NOT_CONNECTED";
+    throw e;
+  }
 
   const expiresAt = new Date(tokenRow.token_expires_at);
   if (expiresAt > new Date(Date.now() + 60000)) {
     return tokenRow.access_token;
   }
 
-  if (!tokenRow.refresh_token) throw new Error("Re-authentication required");
+  if (!tokenRow.refresh_token) {
+    const e = new Error("Your Gmail session has expired. Please reconnect your account.");
+    (e as any).code = "RECONNECT_REQUIRED";
+    throw e;
+  }
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -40,7 +48,16 @@ async function getValidToken(userId: string) {
   });
 
   const data = await response.json();
-  if (data.error) throw new Error(data.error_description || data.error);
+  if (data.error) {
+    console.error("Token refresh failed:", data.error, data.error_description);
+    // If refresh token is revoked/invalid, user needs to reconnect
+    if (data.error === "invalid_grant" || data.error === "unauthorized_client") {
+      const e = new Error("Your Gmail session has expired. Please reconnect your account.");
+      (e as any).code = "RECONNECT_REQUIRED";
+      throw e;
+    }
+    throw new Error(data.error_description || data.error);
+  }
 
   await adminClient
     .from("google_oauth_tokens")
@@ -192,9 +209,11 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    const status = (error as any).code === "RECONNECT_REQUIRED" ? 401 : 
+                   (error as any).code === "NOT_CONNECTED" ? 404 : 500;
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: error.message, code: (error as any).code || "UNKNOWN" }),
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
