@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAgent } from "@/contexts/AgentContext";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { ReconnectBanner } from "@/components/ReconnectBanner";
 import {
   AlertTriangle,
   MessageSquareReply,
@@ -180,15 +181,25 @@ export const EmailTriage = () => {
   const [stats, setStats] = useState<TriageStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [totalProcessed, setTotalProcessed] = useState(0);
+  const [needsReconnect, setNeedsReconnect] = useState(false);
+  const [reconnectMessage, setReconnectMessage] = useState("");
 
   const gmailConnected = isConnected("gmail");
 
   const fetchTriage = async () => {
     setLoading(true);
+    setNeedsReconnect(false);
     try {
       const { data, error } = await supabase.functions.invoke("email-triage");
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (data?.error) {
+        if (data?.code === "RECONNECT_REQUIRED") {
+          setNeedsReconnect(true);
+          setReconnectMessage(data.error);
+          return;
+        }
+        throw new Error(data.error);
+      }
 
       setCategories(data.categories);
       setStats(data.stats);
@@ -201,9 +212,16 @@ export const EmailTriage = () => {
       }
     } catch (err: any) {
       console.error("Triage error:", err);
+      // Check for reconnect errors in the error message too
+      const msg = err?.message || "";
+      if (msg.includes("expired") || msg.includes("reconnect") || msg.includes("Re-authentication")) {
+        setNeedsReconnect(true);
+        setReconnectMessage(msg);
+        return;
+      }
       toast({
         title: "Triage failed",
-        description: err.message || "Could not categorize emails",
+        description: msg || "Could not categorize emails",
         variant: "destructive",
       });
     } finally {
@@ -235,7 +253,13 @@ export const EmailTriage = () => {
 
   return (
     <div className="max-w-3xl mx-auto">
-      {/* Header */}
+      {/* Reconnect Banner */}
+      {needsReconnect && (
+        <div className="mb-6" style={{ animation: "fade-up 0.3s ease-out both" }}>
+          <ReconnectBanner service="gmail" message={reconnectMessage} />
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6" style={{ animation: "fade-up 0.3s ease-out both" }}>
         <div>
           <h1 className="font-display text-3xl text-foreground flex items-center gap-3">
