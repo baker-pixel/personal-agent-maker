@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icon-192.png"],
+      includeAssets: ["icon-192-v2.png", "icon-512-v2.png", "icon-maskable-512-v2.png", "apple-touch-icon.png"],
       workbox: {
         navigateFallbackDenylist: [/^\/~oauth/],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
@@ -34,17 +34,17 @@ export default defineConfig(({ mode }) => ({
         start_url: "/",
         icons: [
           {
-            src: "/icon-192.png",
+            src: "/icon-192-v2.png",
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: "/icon-512.png",
+            src: "/icon-512-v2.png",
             sizes: "512x512",
             type: "image/png",
           },
           {
-            src: "/icon-maskable-512.png",
+            src: "/icon-maskable-512-v2.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
