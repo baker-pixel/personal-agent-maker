@@ -103,6 +103,7 @@ const App = () => {
               <Route path="/sms-log" element={<ProtectedRoute session={session}><SmsLog /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            {session && <InstallBanner />}
           </BrowserRouter>
           </AgentProvider>
         </IntegrationsProvider>
