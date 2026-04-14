@@ -42,8 +42,8 @@ export default function DecisionText() {
       />
 
       <div className="flex-1 flex flex-col min-h-screen">
-        <nav className="border-b bg-background sticky top-0 z-50">
-          <div className="container flex items-center h-14">
+        <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+          <div className="container flex items-center h-14 px-4">
             <button
               onClick={() => setSidebarOpen(true)}
               className="flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors lg:hidden mr-1"
@@ -130,7 +130,7 @@ export default function DecisionText() {
           </div>
         </div>
 
-        <div className="border-t bg-background sticky bottom-0 z-50">
+        <div className="border-t bg-background sticky bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
           {!chat.thinking && (
             <div className="container max-w-lg px-4 pt-3 pb-1">
               <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">

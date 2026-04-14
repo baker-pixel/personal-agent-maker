@@ -167,8 +167,8 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="border-b bg-background sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-14">
+      <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+        <div className="container flex items-center justify-between h-14 px-4">
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm font-medium">Back</span>
@@ -178,7 +178,7 @@ export default function Settings() {
         </div>
       </nav>
 
-      <div className="container py-8 max-w-lg space-y-8">
+      <div className="container py-6 sm:py-8 max-w-lg space-y-8 px-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
         {/* Account / Login Info */}
         <section className="space-y-3">
           <div className="flex items-center gap-2">

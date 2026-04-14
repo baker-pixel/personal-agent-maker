@@ -202,8 +202,8 @@ export default function CalendarView() {
   if (!calendarConnected) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <nav className="border-b bg-background sticky top-0 z-50">
-          <div className="container flex items-center justify-between h-14">
+        <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+          <div className="container flex items-center justify-between h-14 px-4">
             <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <ArrowLeft className="w-4 h-4" />
               <span className="text-sm font-medium">Admin</span>
@@ -230,8 +230,8 @@ export default function CalendarView() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <nav className="border-b bg-background sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-14">
+      <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+        <div className="container flex items-center justify-between h-14 px-4">
           <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm font-medium">Admin</span>
@@ -474,7 +474,7 @@ export default function CalendarView() {
             <motion.div
               initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="bg-background w-full max-w-lg rounded-t-2xl p-6"
+              className="bg-background w-full max-w-lg rounded-t-2xl p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="w-10 h-1 rounded-full bg-border mx-auto mb-4" />
@@ -514,7 +514,7 @@ export default function CalendarView() {
       {!selectedEvent && !agentSheetOpen && (
         <button
           onClick={() => setAgentSheetOpen(true)}
-          className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-accent text-accent-foreground shadow-lg shadow-accent/30 flex items-center justify-center hover:scale-105 transition-transform z-40"
+          className="fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-6 w-14 h-14 rounded-full bg-accent text-accent-foreground shadow-lg shadow-accent/30 flex items-center justify-center hover:scale-105 transition-transform z-40"
         >
           <span className="font-display font-bold text-lg">{agentName.charAt(0)}</span>
         </button>

@@ -405,44 +405,44 @@ export default function Office() {
       </div>
 
       {/* Top bar */}
-      <header className="relative z-10 flex items-center justify-between px-6 py-4">
+      <header className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <button
           onClick={() => navigate("/mode-select")}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           ← Back
         </button>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           {/* Live clock */}
-          <AnalogClock size={56} />
-          <div className="flex items-center gap-2">
+          <AnalogClock size={40} />
+          <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs text-muted-foreground">{agentName} is online</span>
+            <span className="text-[11px] sm:text-xs text-muted-foreground">{agentName} online</span>
           </div>
         </div>
       </header>
 
       {/* Status legend */}
-      <div className="relative z-10 flex items-center justify-center gap-5 mb-2 px-4">
-        <div className="flex items-center gap-4 px-4 py-2 rounded-xl bg-card/60 border border-border/30 backdrop-blur-sm">
-          <div className="flex items-center gap-1.5">
+      <div className="relative z-10 flex items-center justify-center mb-2 px-4">
+        <div className="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 rounded-xl bg-card/60 border border-border/30 backdrop-blur-sm overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-[11px] text-muted-foreground">Online / Ready</span>
+            <span className="text-[10px] sm:text-[11px] text-muted-foreground">Ready</span>
           </div>
-          <div className="w-px h-3 bg-border/50" />
-          <div className="flex items-center gap-1.5">
+          <div className="w-px h-3 bg-border/50 shrink-0" />
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <span className="w-2 h-2 rounded-full bg-orange-500" />
-            <span className="text-[11px] text-muted-foreground">Needs Attention</span>
+            <span className="text-[10px] sm:text-[11px] text-muted-foreground">Attention</span>
           </div>
-          <div className="w-px h-3 bg-border/50" />
-          <div className="flex items-center gap-1.5">
+          <div className="w-px h-3 bg-border/50 shrink-0" />
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <span className="w-2 h-2 rounded-full bg-destructive" />
-            <span className="text-[11px] text-muted-foreground">Urgent</span>
+            <span className="text-[10px] sm:text-[11px] text-muted-foreground">Urgent</span>
           </div>
-          <div className="w-px h-3 bg-border/50" />
-          <div className="flex items-center gap-1.5">
+          <div className="w-px h-3 bg-border/50 shrink-0" />
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <span className="w-2 h-2 rounded-full bg-blue-500" />
-            <span className="text-[11px] text-muted-foreground">Scheduled</span>
+            <span className="text-[10px] sm:text-[11px] text-muted-foreground">Scheduled</span>
           </div>
         </div>
       </div>

@@ -54,15 +54,15 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="border-b bg-background sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-14">
+      <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+        <div className="container flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("/mode-select")}>
             <img src={normyLogo} alt="Normy Agent" className="h-7 w-auto" />
           </div>
         </div>
       </nav>
 
-      <div className="container py-10 max-w-4xl">
+      <div className="container py-8 sm:py-10 max-w-4xl px-4">
         <div className="mb-8">
           <h1 className="font-display text-3xl font-bold mb-1">Your Departments</h1>
           <p className="text-muted-foreground">{agentName} is ready to help manage your business.</p>
