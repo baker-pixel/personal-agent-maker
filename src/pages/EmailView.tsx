@@ -289,8 +289,8 @@ export default function EmailView() {
   if (!gmailConnected) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <nav className="border-b bg-background sticky top-0 z-50">
-          <div className="container flex items-center justify-between h-14">
+        <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+          <div className="container flex items-center justify-between h-14 px-4">
             <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <ArrowLeft className="w-4 h-4" />
               <span className="text-sm font-medium">Admin</span>
@@ -317,8 +317,8 @@ export default function EmailView() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <nav className="border-b bg-background sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-14">
+      <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+        <div className="container flex items-center justify-between h-14 px-4">
           <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm font-medium">Admin</span>
