@@ -45,8 +45,8 @@ const departments = [
     subtitle: "AI Marketing Manager",
     icon: BarChart3,
     available: false,
-    price: "$20",
-    period: "/month",
+    price: null,
+    period: null,
     desc: "Campaigns, content calendar, social media scheduling, and performance analytics — all managed by AI.",
     features: [
       "Social media content & scheduling",
@@ -78,8 +78,8 @@ const departments = [
     subtitle: "AI People Operations",
     icon: Users,
     available: false,
-    price: "$20",
-    period: "/month",
+    price: null,
+    period: null,
     desc: "Hiring, onboarding, team management, and employee communications — streamlined with AI.",
     features: [
       "Job posting & candidate screening",
@@ -112,8 +112,8 @@ const departments = [
     subtitle: "AI Financial Assistant",
     icon: BookOpen,
     available: false,
-    price: "$20",
-    period: "/month",
+    price: null,
+    period: null,
     desc: "Invoices, expense tracking, financial reporting, and tax prep support — powered by AI.",
     features: [
       "Invoice creation & tracking",
@@ -146,8 +146,8 @@ const departments = [
     subtitle: "AI Operations Manager",
     icon: Settings,
     available: false,
-    price: "$20",
-    period: "/month",
+    price: null,
+    period: null,
     desc: "Vendor management, inventory, process optimization, and logistics — coordinated by AI.",
     features: [
       "Vendor communication & tracking",
@@ -241,10 +241,12 @@ export default function Pricing() {
                   <h3 className="font-display text-xl font-bold mb-0.5">{dept.name}</h3>
                   <p className="text-muted-foreground text-xs mb-4">{dept.subtitle}</p>
 
-                  <div className="flex items-baseline gap-1 mb-3">
-                    <span className={`font-display text-3xl font-bold ${dept.available ? "text-foreground" : "text-muted-foreground"}`}>{dept.price}</span>
-                    {dept.period && <span className="text-muted-foreground text-sm">{dept.period}</span>}
-                  </div>
+                  {dept.price && (
+                    <div className="flex items-baseline gap-1 mb-3">
+                      <span className={`font-display text-3xl font-bold ${dept.available ? "text-foreground" : "text-muted-foreground"}`}>{dept.price}</span>
+                      {dept.period && <span className="text-muted-foreground text-sm">{dept.period}</span>}
+                    </div>
+                  )}
                   {dept.available && <p className="text-xs text-muted-foreground mb-1">No contract · Cancel anytime</p>}
 
                   <p className="text-muted-foreground text-sm mt-3 leading-relaxed">{dept.desc}</p>

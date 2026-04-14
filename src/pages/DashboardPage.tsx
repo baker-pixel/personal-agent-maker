@@ -125,7 +125,7 @@ export default function Dashboard() {
 
                 {/* CTA for inactive */}
                 {!dept.active && (
-                  <p className="text-xs text-accent font-medium">$20/month · Click to learn more →</p>
+                  <p className="text-xs text-accent font-medium">Click to learn more →</p>
                 )}
               </div>
             );
