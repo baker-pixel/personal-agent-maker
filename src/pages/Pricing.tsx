@@ -23,6 +23,11 @@ const adminFeatures = [
   "Contact intelligence",
   "Morning briefing",
   "Document summarization",
+  "Weekly performance reports",
+  "Industry news monitoring",
+  "Smart scheduling & availability",
+  "SMS & voice interaction",
+  "Slack notifications",
   "The world's first behavioral agentic reasoning system.",
 ];
 
