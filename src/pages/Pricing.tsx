@@ -188,26 +188,26 @@ export default function Pricing() {
   const navigate = useNavigate();
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       {/* Nav */}
-      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b">
-        <div className="container flex items-center justify-between h-16">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("/")}>
-            <img src={normyLogo} alt="Normy" className="h-8 w-auto" />
+      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b pt-[env(safe-area-inset-top)]">
+        <div className="container flex items-center justify-between h-14 md:h-16 px-4">
+          <div className="flex items-center gap-2 cursor-pointer flex-shrink-0" onClick={() => navigate("/")}>
+            <img src={normyLogo} alt="Normy" className="h-7 md:h-8 w-auto" />
           </div>
-          <div className="flex items-center gap-3">
-            <Button onClick={() => navigate("/auth")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">Log In</Button>
-            <Button onClick={() => navigate("/onboarding")} variant="default" size="sm">Get Started <ArrowRight className="w-4 h-4 ml-1" /></Button>
+          <div className="flex items-center gap-1 md:gap-3">
+            <Button onClick={() => navigate("/auth")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs md:text-sm px-2 md:px-3">Log In</Button>
+            <Button onClick={() => navigate("/onboarding")} variant="default" size="sm" className="text-xs md:text-sm px-2.5 md:px-3">Get Started <ArrowRight className="w-3.5 h-3.5 md:w-4 md:h-4 ml-1" /></Button>
           </div>
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="pt-32 pb-16 md:pt-40 md:pb-20">
-        <div className="container max-w-5xl text-center">
+      <section className="pt-24 pb-10 md:pt-40 md:pb-20">
+        <div className="container max-w-5xl text-center px-5">
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-accent font-medium text-sm tracking-widest uppercase mb-4">Pricing</motion.p>
-          <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="font-display text-4xl md:text-6xl font-bold tracking-tight mb-4">Your AI team, one department at a time</motion.h1>
-          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }} className="text-muted-foreground text-lg md:text-xl max-w-2xl mx-auto">Leverage the power of artificial intelligence built specifically for you, the SMB owner/Operator. Start with the Admin Agent today. Zero contract. Add more departments as they launch, each one a specialist that works around the clock to support you.</motion.p>
+          <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="font-display text-3xl md:text-6xl font-bold tracking-tight mb-4">Your AI team, one department at a time</motion.h1>
+          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }} className="text-muted-foreground text-base md:text-xl max-w-2xl mx-auto">Leverage the power of artificial intelligence built specifically for you, the SMB owner/Operator. Start with the Admin Agent today. Zero contract. Add more departments as they launch, each one a specialist that works around the clock to support you.</motion.p>
         </div>
       </section>
 
@@ -349,21 +349,21 @@ export default function Pricing() {
       </section>
 
       {/* Comparison */}
-      <section className="py-16 bg-card">
-        <div className="container max-w-3xl text-center">
+      <section className="py-12 md:py-16 bg-card">
+        <div className="container max-w-3xl text-center px-5">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }}>
-            <motion.h2 variants={fadeUp} custom={0} className="font-display text-3xl md:text-4xl font-bold tracking-tight mb-4">Normy vs. a Human EA</motion.h2>
-            <motion.p variants={fadeUp} custom={1} className="text-muted-foreground text-lg mb-10">The same daily tasks at a fraction of the cost.</motion.p>
+            <motion.h2 variants={fadeUp} custom={0} className="font-display text-2xl md:text-4xl font-bold tracking-tight mb-4">Normy vs. a Human EA</motion.h2>
+            <motion.p variants={fadeUp} custom={1} className="text-muted-foreground text-base md:text-lg mb-8 md:mb-10">The same daily tasks at a fraction of the cost.</motion.p>
           </motion.div>
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} className="grid grid-cols-2 gap-6 max-w-xl mx-auto">
-            <motion.div variants={fadeUp} custom={2} className="rounded-xl border bg-background p-6 text-center">
-              <p className="text-muted-foreground text-sm mb-2">Part-Time Human EA</p>
-              <p className="font-display text-3xl font-bold text-foreground">$2,000–$4,000</p>
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} className="grid grid-cols-2 gap-3 md:gap-6 max-w-xl mx-auto">
+            <motion.div variants={fadeUp} custom={2} className="rounded-xl border bg-background p-4 md:p-6 text-center">
+              <p className="text-muted-foreground text-xs md:text-sm mb-2">Part-Time Human EA</p>
+              <p className="font-display text-xl md:text-3xl font-bold text-foreground">$2,000–$4,000</p>
               <p className="text-muted-foreground text-xs mt-1">/month</p>
             </motion.div>
-            <motion.div variants={fadeUp} custom={3} className="rounded-xl border bg-background p-6 text-center ring-2 ring-accent/30">
-              <p className="text-accent text-sm font-semibold mb-2">Normy Admin Agent</p>
-              <p className="font-display text-3xl font-bold text-foreground">$20</p>
+            <motion.div variants={fadeUp} custom={3} className="rounded-xl border bg-background p-4 md:p-6 text-center ring-2 ring-accent/30">
+              <p className="text-accent text-xs md:text-sm font-semibold mb-2">Normy Admin Agent</p>
+              <p className="font-display text-xl md:text-3xl font-bold text-foreground">$20</p>
               <p className="text-muted-foreground text-xs mt-1">/month · 24/7</p>
             </motion.div>
           </motion.div>
@@ -371,15 +371,15 @@ export default function Pricing() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16">
-        <div className="container max-w-3xl">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} className="text-center mb-10">
-            <motion.h2 variants={fadeUp} custom={0} className="font-display text-3xl md:text-4xl font-bold tracking-tight">Frequently Asked Questions</motion.h2>
+      <section className="py-12 md:py-16">
+        <div className="container max-w-3xl px-5">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} className="text-center mb-8 md:mb-10">
+            <motion.h2 variants={fadeUp} custom={0} className="font-display text-2xl md:text-4xl font-bold tracking-tight">Frequently Asked Questions</motion.h2>
           </motion.div>
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} className="space-y-5">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} className="space-y-4 md:space-y-5">
             {faqs.map((faq, i) => (
-              <motion.div key={faq.q} variants={fadeUp} custom={i + 1} className="bg-card rounded-xl border p-6">
-                <h3 className="font-display font-semibold text-lg mb-2">{faq.q}</h3>
+              <motion.div key={faq.q} variants={fadeUp} custom={i + 1} className="bg-card rounded-xl border p-4 md:p-6">
+                <h3 className="font-display font-semibold text-base md:text-lg mb-2">{faq.q}</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">{faq.a}</p>
               </motion.div>
             ))}
@@ -388,13 +388,13 @@ export default function Pricing() {
       </section>
 
       {/* Final CTA */}
-      <section className="py-20 bg-card">
-        <div className="container max-w-3xl text-center">
+      <section className="py-14 md:py-20 bg-card">
+        <div className="container max-w-3xl text-center px-5">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }}>
-            <motion.h2 variants={fadeUp} custom={0} className="font-display text-3xl md:text-5xl font-bold tracking-tight mb-6">Ready to hire your AI team?</motion.h2>
-            <motion.p variants={fadeUp} custom={1} className="text-muted-foreground text-lg mb-10">Start with the Admin Agent — set up in under 2 minutes. No credit card required.</motion.p>
+            <motion.h2 variants={fadeUp} custom={0} className="font-display text-2xl md:text-5xl font-bold tracking-tight mb-5 md:mb-6">Ready to hire your AI team?</motion.h2>
+            <motion.p variants={fadeUp} custom={1} className="text-muted-foreground text-base md:text-lg mb-8 md:mb-10">Start with the Admin Agent — set up in under 2 minutes. No credit card required.</motion.p>
             <motion.div variants={fadeUp} custom={2}>
-              <Button onClick={() => navigate("/onboarding")} size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 text-base px-8 py-6 rounded-xl shadow-lg shadow-accent/20">
+              <Button onClick={() => navigate("/onboarding")} size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 text-sm md:text-base px-6 md:px-8 py-5 md:py-6 rounded-xl shadow-lg shadow-accent/20 w-full sm:w-auto">
                 Get Started <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </motion.div>
@@ -403,13 +403,13 @@ export default function Pricing() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 border-t">
-        <div className="container flex items-center justify-between text-sm text-muted-foreground">
+      <footer className="py-6 md:py-8 border-t">
+        <div className="container flex flex-col md:flex-row items-center justify-between gap-3 text-sm text-muted-foreground px-5">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded bg-accent flex items-center justify-center"><Sparkles className="w-3 h-3 text-accent-foreground" /></div>
             <span className="font-display font-semibold text-foreground">Normy Agent</span>
           </div>
-          <p>© 2026 Normy Agent. All rights reserved.</p>
+          <p className="text-xs md:text-sm">© 2026 Normy Agent. All rights reserved.</p>
         </div>
       </footer>
     </div>
