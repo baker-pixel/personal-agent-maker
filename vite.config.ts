@@ -18,10 +18,23 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icon-192-v2.png", "icon-512-v2.png", "icon-maskable-512-v2.png", "apple-touch-icon.png"],
+      devOptions: { enabled: false },
+      includeAssets: ["icon-192-v2.png", "icon-512-v2.png", "icon-maskable-512-v2.png", "apple-touch-icon.png", "offline.html"],
       workbox: {
         navigateFallbackDenylist: [/^\/~oauth/],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        offlineGoogleAnalytics: false,
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts-cache",
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
       manifest: {
         name: "Normy — AI Executive Assistant",
@@ -32,6 +45,22 @@ export default defineConfig(({ mode }) => ({
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
+        scope: "/",
+        categories: ["productivity", "business"],
+        shortcuts: [
+          {
+            name: "Chat with Normy",
+            short_name: "Chat",
+            url: "/decision/text",
+            icons: [{ src: "/icon-192-v2.png", sizes: "192x192" }],
+          },
+          {
+            name: "Email Triage",
+            short_name: "Email",
+            url: "/email",
+            icons: [{ src: "/icon-192-v2.png", sizes: "192x192" }],
+          },
+        ],
         icons: [
           {
             src: "/icon-192-v2.png",
