@@ -569,7 +569,7 @@ export default function EmailView() {
       {!selectedEmail && !agentSheetOpen && (
         <button
           onClick={() => setAgentSheetOpen(true)}
-          className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-accent text-accent-foreground shadow-lg shadow-accent/30 flex items-center justify-center hover:scale-105 transition-transform z-40"
+          className="fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-6 w-14 h-14 rounded-full bg-accent text-accent-foreground shadow-lg shadow-accent/30 flex items-center justify-center hover:scale-105 transition-transform z-40"
         >
           <span className="font-display font-bold text-lg">{agentName.charAt(0)}</span>
         </button>

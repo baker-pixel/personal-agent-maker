@@ -136,7 +136,7 @@ export default function DecisionVoice() {
           </div>
         </div>
 
-        <div className="border-t bg-background sticky bottom-0 z-50">
+        <div className="border-t bg-background sticky bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
           <div className="container max-w-lg flex items-center gap-2 py-3 px-4">
             <Input
               value={input}
