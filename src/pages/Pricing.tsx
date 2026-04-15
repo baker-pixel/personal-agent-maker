@@ -429,6 +429,48 @@ export default function Pricing() {
           <p className="text-xs md:text-sm">© 2026 Normy Agent. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* Demo Video Modal */}
+      <AnimatePresence>
+        {showDemoVideo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/80 backdrop-blur-sm p-4"
+            onClick={() => {
+              setShowDemoVideo(false);
+              if (videoRef.current) videoRef.current.pause();
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 25 }}
+              className="relative w-full max-w-4xl rounded-2xl overflow-hidden bg-background shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => {
+                  setShowDemoVideo(false);
+                  if (videoRef.current) videoRef.current.pause();
+                }}
+                className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-background/80 flex items-center justify-center hover:bg-background transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <video
+                ref={videoRef}
+                src="/admin-demo.mp4"
+                controls
+                autoPlay
+                className="w-full aspect-video"
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
