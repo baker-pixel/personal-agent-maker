@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Mail, BarChart3, Users, BookOpen, Settings, Check, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowRight, Mail, BarChart3, Users, BookOpen, Settings, Check, Sparkles, ChevronDown, ChevronUp, Play, X } from "lucide-react";
 import normyLogo from "@/assets/normy-logo.png";
 
 const fadeUp = {
