@@ -50,7 +50,7 @@ export default function SmsLog() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="border-b bg-background sticky top-0 z-50">
+      <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
         <div className="container flex items-center justify-between h-14">
           <button
             onClick={() => navigate("/office")}
