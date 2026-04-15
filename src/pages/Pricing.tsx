@@ -193,6 +193,8 @@ const faqs = [
 export default function Pricing() {
   const navigate = useNavigate();
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
+  const [showDemoVideo, setShowDemoVideo] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       {/* Nav */}
