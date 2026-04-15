@@ -2,13 +2,14 @@ import { useState } from "react";
 import { OnboardingWelcome } from "@/components/onboarding/OnboardingWelcome";
 import { OnboardingNameAgent } from "@/components/onboarding/OnboardingNameAgent";
 import { OnboardingConnect } from "@/components/onboarding/OnboardingConnect";
+import { OnboardingInstallPWA } from "@/components/onboarding/OnboardingInstallPWA";
 
 interface OnboardingFlowProps {
   onComplete: () => void;
   onSkip: () => void;
 }
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 4;
 
 export const OnboardingFlow = ({ onComplete, onSkip }: OnboardingFlowProps) => {
   const [step, setStep] = useState(0);
