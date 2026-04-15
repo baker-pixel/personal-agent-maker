@@ -275,16 +275,18 @@ export default function Pricing() {
                 {/* Learn More / CTA */}
                 <div className="p-6 pt-2 space-y-2">
                   {dept.available ? (
-                    <Button onClick={() => navigate("/onboarding")} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                      {dept.cta} <ArrowRight className="w-4 h-4 ml-1" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full text-accent border-accent/30 hover:bg-accent/5"
-                      onClick={() => setShowDemoVideo(true)}
-                    >
-                      <Play className="w-4 h-4 mr-1.5 fill-current" /> Watch Demo
-                    </Button>
+                    <>
+                      <Button onClick={() => navigate("/onboarding")} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
+                        {dept.cta} <ArrowRight className="w-4 h-4 ml-1" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full text-accent border-accent/30 hover:bg-accent/5"
+                        onClick={() => setShowDemoVideo(true)}
+                      >
+                        <Play className="w-4 h-4 mr-1.5 fill-current" /> Watch Demo
+                      </Button>
+                    </>
                   ) : (
                     <>
                       <Button
