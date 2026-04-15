@@ -57,6 +57,7 @@ export const OnboardingFlow = ({ onComplete, onSkip }: OnboardingFlowProps) => {
         {step === 0 && <OnboardingWelcome onNext={next} onSkip={onSkip} />}
         {step === 1 && <OnboardingNameAgent onNext={next} onBack={back} onSkip={onSkip} />}
         {step === 2 && <OnboardingConnect onNext={next} onBack={back} onSkip={onSkip} />}
+        {step === 3 && <OnboardingInstallPWA onNext={next} onBack={back} onSkip={onSkip} />}
       </div>
     </div>
   );
