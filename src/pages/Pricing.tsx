@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Mail, BarChart3, Users, BookOpen, Settings, Check, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowRight, Mail, BarChart3, Users, BookOpen, Settings, Check, Sparkles, ChevronDown, ChevronUp, Play, X } from "lucide-react";
 import normyLogo from "@/assets/normy-logo.png";
 
 const fadeUp = {
@@ -193,6 +193,8 @@ const faqs = [
 export default function Pricing() {
   const navigate = useNavigate();
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
+  const [showDemoVideo, setShowDemoVideo] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       {/* Nav */}
@@ -273,9 +275,18 @@ export default function Pricing() {
                 {/* Learn More / CTA */}
                 <div className="p-6 pt-2 space-y-2">
                   {dept.available ? (
-                    <Button onClick={() => navigate("/onboarding")} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                      {dept.cta} <ArrowRight className="w-4 h-4 ml-1" />
-                    </Button>
+                    <>
+                      <Button onClick={() => navigate("/onboarding")} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
+                        {dept.cta} <ArrowRight className="w-4 h-4 ml-1" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full text-accent border-accent/30 hover:bg-accent/5"
+                        onClick={() => setShowDemoVideo(true)}
+                      >
+                        <Play className="w-4 h-4 mr-1.5 fill-current" /> Watch Demo
+                      </Button>
+                    </>
                   ) : (
                     <>
                       <Button
@@ -418,6 +429,48 @@ export default function Pricing() {
           <p className="text-xs md:text-sm">© 2026 Normy Agent. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* Demo Video Modal */}
+      <AnimatePresence>
+        {showDemoVideo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/80 backdrop-blur-sm p-4"
+            onClick={() => {
+              setShowDemoVideo(false);
+              if (videoRef.current) videoRef.current.pause();
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 25 }}
+              className="relative w-full max-w-4xl rounded-2xl overflow-hidden bg-background shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => {
+                  setShowDemoVideo(false);
+                  if (videoRef.current) videoRef.current.pause();
+                }}
+                className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-background/80 flex items-center justify-center hover:bg-background transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <video
+                ref={videoRef}
+                src="/admin-demo.mp4"
+                controls
+                autoPlay
+                className="w-full aspect-video"
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
