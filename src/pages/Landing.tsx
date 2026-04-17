@@ -153,6 +153,10 @@ export default function Landing() {
             <div className="w-6 h-6 rounded bg-accent flex items-center justify-center"><Sparkles className="w-3 h-3 text-accent-foreground" /></div>
             <span className="font-display font-semibold text-foreground">Normy Agent</span>
           </div>
+          <div className="flex items-center gap-4 text-xs md:text-sm">
+            <a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a>
+            <a href="/terms" className="hover:text-foreground transition-colors">Terms of Service</a>
+          </div>
           <p className="text-xs md:text-sm">© 2026 Normy Agent. All rights reserved.</p>
         </div>
       </footer>
