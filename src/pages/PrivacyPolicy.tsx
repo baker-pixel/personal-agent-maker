@@ -1,47 +1,130 @@
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div className="space-y-3">
+    <h2 className="font-display text-xl md:text-2xl text-foreground">{title}</h2>
+    <div className="text-muted-foreground space-y-2 leading-relaxed">{children}</div>
+  </div>
+);
+
+const List = ({ items }: { items: string[] }) => (
+  <ul className="list-disc pl-6 space-y-1">
+    {items.map((item) => <li key={item}>{item}</li>)}
+  </ul>
+);
+
 const PrivacyPolicy = () => (
-  <div className="min-h-screen bg-background p-6 md:p-12">
-    <div className="max-w-3xl mx-auto prose prose-invert">
-      <h1 className="font-display text-3xl text-foreground mb-6">Privacy Policy</h1>
-      <p className="text-muted-foreground text-sm mb-8">Last updated: {new Date().toLocaleDateString()}</p>
+  <div className="min-h-screen bg-background">
+    <div className="max-w-3xl mx-auto px-6 py-10 md:py-16">
+      <h1 className="font-display text-4xl md:text-5xl text-foreground mb-2">Privacy Policy for Normy</h1>
+      <p className="text-muted-foreground text-sm mb-10">Effective Date: January 1, 2026</p>
 
-      <section className="space-y-4 text-foreground/90">
-        <h2 className="text-xl font-semibold text-foreground">1. Information We Collect</h2>
-        <p>When you use Normy Agent, we collect the following information:</p>
-        <ul className="list-disc pl-6 space-y-1 text-muted-foreground">
-          <li><strong className="text-foreground">Account information:</strong> Email address and password when you create an account.</li>
-          <li><strong className="text-foreground">Google account data:</strong> When you connect Gmail or Google Calendar, we access your emails and calendar events to provide triage and scheduling features. We store OAuth tokens securely to maintain your connection.</li>
-        </ul>
+      <p className="text-muted-foreground leading-relaxed mb-10">
+        Normy ("Company," "we," "us," or "our") respects your privacy and is committed to protecting the personal information you provide when using our website, applications, and services (collectively, the "Services"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information.
+      </p>
 
-        <h2 className="text-xl font-semibold text-foreground">2. How We Use Your Information</h2>
-        <ul className="list-disc pl-6 space-y-1 text-muted-foreground">
-          <li>To read and categorize your emails for inbox triage</li>
-          <li>To read your calendar events for scheduling optimization</li>
-          <li>To draft email replies for your review and approval</li>
-          <li>To detect calendar conflicts and suggest resolutions</li>
-        </ul>
-        <p className="text-muted-foreground">We <strong className="text-foreground">never</strong> send emails or modify calendar events without your explicit approval.</p>
+      <div className="space-y-10">
+        <Section title="1. Information We Collect">
+          <p>We collect information in the following categories:</p>
+          <p className="font-semibold text-foreground pt-2">a. Information You Provide Directly</p>
+          <List items={[
+            "Name, email address, and contact details",
+            "Account credentials",
+            "Payment and billing information",
+            "Communications with us (e.g., support inquiries)",
+            "Any content, data, or instructions you provide through the Services",
+          ]} />
+          <p className="font-semibold text-foreground pt-2">b. Automatically Collected Information</p>
+          <List items={[
+            "IP address and device identifiers",
+            "Browser type and operating system",
+            "Usage data (pages visited, actions taken, timestamps)",
+            "Cookies and similar tracking technologies",
+          ]} />
+          <p className="font-semibold text-foreground pt-2">c. Third-Party Information</p>
+          <p>We may receive information from third-party services you connect to Normy, such as:</p>
+          <List items={["Email providers", "Calendar platforms", "Other integrated tools or applications"]} />
+        </Section>
 
-        <h2 className="text-xl font-semibold text-foreground">3. Data Storage & Security</h2>
-        <p className="text-muted-foreground">Your OAuth tokens are stored securely in an encrypted database. We do not store the full content of your emails or calendar events — we access them in real time when needed and do not retain copies.</p>
+        <Section title="2. How We Use Your Information">
+          <p>We use collected information to:</p>
+          <List items={[
+            "Provide, operate, and improve the Services",
+            "Personalize user experience and interactions",
+            "Process transactions and manage accounts",
+            "Communicate with you (including updates, service notices, and support)",
+            "Ensure security and prevent fraud or misuse",
+            "Comply with legal obligations",
+          ]} />
+        </Section>
 
-        <h2 className="text-xl font-semibold text-foreground">4. Third-Party Services</h2>
-        <p className="text-muted-foreground">We use Google APIs to access Gmail and Google Calendar. Our use of Google user data complies with the <a href="https://developers.google.com/terms/api-services-user-data-policy" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+        <Section title="3. How We Share Information">
+          <p><strong className="text-foreground">We do not sell your personal information.</strong></p>
+          <p>We may share information in the following circumstances:</p>
+          <List items={[
+            "Service Providers: With trusted third parties who perform services on our behalf (e.g., hosting, payment processing, analytics)",
+            "Integrations: When you connect third-party services, data may be shared as necessary to enable functionality",
+            "Legal Requirements: If required by law, regulation, or legal process",
+            "Business Transfers: In connection with a merger, acquisition, or sale of assets",
+          ]} />
+        </Section>
 
-        <h2 className="text-xl font-semibold text-foreground">5. Data Sharing</h2>
-        <p className="text-muted-foreground">We do not sell, trade, or share your personal data with third parties. Your data is only used to provide the Normy Agent service.</p>
+        <Section title="4. Data Retention">
+          <p>We retain personal information only as long as necessary to:</p>
+          <List items={[
+            "Provide the Services",
+            "Fulfill the purposes outlined in this Policy",
+            "Comply with legal and regulatory obligations",
+          ]} />
+          <p>When no longer required, data will be securely deleted or anonymized.</p>
+        </Section>
 
-        <h2 className="text-xl font-semibold text-foreground">6. Your Rights</h2>
-        <ul className="list-disc pl-6 space-y-1 text-muted-foreground">
-          <li>You can disconnect your Google account at any time from the Integrations page</li>
-          <li>You can delete your account and all associated data at any time</li>
-          <li>You can revoke Normy Agent's access from your <a href="https://myaccount.google.com/permissions" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">Google Account permissions</a></li>
-        </ul>
+        <Section title="5. Security">
+          <p>We implement reasonable administrative, technical, and organizational measures to protect your information.</p>
+          <p>That said, no system is completely secure. Use of the Services is at your own risk.</p>
+        </Section>
 
-        <h2 className="text-xl font-semibold text-foreground">7. Contact</h2>
-        <p className="text-muted-foreground">If you have questions about this privacy policy, please contact us through the app.</p>
-      </section>
+        <Section title="6. Your Rights and Choices">
+          <p>Depending on your jurisdiction, you may have the right to:</p>
+          <List items={[
+            "Access, correct, or delete your personal information",
+            "Object to or restrict certain processing",
+            "Withdraw consent where applicable",
+            "Request data portability",
+          ]} />
+          <p>You may also opt out of non-essential communications at any time.</p>
+        </Section>
 
-      <div className="mt-10">
+        <Section title="7. Cookies and Tracking">
+          <p>We use cookies and similar technologies to:</p>
+          <List items={[
+            "Maintain session functionality",
+            "Analyze usage patterns",
+            "Improve performance and user experience",
+          ]} />
+          <p>You can control cookies through your browser settings.</p>
+        </Section>
+
+        <Section title="8. Third-Party Services">
+          <p>Normy may contain links or integrations with third-party services. We are not responsible for their privacy practices. You should review their policies independently.</p>
+        </Section>
+
+        <Section title="9. Children's Privacy">
+          <p>The Services are not intended for individuals under the age of 13. We do not knowingly collect personal information from children.</p>
+        </Section>
+
+        <Section title="10. International Data Transfers">
+          <p>If you access the Services from outside the United States, your information may be transferred to and processed in the United States or other jurisdictions.</p>
+        </Section>
+
+        <Section title="11. Changes to This Policy">
+          <p>We may update this Privacy Policy from time to time. Changes will be posted with an updated effective date. Continued use of the Services constitutes acceptance of the revised Policy.</p>
+        </Section>
+
+        <Section title="12. Contact Information">
+          <p>Normy</p>
+        </Section>
+      </div>
+
+      <div className="mt-12 pt-6 border-t">
         <a href="/" className="text-accent hover:underline text-sm">← Back to app</a>
       </div>
     </div>
