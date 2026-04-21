@@ -210,7 +210,7 @@ serve(async (req) => {
         ]);
 
         const [emails, events] = await Promise.all([
-          gmailToken ? fetchRecentEmails(gmailToken, 15) : [],
+          gmailToken ? fetchRecentEmails(gmailToken, 8) : [],
           calToken ? fetchEvents(calToken, 7) : [],
         ]);
 
