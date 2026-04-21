@@ -72,7 +72,7 @@ export function VoicePersonalizationSection() {
         <Switch
           id="tts-enabled-toggle"
           checked={tts.enabled}
-          onCheckedChange={(v) => tts.setEnabled(v)}
+          onCheckedChange={() => tts.toggle()}
         />
       </div>
 
