@@ -22,8 +22,10 @@ interface SpeechRecognitionReturn {
 export function useSpeechRecognition({
   onResult,
   onEnd,
+  onSilenceTimeout,
   continuous = true,
   lang = "en-US",
+  silenceTimeoutMs = 0,
 }: UseSpeechRecognitionOptions = {}): SpeechRecognitionReturn {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -32,6 +34,11 @@ export function useSpeechRecognition({
   const startingRef = useRef(false);
   const lastFinalRef = useRef<string>("");
   const lastFinalAtRef = useRef<number>(0);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silenceTimeoutMsRef = useRef(silenceTimeoutMs);
+  const onSilenceTimeoutRef = useRef(onSilenceTimeout);
+  useEffect(() => { silenceTimeoutMsRef.current = silenceTimeoutMs; }, [silenceTimeoutMs]);
+  useEffect(() => { onSilenceTimeoutRef.current = onSilenceTimeout; }, [onSilenceTimeout]);
 
   const SpeechRecognitionAPI =
     typeof window !== "undefined"
