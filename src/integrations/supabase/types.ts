@@ -591,6 +591,11 @@ export type Database = {
           agent_name: string
           created_at: string
           id: string
+          lead_escalate_drafted_minutes: number
+          lead_escalate_to_slack: boolean
+          lead_escalate_to_sms: boolean
+          lead_nudge_enabled: boolean
+          lead_nudge_minutes: number
           phone_number: string | null
           slack_notification_channel_id: string | null
           slack_notification_channel_name: string | null
@@ -612,6 +617,11 @@ export type Database = {
           agent_name?: string
           created_at?: string
           id?: string
+          lead_escalate_drafted_minutes?: number
+          lead_escalate_to_slack?: boolean
+          lead_escalate_to_sms?: boolean
+          lead_nudge_enabled?: boolean
+          lead_nudge_minutes?: number
           phone_number?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
@@ -633,6 +643,11 @@ export type Database = {
           agent_name?: string
           created_at?: string
           id?: string
+          lead_escalate_drafted_minutes?: number
+          lead_escalate_to_slack?: boolean
+          lead_escalate_to_sms?: boolean
+          lead_nudge_enabled?: boolean
+          lead_nudge_minutes?: number
           phone_number?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
