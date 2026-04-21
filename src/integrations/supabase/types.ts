@@ -433,9 +433,14 @@ export type Database = {
           slack_notification_channel_id: string | null
           slack_notification_channel_name: string | null
           stt_language: string | null
+          tts_elevenlabs_model_id: string | null
+          tts_elevenlabs_voice_id: string | null
           tts_enabled: boolean | null
           tts_pitch: number | null
+          tts_provider: string | null
           tts_rate: number | null
+          tts_similarity: number | null
+          tts_stability: number | null
           tts_voice_uri: string | null
           updated_at: string
           user_id: string
@@ -449,9 +454,14 @@ export type Database = {
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
           stt_language?: string | null
+          tts_elevenlabs_model_id?: string | null
+          tts_elevenlabs_voice_id?: string | null
           tts_enabled?: boolean | null
           tts_pitch?: number | null
+          tts_provider?: string | null
           tts_rate?: number | null
+          tts_similarity?: number | null
+          tts_stability?: number | null
           tts_voice_uri?: string | null
           updated_at?: string
           user_id: string
@@ -465,9 +475,14 @@ export type Database = {
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
           stt_language?: string | null
+          tts_elevenlabs_model_id?: string | null
+          tts_elevenlabs_voice_id?: string | null
           tts_enabled?: boolean | null
           tts_pitch?: number | null
+          tts_provider?: string | null
           tts_rate?: number | null
+          tts_similarity?: number | null
+          tts_stability?: number | null
           tts_voice_uri?: string | null
           updated_at?: string
           user_id?: string

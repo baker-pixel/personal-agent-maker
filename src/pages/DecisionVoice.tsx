@@ -100,6 +100,16 @@ export default function DecisionVoice() {
               isSupported={voice.ttsSupported}
               sttLanguage={voice.sttLanguage}
               onSttLanguageChange={voice.setSttLanguage}
+              provider={voice.provider}
+              onProviderChange={voice.setProvider}
+              elevenlabsVoiceId={voice.elevenlabsVoiceId}
+              onElevenlabsVoiceChange={voice.setElevenlabsVoiceId}
+              elevenlabsModelId={voice.elevenlabsModelId}
+              onElevenlabsModelChange={voice.setElevenlabsModelId}
+              stability={voice.stability}
+              onStabilityChange={voice.setStability}
+              similarity={voice.similarity}
+              onSimilarityChange={voice.setSimilarity}
             />
             <button
               onClick={() => { voice.stopConversation(); chat.reset(); }}

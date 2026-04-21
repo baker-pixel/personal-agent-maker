@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import { Settings2, Play, Sparkles } from "lucide-react";
+import { Settings2, Play, Sparkles, Crown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -12,6 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ELEVENLABS_VOICES, ELEVENLABS_MODELS } from "@/lib/elevenlabsVoices";
+
+type TtsProvider = "browser" | "elevenlabs";
 
 interface VoiceSettingsPanelProps {
   voices: SpeechSynthesisVoice[];
@@ -23,9 +27,20 @@ interface VoiceSettingsPanelProps {
   onPitchChange: (v: number) => void;
   onPreview: () => void;
   isSupported: boolean;
-  // New: STT language
+  // STT language
   sttLanguage?: string;
   onSttLanguageChange?: (lang: string) => void;
+  // Premium (ElevenLabs)
+  provider?: TtsProvider;
+  onProviderChange?: (p: TtsProvider) => void;
+  elevenlabsVoiceId?: string | null;
+  onElevenlabsVoiceChange?: (id: string) => void;
+  elevenlabsModelId?: string;
+  onElevenlabsModelChange?: (id: string) => void;
+  stability?: number;
+  onStabilityChange?: (v: number) => void;
+  similarity?: number;
+  onSimilarityChange?: (v: number) => void;
 }
 
 // Common dictation languages for the STT picker.
@@ -109,7 +124,19 @@ export function VoiceSettingsPanel({
   isSupported,
   sttLanguage,
   onSttLanguageChange,
+  provider = "browser",
+  onProviderChange,
+  elevenlabsVoiceId,
+  onElevenlabsVoiceChange,
+  elevenlabsModelId,
+  onElevenlabsModelChange,
+  stability = 0.5,
+  onStabilityChange,
+  similarity = 0.75,
+  onSimilarityChange,
 }: VoiceSettingsPanelProps) {
+  const isPremium = provider === "elevenlabs";
+
   // Group voices by language tag (e.g. "en-US", "fr-FR"). Sort: English first, then alpha.
   const voiceGroups = useMemo(() => {
     const groups = new Map<string, SpeechSynthesisVoice[]>();
@@ -157,32 +184,125 @@ export function VoiceSettingsPanel({
             </p>
           </div>
 
-          {!isSupported ? (
-            <p className="text-xs text-muted-foreground">
-              Voice synthesis isn't supported in this browser.
-            </p>
-          ) : (
-            <>
-              {/* Tone presets */}
-              <div className="space-y-1.5">
-                <Label className="text-xs flex items-center gap-1.5">
-                  <Sparkles className="w-3 h-3" />
-                  Tone presets
-                </Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {TONE_PRESETS.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => applyPreset(p.id)}
-                      className="text-xs px-2.5 py-1 rounded-full bg-muted hover:bg-accent hover:text-accent-foreground transition-colors"
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+          {/* Voice quality toggle (Standard / Premium) */}
+          {onProviderChange && (
+            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-3 py-2.5">
+              <div className="flex items-start gap-2">
+                <Crown className={`w-4 h-4 mt-0.5 ${isPremium ? "text-primary" : "text-muted-foreground"}`} />
+                <div>
+                  <Label className="text-xs font-semibold cursor-pointer" htmlFor="premium-toggle">
+                    Premium voice
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                    Studio-quality, consistent on every device.
+                  </p>
                 </div>
               </div>
+              <Switch
+                id="premium-toggle"
+                checked={isPremium}
+                onCheckedChange={(c) => onProviderChange(c ? "elevenlabs" : "browser")}
+              />
+            </div>
+          )}
 
-              {/* Voice picker grouped by language/accent */}
+          {/* Tone presets — apply to both providers via rate/pitch */}
+          <div className="space-y-1.5">
+            <Label className="text-xs flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3" />
+              Tone presets
+            </Label>
+            <div className="flex flex-wrap gap-1.5">
+              {TONE_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => applyPreset(p.id)}
+                  className="text-xs px-2.5 py-1 rounded-full bg-muted hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isPremium ? (
+            <>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Premium voice</Label>
+                <Select
+                  value={elevenlabsVoiceId ?? undefined}
+                  onValueChange={(v) => onElevenlabsVoiceChange?.(v)}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Pick a voice" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {ELEVENLABS_VOICES.map((v) => (
+                      <SelectItem key={v.id} value={v.id} className="text-sm">
+                        <span className="font-medium">{v.name}</span>
+                        <span className="text-muted-foreground ml-1.5">— {v.accent}, {v.description}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Model</Label>
+                <Select
+                  value={elevenlabsModelId ?? "eleven_multilingual_v2"}
+                  onValueChange={(v) => onElevenlabsModelChange?.(v)}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ELEVENLABS_MODELS.map((m) => (
+                      <SelectItem key={m.id} value={m.id} className="text-sm">
+                        <span className="font-medium">{m.label}</span>
+                        <span className="text-muted-foreground block text-[11px]">{m.description}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Stability</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">{stability.toFixed(2)}</span>
+                </div>
+                <Slider
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={[stability]}
+                  onValueChange={(v) => onStabilityChange?.(v[0])}
+                />
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Lower = more expressive & variable. Higher = more consistent.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Similarity</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">{similarity.toFixed(2)}</span>
+                </div>
+                <Slider
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={[similarity]}
+                  onValueChange={(v) => onSimilarityChange?.(v[0])}
+                />
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  How closely to match the original voice character.
+                </p>
+              </div>
+            </>
+          ) : (
+            isSupported && (
               <div className="space-y-1.5">
                 <Label className="text-xs">Voice & accent</Label>
                 <Select
@@ -206,68 +326,75 @@ export function VoiceSettingsPanel({
                   </SelectContent>
                 </Select>
               </div>
+            )
+          )}
 
-              {/* STT language picker */}
-              {onSttLanguageChange && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">I'll speak in…</Label>
-                  <Select
-                    value={sttLanguage ?? "en-US"}
-                    onValueChange={onSttLanguageChange}
-                  >
-                    <SelectTrigger className="h-9 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-72">
-                      {STT_LANGUAGES.map((l) => (
-                        <SelectItem key={l.code} value={l.code} className="text-sm">
-                          {l.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground leading-snug">
-                    The language Normy listens for when you talk.
-                  </p>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Speed</Label>
-                  <span className="text-xs text-muted-foreground tabular-nums">{rate.toFixed(2)}×</span>
-                </div>
-                <Slider
-                  min={0.5}
-                  max={2}
-                  step={0.05}
-                  value={[rate]}
-                  onValueChange={(v) => onRateChange(v[0])}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Pitch</Label>
-                  <span className="text-xs text-muted-foreground tabular-nums">{pitch.toFixed(2)}</span>
-                </div>
-                <Slider
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  value={[pitch]}
-                  onValueChange={(v) => onPitchChange(v[0])}
-                />
-              </div>
-
-              <button
-                onClick={onPreview}
-                className="w-full flex items-center justify-center gap-2 h-9 rounded-lg bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors"
+          {onSttLanguageChange && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">I'll speak in…</Label>
+              <Select
+                value={sttLanguage ?? "en-US"}
+                onValueChange={onSttLanguageChange}
               >
-                <Play className="w-3.5 h-3.5" />
-                Preview voice
-              </button>
-            </>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {STT_LANGUAGES.map((l) => (
+                    <SelectItem key={l.code} value={l.code} className="text-sm">
+                      {l.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                The language Normy listens for when you talk.
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Speed</Label>
+              <span className="text-xs text-muted-foreground tabular-nums">{rate.toFixed(2)}×</span>
+            </div>
+            <Slider
+              min={0.5}
+              max={2}
+              step={0.05}
+              value={[rate]}
+              onValueChange={(v) => onRateChange(v[0])}
+            />
+          </div>
+
+          {!isPremium && isSupported && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Pitch</Label>
+                <span className="text-xs text-muted-foreground tabular-nums">{pitch.toFixed(2)}</span>
+              </div>
+              <Slider
+                min={0}
+                max={2}
+                step={0.05}
+                value={[pitch]}
+                onValueChange={(v) => onPitchChange(v[0])}
+              />
+            </div>
+          )}
+
+          <button
+            onClick={onPreview}
+            className="w-full flex items-center justify-center gap-2 h-9 rounded-lg bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors"
+          >
+            <Play className="w-3.5 h-3.5" />
+            Preview voice
+          </button>
+
+          {!isSupported && !isPremium && (
+            <p className="text-xs text-muted-foreground">
+              Your browser's voice synthesis isn't available. Toggle <strong>Premium voice</strong> above to use ElevenLabs.
+            </p>
           )}
         </div>
       </PopoverContent>

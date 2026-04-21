@@ -1,8 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const VOICE_KEY = "normy_tts_voice";
 const RATE_KEY = "normy_tts_rate";
 const PITCH_KEY = "normy_tts_pitch";
+
+export type TtsProvider = "browser" | "elevenlabs";
 
 interface TtsRemoteOpts {
   remote?: {
@@ -11,8 +14,24 @@ interface TtsRemoteOpts {
     pitch: number;
     enabled: boolean;
     loaded: boolean;
+    // Premium
+    provider?: TtsProvider;
+    elevenlabsVoiceId?: string | null;
+    elevenlabsModelId?: string;
+    stability?: number;
+    similarity?: number;
   };
-  onChange?: (patch: { tts_voice_uri?: string | null; tts_rate?: number; tts_pitch?: number; tts_enabled?: boolean }) => void;
+  onChange?: (patch: {
+    tts_voice_uri?: string | null;
+    tts_rate?: number;
+    tts_pitch?: number;
+    tts_enabled?: boolean;
+    tts_provider?: TtsProvider;
+    tts_elevenlabs_voice_id?: string | null;
+    tts_elevenlabs_model_id?: string;
+    tts_stability?: number;
+    tts_similarity?: number;
+  }) => void;
 }
 
 export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
@@ -31,8 +50,13 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     const v = parseFloat(localStorage.getItem(PITCH_KEY) || "1.0");
     return isNaN(v) ? 1.0 : v;
   });
+  // Premium state (purely remote-driven; no localStorage fallback)
+  const [provider, setProviderState] = useState<TtsProvider>("browser");
+  const [elevenlabsVoiceId, setElevenlabsVoiceIdState] = useState<string | null>("EXAVITQu4vr4xnSDxMaL");
+  const [elevenlabsModelId, setElevenlabsModelIdState] = useState<string>("eleven_multilingual_v2");
+  const [stability, setStabilityState] = useState<number>(0.5);
+  const [similarity, setSimilarityState] = useState<number>(0.75);
 
-  // Hydrate from remote prefs once they load (remote wins over localStorage)
   const hydratedRef = useRef(false);
   useEffect(() => {
     if (!remote?.loaded || hydratedRef.current) return;
@@ -41,7 +65,12 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     setRateState(remote.rate);
     setPitchState(remote.pitch);
     setEnabledState(remote.enabled);
-  }, [remote?.loaded, remote?.voiceURI, remote?.rate, remote?.pitch, remote?.enabled]);
+    if (remote.provider) setProviderState(remote.provider);
+    if (remote.elevenlabsVoiceId !== undefined) setElevenlabsVoiceIdState(remote.elevenlabsVoiceId);
+    if (remote.elevenlabsModelId) setElevenlabsModelIdState(remote.elevenlabsModelId);
+    if (remote.stability != null) setStabilityState(remote.stability);
+    if (remote.similarity != null) setSimilarityState(remote.similarity);
+  }, [remote?.loaded, remote?.voiceURI, remote?.rate, remote?.pitch, remote?.enabled, remote?.provider, remote?.elevenlabsVoiceId, remote?.elevenlabsModelId, remote?.stability, remote?.similarity]);
 
   const setEnabled = (v: boolean | ((prev: boolean) => boolean)) => {
     setEnabledState((prev) => {
@@ -53,34 +82,38 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const setVoiceURI = (v: string | null) => { setVoiceURIState(v); onChange?.({ tts_voice_uri: v }); };
   const setRate = (v: number) => { setRateState(v); onChange?.({ tts_rate: v }); };
   const setPitch = (v: number) => { setPitchState(v); onChange?.({ tts_pitch: v }); };
+  const setProvider = (v: TtsProvider) => { setProviderState(v); onChange?.({ tts_provider: v }); };
+  const setElevenlabsVoiceId = (v: string | null) => { setElevenlabsVoiceIdState(v); onChange?.({ tts_elevenlabs_voice_id: v }); };
+  const setElevenlabsModelId = (v: string) => { setElevenlabsModelIdState(v); onChange?.({ tts_elevenlabs_model_id: v }); };
+  const setStability = (v: number) => { setStabilityState(v); onChange?.({ tts_stability: v }); };
+  const setSimilarity = (v: number) => { setSimilarityState(v); onChange?.({ tts_similarity: v }); };
+
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
   const unlockedRef = useRef(false);
   const keepAliveRef = useRef<number | null>(null);
 
   const isSupported = typeof window !== "undefined" && "speechSynthesis" in window;
 
-  /**
-   * iOS (Safari + standalone PWA) requires SpeechSynthesis to be "unlocked"
-   * by a user gesture before it will produce audio. We speak an empty/silent
-   * utterance the first time the user interacts with voice.
-   */
+  // iOS unlock for both Web Speech AND <audio> playback
   const unlockAudio = useCallback(() => {
-    if (!isSupported || unlockedRef.current) return;
+    if (unlockedRef.current) return;
     try {
-      const u = new SpeechSynthesisUtterance(" ");
-      u.volume = 0;
-      u.rate = 1;
-      window.speechSynthesis.speak(u);
+      if (isSupported) {
+        const u = new SpeechSynthesisUtterance(" ");
+        u.volume = 0;
+        window.speechSynthesis.speak(u);
+      }
+      // Prime an Audio element with a silent buffer (helps iOS PWA)
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+        audioRef.current.preload = "auto";
+      }
       unlockedRef.current = true;
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }, [isSupported]);
 
-  /**
-   * iOS pauses the SpeechSynthesis queue after ~15s. A periodic pause/resume
-   * "keep-alive" prevents truncation of long utterances.
-   */
   useEffect(() => {
     if (!isSupported) return;
     keepAliveRef.current = window.setInterval(() => {
@@ -89,32 +122,18 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
           window.speechSynthesis.pause();
           window.speechSynthesis.resume();
         }
-      } catch {
-        /* ignore */
-      }
+      } catch { /* ignore */ }
     }, 10000) as unknown as number;
     return () => {
       if (keepAliveRef.current) window.clearInterval(keepAliveRef.current);
     };
   }, [isSupported]);
 
-  useEffect(() => {
-    localStorage.setItem("normy_tts_enabled", String(enabled));
-  }, [enabled]);
+  useEffect(() => { localStorage.setItem("normy_tts_enabled", String(enabled)); }, [enabled]);
+  useEffect(() => { if (voiceURI) localStorage.setItem(VOICE_KEY, voiceURI); }, [voiceURI]);
+  useEffect(() => { localStorage.setItem(RATE_KEY, String(rate)); }, [rate]);
+  useEffect(() => { localStorage.setItem(PITCH_KEY, String(pitch)); }, [pitch]);
 
-  useEffect(() => {
-    if (voiceURI) localStorage.setItem(VOICE_KEY, voiceURI);
-  }, [voiceURI]);
-
-  useEffect(() => {
-    localStorage.setItem(RATE_KEY, String(rate));
-  }, [rate]);
-
-  useEffect(() => {
-    localStorage.setItem(PITCH_KEY, String(pitch));
-  }, [pitch]);
-
-  // Load voices (async in some browsers)
   useEffect(() => {
     if (!isSupported) return;
     const load = () => {
@@ -128,9 +147,28 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     };
   }, [isSupported]);
 
+  const cleanText = (text: string) => text
+    .replace(/#{1,6}\s/g, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/`(.+?)`/g, "$1")
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/\[(.+?)\]\(.+?\)/g, "$1")
+    .replace(/^[-*•]\s/gm, "")
+    .replace(/⚠️/g, "Warning:")
+    .replace(/\n{2,}/g, ". ")
+    .replace(/\n/g, " ")
+    .trim();
+
   const stop = useCallback(() => {
-    if (isSupported) {
-      window.speechSynthesis.cancel();
+    if (isSupported) window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      try { audioRef.current.pause(); } catch { /* ignore */ }
+      audioRef.current.src = "";
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
     }
     setIsSpeaking(false);
   }, [isSupported]);
@@ -148,51 +186,70 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     );
   }, [voices, voiceURI]);
 
-  const speak = useCallback((text: string, onComplete?: () => void) => {
-    if (!isSupported || !enabled) {
-      onComplete?.();
-      return;
-    }
-
-    const clean = text
-      .replace(/#{1,6}\s/g, "")
-      .replace(/\*\*(.+?)\*\*/g, "$1")
-      .replace(/\*(.+?)\*/g, "$1")
-      .replace(/`(.+?)`/g, "$1")
-      .replace(/```[\s\S]*?```/g, "")
-      .replace(/\[(.+?)\]\(.+?\)/g, "$1")
-      .replace(/^[-*•]\s/gm, "")
-      .replace(/⚠️/g, "Warning:")
-      .replace(/\n{2,}/g, ". ")
-      .replace(/\n/g, " ")
-      .trim();
-
-    if (!clean) {
-      onComplete?.();
-      return;
-    }
-
+  const speakBrowser = useCallback((text: string, onComplete?: () => void) => {
+    if (!isSupported) { onComplete?.(); return; }
     window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(clean);
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = rate;
     utterance.pitch = pitch;
-
     const preferred = pickVoice();
     if (preferred) utterance.voice = preferred;
-
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => { setIsSpeaking(false); onComplete?.(); };
     utterance.onerror = () => { setIsSpeaking(false); onComplete?.(); };
-
     utteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
-  }, [isSupported, enabled, rate, pitch, pickVoice]);
+  }, [isSupported, rate, pitch, pickVoice]);
+
+  const speakElevenLabs = useCallback(async (text: string, onComplete?: () => void) => {
+    try {
+      setIsSpeaking(true);
+      const { data, error } = await supabase.functions.invoke("elevenlabs-tts", {
+        body: {
+          text,
+          voice_id: elevenlabsVoiceId,
+          model_id: elevenlabsModelId,
+          stability,
+          similarity_boost: similarity,
+          speed: rate,
+        },
+      });
+      if (error) throw error;
+      // data is a Blob (binary response from edge function)
+      const blob = data instanceof Blob ? data : new Blob([data as ArrayBuffer], { type: "audio/mpeg" });
+      const url = URL.createObjectURL(blob);
+      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = url;
+      if (!audioRef.current) audioRef.current = new Audio();
+      audioRef.current.src = url;
+      audioRef.current.onended = () => { setIsSpeaking(false); onComplete?.(); };
+      audioRef.current.onerror = () => { setIsSpeaking(false); onComplete?.(); };
+      await audioRef.current.play();
+    } catch (e) {
+      console.error("ElevenLabs TTS failed, falling back to browser:", e);
+      setIsSpeaking(false);
+      // Fallback to browser TTS so the user still hears something
+      speakBrowser(text, onComplete);
+    }
+  }, [elevenlabsVoiceId, elevenlabsModelId, stability, similarity, rate, speakBrowser]);
+
+  const speak = useCallback((text: string, onComplete?: () => void) => {
+    if (!enabled) { onComplete?.(); return; }
+    const clean = cleanText(text);
+    if (!clean) { onComplete?.(); return; }
+    stop();
+    if (provider === "elevenlabs") {
+      speakElevenLabs(clean, onComplete);
+    } else {
+      speakBrowser(clean, onComplete);
+    }
+  }, [enabled, provider, speakBrowser, speakElevenLabs, stop]);
 
   const toggle = useCallback(() => {
     setEnabled((prev) => {
       if (prev) {
         window.speechSynthesis?.cancel();
+        if (audioRef.current) { try { audioRef.current.pause(); } catch { /* ignore */ } }
         setIsSpeaking(false);
       }
       return !prev;
@@ -200,18 +257,22 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   }, []);
 
   const previewVoice = useCallback(() => {
-    if (!isSupported) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance("Hi, I'm Normy. This is how I'll sound when we talk.");
-    u.rate = rate;
-    u.pitch = pitch;
-    const preferred = pickVoice();
-    if (preferred) u.voice = preferred;
-    u.onstart = () => setIsSpeaking(true);
-    u.onend = () => setIsSpeaking(false);
-    u.onerror = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(u);
-  }, [isSupported, rate, pitch, pickVoice]);
+    const previewText = "Hi, I'm Normy. This is how I'll sound when we talk.";
+    stop();
+    if (provider === "elevenlabs") {
+      speakElevenLabs(previewText);
+    } else if (isSupported) {
+      const u = new SpeechSynthesisUtterance(previewText);
+      u.rate = rate;
+      u.pitch = pitch;
+      const preferred = pickVoice();
+      if (preferred) u.voice = preferred;
+      u.onstart = () => setIsSpeaking(true);
+      u.onend = () => setIsSpeaking(false);
+      u.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(u);
+    }
+  }, [provider, isSupported, rate, pitch, pickVoice, speakElevenLabs, stop]);
 
   return {
     enabled,
@@ -229,5 +290,16 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     pitch,
     setPitch,
     previewVoice,
+    // Premium
+    provider,
+    setProvider,
+    elevenlabsVoiceId,
+    setElevenlabsVoiceId,
+    elevenlabsModelId,
+    setElevenlabsModelId,
+    stability,
+    setStability,
+    similarity,
+    setSimilarity,
   };
 }
