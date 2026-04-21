@@ -11,8 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Flame, Loader2, RefreshCw, Send, Plus, Trash2, Settings, CheckCircle2, Archive } from "lucide-react";
+import { Flame, Loader2, RefreshCw, Send, Plus, Trash2, Settings, CheckCircle2, Archive, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { LeadSlaSettings } from "@/components/LeadSlaSettings";
 
 type LeadStatus = "new" | "drafted" | "responded" | "qualified" | "closed" | "archived";
 type Lead = {
@@ -39,6 +40,7 @@ export default function Leads() {
   const [openLead, setOpenLead] = useState<Lead | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [showRules, setShowRules] = useState(false);
+  const [showSla, setShowSla] = useState(false);
   const [newRule, setNewRule] = useState({ rule_type: "sender_domain", pattern: "", label: "", priority: 70 });
 
   const load = async () => {
@@ -180,6 +182,9 @@ export default function Leads() {
             <p className="text-sm text-muted-foreground mt-1">New inquiries Normy detected from your inbox</p>
           </div>
           <div className="flex gap-2">
+            <Button onClick={() => setShowSla(true)} size="sm" variant="outline">
+              <Clock className="w-4 h-4 mr-1" /> SLA
+            </Button>
             <Button onClick={() => setShowRules(true)} size="sm" variant="outline">
               <Settings className="w-4 h-4 mr-1" /> Rules
             </Button>
@@ -249,6 +254,16 @@ export default function Leads() {
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* SLA dialog */}
+      <Dialog open={showSla} onOpenChange={setShowSla}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Clock className="w-5 h-5 text-accent" /> Lead response SLA</DialogTitle>
+          </DialogHeader>
+          <LeadSlaSettings onClose={() => setShowSla(false)} />
         </DialogContent>
       </Dialog>
 

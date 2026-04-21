@@ -14,15 +14,20 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Find leads that are 15+ minutes old, still new/drafted, and not yet nudged
-    const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    // Pull all user SLA preferences in one go
+    const { data: prefs } = await admin
+      .from("user_preferences")
+      .select("user_id, lead_nudge_enabled, lead_nudge_minutes, lead_escalate_drafted_minutes, lead_escalate_to_slack, lead_escalate_to_sms, slack_notification_channel_id, phone_number");
+
+    const prefMap = new Map<string, any>();
+    (prefs || []).forEach((p: any) => prefMap.set(p.user_id, p));
+
+    // Find candidate leads (oldest first), filter per-user SLA in code
     const { data: leads, error } = await admin
       .from("leads")
-      .select("id, user_id, from_name, from_email, subject, source, received_at")
+      .select("id, user_id, from_name, from_email, subject, source, status, received_at, nudged_at")
       .in("status", ["new", "drafted"])
-      .lte("received_at", cutoff)
-      .is("nudged_at", null)
-      .limit(100);
+      .limit(500);
 
     if (error) throw error;
     if (!leads || leads.length === 0) {
@@ -31,19 +36,66 @@ Deno.serve(async (req) => {
       });
     }
 
+    const now = Date.now();
     let nudged = 0;
+
     for (const lead of leads) {
-      // Mark nudged + create a draft_action of type lead_nudge for the Approval Inbox
+      const p = prefMap.get(lead.user_id) || {};
+      if (p.lead_nudge_enabled === false) continue;
+
+      const baseMin = Math.max(1, p.lead_nudge_minutes ?? 15);
+      const escalateMin = Math.max(baseMin, p.lead_escalate_drafted_minutes ?? 60);
+      const ageMin = (now - new Date(lead.received_at).getTime()) / 60000;
+
+      const neverNudged = !lead.nudged_at;
+      const lastNudgeMin = lead.nudged_at ? (now - new Date(lead.nudged_at).getTime()) / 60000 : Infinity;
+
+      // First nudge after baseMin; re-nudge drafted leads after escalateMin since last nudge
+      const shouldFirstNudge = neverNudged && ageMin >= baseMin;
+      const shouldEscalate = !neverNudged && lead.status === "drafted" && lastNudgeMin >= escalateMin;
+      if (!shouldFirstNudge && !shouldEscalate) continue;
+
+      const escalating = shouldEscalate;
+      const ageStr = `${Math.round(ageMin)} min`;
+      const subjectLine = escalating
+        ? `⚠️ Still unanswered (${ageStr}): ${lead.subject || "(no subject)"}`
+        : `🔥 Unanswered lead: ${lead.subject || "(no subject)"}`;
+
       await admin.from("draft_actions").insert({
         user_id: lead.user_id,
         type: "lead_nudge",
         status: "pending",
         to_email: lead.from_email,
         to_name: lead.from_name,
-        subject: `🔥 Unanswered lead: ${lead.subject || "(no subject)"}`,
-        body: `New lead from ${lead.from_name || lead.from_email} via ${lead.source || "unknown source"} arrived ${Math.round((Date.now() - new Date(lead.received_at).getTime()) / 60000)} minutes ago and hasn't been responded to. Open the Leads page to respond.`,
-        metadata: { lead_id: lead.id, source: lead.source },
+        subject: subjectLine,
+        body: `Lead from ${lead.from_name || lead.from_email} via ${lead.source || "unknown source"} arrived ${ageStr} ago and is still ${lead.status}. Open the Leads page to respond.`,
+        metadata: { lead_id: lead.id, source: lead.source, escalation: escalating },
       });
+
+      // Optional Slack escalation
+      if (escalating && p.lead_escalate_to_slack && p.slack_notification_channel_id) {
+        try {
+          await admin.functions.invoke("slack-channels", {
+            body: {
+              action: "send",
+              channel: p.slack_notification_channel_id,
+              text: `⚠️ Lead from *${lead.from_name || lead.from_email}* still unanswered after ${ageStr}. Subject: ${lead.subject || "(no subject)"}`,
+            },
+          });
+        } catch (_) { /* non-fatal */ }
+      }
+
+      // Optional SMS escalation
+      if (escalating && p.lead_escalate_to_sms && p.phone_number) {
+        try {
+          await admin.functions.invoke("sms-send", {
+            body: {
+              to: p.phone_number,
+              message: `Normy: lead from ${lead.from_name || lead.from_email} unanswered ${ageStr}. Subject: ${lead.subject || "(no subject)"}`,
+            },
+          });
+        } catch (_) { /* non-fatal */ }
+      }
 
       await admin.from("leads").update({ nudged_at: new Date().toISOString() }).eq("id", lead.id);
       nudged++;
