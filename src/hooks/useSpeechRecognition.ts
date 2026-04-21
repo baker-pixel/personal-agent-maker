@@ -35,6 +35,11 @@ export function useSpeechRecognition({
 
   const startListening = useCallback(() => {
     if (!SpeechRecognitionAPI) return;
+    // Guard: if a recognition instance is already running, don't start another
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+    }
 
     const recognition = new SpeechRecognitionAPI();
     recognition.continuous = continuous;
@@ -67,7 +72,10 @@ export function useSpeechRecognition({
     };
 
     recognition.onerror = (event: any) => {
-      console.error("Speech recognition error:", event.error);
+      // 'aborted' and 'no-speech' are normal during conversation flow — don't spam logs
+      if (event.error !== "aborted" && event.error !== "no-speech") {
+        console.error("Speech recognition error:", event.error);
+      }
       setIsListening(false);
     };
 
