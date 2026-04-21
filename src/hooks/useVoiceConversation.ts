@@ -38,6 +38,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
 
   const speech = useSpeechRecognition({
     continuous: false,
+    lang: voicePrefs.prefs.stt_language || "en-US",
     onResult: (text) => {
       const trimmed = text.trim();
       if (!trimmed) return;
@@ -135,6 +136,9 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     setPitch: tts.setPitch,
     previewVoice: tts.previewVoice,
     ttsSupported: tts.isSupported,
+    // STT language preference
+    sttLanguage: voicePrefs.prefs.stt_language,
+    setSttLanguage: (lang: string) => voicePrefs.update({ stt_language: lang }),
     // PWA environment flags
     isStandalone: pwa.isStandalone,
     isIOS: pwa.isIOS,
