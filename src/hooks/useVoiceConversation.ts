@@ -107,5 +107,15 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     startConversation,
     stopConversation,
     toggleConversation,
+    // Voice settings
+    voices: tts.voices,
+    voiceURI: tts.voiceURI,
+    setVoiceURI: tts.setVoiceURI,
+    rate: tts.rate,
+    setRate: tts.setRate,
+    pitch: tts.pitch,
+    setPitch: tts.setPitch,
+    previewVoice: tts.previewVoice,
+    ttsSupported: tts.isSupported,
   };
 }
