@@ -136,6 +136,7 @@ export function VoiceSettingsPanel({
   onStabilityChange,
   similarity = 0.75,
   onSimilarityChange,
+  inline = false,
 }: VoiceSettingsPanelProps) {
   const isPremium = provider === "elevenlabs";
 
