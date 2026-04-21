@@ -60,21 +60,23 @@ async function getValidToken(userId: string, provider: string) {
   }
 }
 
-// --- Gmail fetch ---
-async function fetchRecentEmails(accessToken: string, maxResults = 10) {
+// --- Gmail fetch with timeout ---
+async function fetchRecentEmails(accessToken: string, maxResults = 8) {
   try {
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 8000);
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=is:inbox`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
     );
     const listData = await listRes.json();
-    if (!listData.messages?.length) return [];
+    if (!listData.messages?.length) { clearTimeout(timeoutId); return []; }
 
     const emails = await Promise.all(
       listData.messages.slice(0, maxResults).map(async (msg: { id: string }) => {
         const msgRes = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
+          { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
         );
         const msgData = await msgRes.json();
         const headers = msgData.payload?.headers || [];
@@ -91,9 +93,10 @@ async function fetchRecentEmails(accessToken: string, maxResults = 10) {
         };
       })
     );
+    clearTimeout(timeoutId);
     return emails;
   } catch (e) {
-    console.error("Gmail fetch error:", e);
+    console.error("Gmail fetch error or timeout:", e);
     return [];
   }
 }
