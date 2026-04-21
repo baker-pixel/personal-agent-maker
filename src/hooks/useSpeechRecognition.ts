@@ -3,8 +3,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 interface UseSpeechRecognitionOptions {
   onResult?: (transcript: string) => void;
   onEnd?: () => void;
+  onSilenceTimeout?: () => void;
   continuous?: boolean;
   lang?: string;
+  /** Auto-stop after this many ms of no speech results. 0 or undefined disables. */
+  silenceTimeoutMs?: number;
 }
 
 interface SpeechRecognitionReturn {
@@ -19,8 +22,10 @@ interface SpeechRecognitionReturn {
 export function useSpeechRecognition({
   onResult,
   onEnd,
+  onSilenceTimeout,
   continuous = true,
   lang = "en-US",
+  silenceTimeoutMs = 0,
 }: UseSpeechRecognitionOptions = {}): SpeechRecognitionReturn {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -29,6 +34,11 @@ export function useSpeechRecognition({
   const startingRef = useRef(false);
   const lastFinalRef = useRef<string>("");
   const lastFinalAtRef = useRef<number>(0);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silenceTimeoutMsRef = useRef(silenceTimeoutMs);
+  const onSilenceTimeoutRef = useRef(onSilenceTimeout);
+  useEffect(() => { silenceTimeoutMsRef.current = silenceTimeoutMs; }, [silenceTimeoutMs]);
+  useEffect(() => { onSilenceTimeoutRef.current = onSilenceTimeout; }, [onSilenceTimeout]);
 
   const SpeechRecognitionAPI =
     typeof window !== "undefined"
@@ -47,9 +57,17 @@ export function useSpeechRecognition({
     } catch { /* ignore */ }
   }, []);
 
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }, []);
+
   const stopListening = useCallback(() => {
     const rec = recognitionRef.current;
     stoppingRef.current = true;
+    clearSilenceTimer();
     setIsListening(false);
     if (rec) {
       teardown(rec);
@@ -61,7 +79,18 @@ export function useSpeechRecognition({
     recognitionRef.current = null;
     // Clear stopping flag on next tick so a quick re-start isn't blocked.
     setTimeout(() => { stoppingRef.current = false; }, 0);
-  }, [teardown]);
+  }, [teardown, clearSilenceTimer]);
+
+  const armSilenceTimer = useCallback(() => {
+    const ms = silenceTimeoutMsRef.current;
+    if (!ms || ms <= 0) return;
+    clearSilenceTimer();
+    silenceTimerRef.current = setTimeout(() => {
+      silenceTimerRef.current = null;
+      onSilenceTimeoutRef.current?.();
+      stopListening();
+    }, ms);
+  }, [clearSilenceTimer, stopListening]);
 
   const startListening = useCallback(() => {
     if (!SpeechRecognitionAPI) return;
@@ -98,6 +127,8 @@ export function useSpeechRecognition({
 
       const combined = finalTranscript || interimTranscript;
       setTranscript(combined);
+      // Any speech activity (interim or final) resets the silence timer.
+      if (combined) armSilenceTimer();
       if (finalTranscript) {
         const trimmed = finalTranscript.trim();
         const now = Date.now();
@@ -114,6 +145,7 @@ export function useSpeechRecognition({
       if (recognitionRef.current === recognition) {
         recognitionRef.current = null;
       }
+      clearSilenceTimer();
       setIsListening(false);
       if (!stoppingRef.current) onEnd?.();
     };
@@ -122,11 +154,13 @@ export function useSpeechRecognition({
       if (event.error !== "aborted" && event.error !== "no-speech") {
         console.error("Speech recognition error:", event.error);
       }
+      clearSilenceTimer();
       setIsListening(false);
     };
 
     recognition.onstart = () => {
       startingRef.current = false;
+      armSilenceTimer();
     };
 
     recognitionRef.current = recognition;
@@ -141,7 +175,7 @@ export function useSpeechRecognition({
       recognitionRef.current = null;
       setIsListening(false);
     }
-  }, [SpeechRecognitionAPI, continuous, lang, onResult, onEnd, teardown]);
+  }, [SpeechRecognitionAPI, continuous, lang, onResult, onEnd, teardown, armSilenceTimer, clearSilenceTimer]);
 
   const toggleListening = useCallback(() => {
     if (isListening) {
@@ -153,6 +187,7 @@ export function useSpeechRecognition({
 
   useEffect(() => {
     return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       const rec = recognitionRef.current;
       if (rec) {
         teardown(rec);
