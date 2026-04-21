@@ -42,12 +42,11 @@ export function VoicePersonalizationSection() {
     };
   }, []);
 
-  const previewText =
-    "Hi, I'm Normy. This is how I'll sound when I read your briefings out loud.";
-
   const handlePreview = () => {
+    // Unlock audio in the same user-gesture tick (required by iOS / strict
+    // autoplay policies) BEFORE any async work happens inside previewVoice.
     tts.unlockAudio();
-    tts.speak(previewText);
+    tts.previewVoice();
   };
 
   return (
