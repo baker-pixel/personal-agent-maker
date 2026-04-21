@@ -4,21 +4,55 @@ const VOICE_KEY = "normy_tts_voice";
 const RATE_KEY = "normy_tts_rate";
 const PITCH_KEY = "normy_tts_pitch";
 
-export function useTextToSpeech() {
-  const [enabled, setEnabled] = useState(() => {
+interface TtsRemoteOpts {
+  remote?: {
+    voiceURI: string | null;
+    rate: number;
+    pitch: number;
+    enabled: boolean;
+    loaded: boolean;
+  };
+  onChange?: (patch: { tts_voice_uri?: string | null; tts_rate?: number; tts_pitch?: number; tts_enabled?: boolean }) => void;
+}
+
+export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
+  const { remote, onChange } = opts;
+  const [enabled, setEnabledState] = useState(() => {
     return localStorage.getItem("normy_tts_enabled") === "true";
   });
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [voiceURI, setVoiceURI] = useState<string | null>(() => localStorage.getItem(VOICE_KEY));
-  const [rate, setRate] = useState<number>(() => {
+  const [voiceURI, setVoiceURIState] = useState<string | null>(() => localStorage.getItem(VOICE_KEY));
+  const [rate, setRateState] = useState<number>(() => {
     const v = parseFloat(localStorage.getItem(RATE_KEY) || "1.05");
     return isNaN(v) ? 1.05 : v;
   });
-  const [pitch, setPitch] = useState<number>(() => {
+  const [pitch, setPitchState] = useState<number>(() => {
     const v = parseFloat(localStorage.getItem(PITCH_KEY) || "1.0");
     return isNaN(v) ? 1.0 : v;
   });
+
+  // Hydrate from remote prefs once they load (remote wins over localStorage)
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (!remote?.loaded || hydratedRef.current) return;
+    hydratedRef.current = true;
+    setVoiceURIState(remote.voiceURI);
+    setRateState(remote.rate);
+    setPitchState(remote.pitch);
+    setEnabledState(remote.enabled);
+  }, [remote?.loaded, remote?.voiceURI, remote?.rate, remote?.pitch, remote?.enabled]);
+
+  const setEnabled = (v: boolean | ((prev: boolean) => boolean)) => {
+    setEnabledState((prev) => {
+      const next = typeof v === "function" ? (v as (p: boolean) => boolean)(prev) : v;
+      onChange?.({ tts_enabled: next });
+      return next;
+    });
+  };
+  const setVoiceURI = (v: string | null) => { setVoiceURIState(v); onChange?.({ tts_voice_uri: v }); };
+  const setRate = (v: number) => { setRateState(v); onChange?.({ tts_rate: v }); };
+  const setPitch = (v: number) => { setPitchState(v); onChange?.({ tts_pitch: v }); };
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const unlockedRef = useRef(false);
   const keepAliveRef = useRef<number | null>(null);
