@@ -105,12 +105,13 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   }, [agentReply, conversationActive]);
 
   // Watchdog: if conversation is active but nothing is happening (not listening,
-  // not speaking, not thinking), kick off listening again. Prevents the
-  // "stuck on Paused" state when onEnd misses or a restart attempt fails silently.
+  // not speaking, not thinking), kick off listening again. Re-runs on an interval
+  // so a silently-failed start() will be retried until it sticks. Prevents the
+  // "stuck on Paused" state.
   useEffect(() => {
     if (!conversationActive) return;
     if (speech.isListening || tts.isSpeaking || thinking) return;
-    const id = setTimeout(() => {
+    const id = setInterval(() => {
       if (
         conversationActiveRef.current &&
         !ttsSpeakingRef.current &&
@@ -119,8 +120,8 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
       ) {
         try { speechRef.current?.startListening(); } catch { /* ignore */ }
       }
-    }, 600);
-    return () => clearTimeout(id);
+    }, 800);
+    return () => clearInterval(id);
   }, [conversationActive, speech.isListening, tts.isSpeaking, thinking]);
 
   const pwa = usePwaEnvironment();
