@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useSpeechRecognition } from "./useSpeechRecognition";
 import { useTextToSpeech } from "./useTextToSpeech";
 import { usePwaEnvironment } from "./usePwaEnvironment";
+import { useVoicePreferences } from "./useVoicePreferences";
 
 interface UseVoiceConversationOpts {
   onUserUtterance: (text: string) => void;
@@ -18,10 +19,20 @@ interface UseVoiceConversationOpts {
  * - If user starts speaking while TTS is playing, cancels TTS (barge-in)
  */
 export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: UseVoiceConversationOpts) {
+  const voicePrefs = useVoicePreferences();
   const [conversationActive, setConversationActive] = useState(false);
   const conversationActiveRef = useRef(false);
   const lastSpokenReplyRef = useRef<string | null>(null);
-  const tts = useTextToSpeech();
+  const tts = useTextToSpeech({
+    remote: {
+      voiceURI: voicePrefs.prefs.tts_voice_uri,
+      rate: voicePrefs.prefs.tts_rate,
+      pitch: voicePrefs.prefs.tts_pitch,
+      enabled: voicePrefs.prefs.tts_enabled,
+      loaded: voicePrefs.loaded,
+    },
+    onChange: voicePrefs.update,
+  });
   const ttsSpeakingRef = useRef(false);
   ttsSpeakingRef.current = tts.isSpeaking;
 
@@ -82,19 +93,21 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const startConversation = useCallback(() => {
     setConversationActive(true);
     conversationActiveRef.current = true;
+    voicePrefs.update({ voice_conversation_enabled: true });
     // Unlock iOS SpeechSynthesis on the user gesture (required for PWA)
     tts.unlockAudio();
     // Auto-enable TTS for conversation mode
     if (!tts.enabled) tts.toggle();
     try { speech.startListening(); } catch { }
-  }, [speech, tts]);
+  }, [speech, tts, voicePrefs]);
 
   const stopConversation = useCallback(() => {
     setConversationActive(false);
     conversationActiveRef.current = false;
+    voicePrefs.update({ voice_conversation_enabled: false });
     speech.stopListening();
     tts.stop();
-  }, [speech, tts]);
+  }, [speech, tts, voicePrefs]);
 
   const toggleConversation = useCallback(() => {
     if (conversationActive) stopConversation();

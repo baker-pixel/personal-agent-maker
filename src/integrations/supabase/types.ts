@@ -432,8 +432,13 @@ export type Database = {
           phone_number: string | null
           slack_notification_channel_id: string | null
           slack_notification_channel_name: string | null
+          tts_enabled: boolean | null
+          tts_pitch: number | null
+          tts_rate: number | null
+          tts_voice_uri: string | null
           updated_at: string
           user_id: string
+          voice_conversation_enabled: boolean | null
         }
         Insert: {
           agent_name?: string
@@ -442,8 +447,13 @@ export type Database = {
           phone_number?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
+          tts_enabled?: boolean | null
+          tts_pitch?: number | null
+          tts_rate?: number | null
+          tts_voice_uri?: string | null
           updated_at?: string
           user_id: string
+          voice_conversation_enabled?: boolean | null
         }
         Update: {
           agent_name?: string
@@ -452,8 +462,13 @@ export type Database = {
           phone_number?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
+          tts_enabled?: boolean | null
+          tts_pitch?: number | null
+          tts_rate?: number | null
+          tts_voice_uri?: string | null
           updated_at?: string
           user_id?: string
+          voice_conversation_enabled?: boolean | null
         }
         Relationships: []
       }
