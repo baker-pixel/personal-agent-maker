@@ -57,9 +57,17 @@ export function useSpeechRecognition({
     } catch { /* ignore */ }
   }, []);
 
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }, []);
+
   const stopListening = useCallback(() => {
     const rec = recognitionRef.current;
     stoppingRef.current = true;
+    clearSilenceTimer();
     setIsListening(false);
     if (rec) {
       teardown(rec);
@@ -71,7 +79,18 @@ export function useSpeechRecognition({
     recognitionRef.current = null;
     // Clear stopping flag on next tick so a quick re-start isn't blocked.
     setTimeout(() => { stoppingRef.current = false; }, 0);
-  }, [teardown]);
+  }, [teardown, clearSilenceTimer]);
+
+  const armSilenceTimer = useCallback(() => {
+    const ms = silenceTimeoutMsRef.current;
+    if (!ms || ms <= 0) return;
+    clearSilenceTimer();
+    silenceTimerRef.current = setTimeout(() => {
+      silenceTimerRef.current = null;
+      onSilenceTimeoutRef.current?.();
+      stopListening();
+    }, ms);
+  }, [clearSilenceTimer, stopListening]);
 
   const startListening = useCallback(() => {
     if (!SpeechRecognitionAPI) return;
