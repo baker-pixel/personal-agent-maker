@@ -163,6 +163,66 @@ export type Database = {
         }
         Relationships: []
       }
+      contacts: {
+        Row: {
+          company: string | null
+          created_at: string
+          email: string | null
+          enriched_at: string | null
+          id: string
+          interaction_count: number
+          is_vip: boolean
+          last_interaction_at: string | null
+          last_interaction_source: string | null
+          last_interaction_summary: string | null
+          name: string
+          notes: string | null
+          phone: string | null
+          role: string | null
+          tags: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          enriched_at?: string | null
+          id?: string
+          interaction_count?: number
+          is_vip?: boolean
+          last_interaction_at?: string | null
+          last_interaction_source?: string | null
+          last_interaction_summary?: string | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          tags?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          enriched_at?: string | null
+          id?: string
+          interaction_count?: number
+          is_vip?: boolean
+          last_interaction_at?: string | null
+          last_interaction_source?: string | null
+          last_interaction_summary?: string | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          tags?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       daily_briefings: {
         Row: {
           briefing_date: string
