@@ -70,8 +70,8 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
 
   // Stable refs to avoid re-running the speak effect on every render
   const ttsRef = useRef(tts);
-  ttsRef.current = tts;
   const speechRef = useRef(speech);
+  ttsRef.current = tts;
   speechRef.current = speech;
 
   // When a new agent reply comes in, speak it (if conversation active and TTS enabled)
