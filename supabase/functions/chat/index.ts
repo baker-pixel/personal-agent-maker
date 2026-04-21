@@ -61,12 +61,13 @@ async function getValidToken(userId: string, provider: string) {
 }
 
 // --- Gmail fetch with timeout ---
-async function fetchRecentEmails(accessToken: string, maxResults = 8) {
+async function fetchRecentEmails(accessToken: string, maxResults = 30) {
   try {
     const ctrl = new AbortController();
-    const timeoutId = setTimeout(() => ctrl.abort(), 8000);
+    const timeoutId = setTimeout(() => ctrl.abort(), 10000);
+    // Pull last ~2 days so the agent can answer about earlier-today emails (lunch, morning, etc.)
     const listRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=is:inbox`,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=in:inbox newer_than:2d`,
       { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
     );
     const listData = await listRes.json();
