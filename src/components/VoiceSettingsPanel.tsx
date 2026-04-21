@@ -1,11 +1,14 @@
-import { Settings2, Play } from "lucide-react";
+import { useMemo } from "react";
+import { Settings2, Play, Sparkles } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -20,6 +23,78 @@ interface VoiceSettingsPanelProps {
   onPitchChange: (v: number) => void;
   onPreview: () => void;
   isSupported: boolean;
+  // New: STT language
+  sttLanguage?: string;
+  onSttLanguageChange?: (lang: string) => void;
+}
+
+// Common dictation languages for the STT picker.
+const STT_LANGUAGES: { code: string; label: string }[] = [
+  { code: "en-US", label: "English (US)" },
+  { code: "en-GB", label: "English (UK)" },
+  { code: "en-AU", label: "English (Australia)" },
+  { code: "en-CA", label: "English (Canada)" },
+  { code: "en-IN", label: "English (India)" },
+  { code: "es-ES", label: "Spanish (Spain)" },
+  { code: "es-MX", label: "Spanish (Mexico)" },
+  { code: "fr-FR", label: "French (France)" },
+  { code: "fr-CA", label: "French (Canada)" },
+  { code: "de-DE", label: "German" },
+  { code: "it-IT", label: "Italian" },
+  { code: "pt-BR", label: "Portuguese (Brazil)" },
+  { code: "pt-PT", label: "Portuguese (Portugal)" },
+  { code: "nl-NL", label: "Dutch" },
+  { code: "sv-SE", label: "Swedish" },
+  { code: "da-DK", label: "Danish" },
+  { code: "no-NO", label: "Norwegian" },
+  { code: "fi-FI", label: "Finnish" },
+  { code: "pl-PL", label: "Polish" },
+  { code: "ja-JP", label: "Japanese" },
+  { code: "ko-KR", label: "Korean" },
+  { code: "zh-CN", label: "Chinese (Mandarin)" },
+  { code: "zh-TW", label: "Chinese (Taiwan)" },
+  { code: "hi-IN", label: "Hindi" },
+  { code: "ar-SA", label: "Arabic" },
+  { code: "tr-TR", label: "Turkish" },
+  { code: "ru-RU", label: "Russian" },
+];
+
+// Tone presets — friendly defaults that map to rate/pitch combos.
+const TONE_PRESETS = [
+  { id: "professional", label: "Professional", rate: 1.0, pitch: 1.0 },
+  { id: "warm", label: "Warm", rate: 0.95, pitch: 0.95 },
+  { id: "energetic", label: "Energetic", rate: 1.15, pitch: 1.1 },
+  { id: "calm", label: "Calm", rate: 0.9, pitch: 0.9 },
+  { id: "fast", label: "Fast briefing", rate: 1.3, pitch: 1.0 },
+];
+
+const LANG_DISPLAY: Record<string, string> = {
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  it: "Italian",
+  pt: "Portuguese",
+  nl: "Dutch",
+  sv: "Swedish",
+  da: "Danish",
+  no: "Norwegian",
+  fi: "Finnish",
+  pl: "Polish",
+  ja: "Japanese",
+  ko: "Korean",
+  zh: "Chinese",
+  hi: "Hindi",
+  ar: "Arabic",
+  tr: "Turkish",
+  ru: "Russian",
+};
+
+function languageGroupLabel(lang: string): string {
+  const base = lang.split("-")[0].toLowerCase();
+  const region = lang.split("-")[1];
+  const baseName = LANG_DISPLAY[base] || lang;
+  return region ? `${baseName} (${region})` : baseName;
 }
 
 export function VoiceSettingsPanel({
@@ -32,9 +107,36 @@ export function VoiceSettingsPanel({
   onPitchChange,
   onPreview,
   isSupported,
+  sttLanguage,
+  onSttLanguageChange,
 }: VoiceSettingsPanelProps) {
-  const englishVoices = voices.filter((v) => v.lang.toLowerCase().startsWith("en"));
-  const otherVoices = voices.filter((v) => !v.lang.toLowerCase().startsWith("en"));
+  // Group voices by language tag (e.g. "en-US", "fr-FR"). Sort: English first, then alpha.
+  const voiceGroups = useMemo(() => {
+    const groups = new Map<string, SpeechSynthesisVoice[]>();
+    for (const v of voices) {
+      const key = v.lang || "other";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(v);
+    }
+    const entries = Array.from(groups.entries());
+    entries.sort(([a], [b]) => {
+      const aEn = a.toLowerCase().startsWith("en");
+      const bEn = b.toLowerCase().startsWith("en");
+      if (aEn && !bEn) return -1;
+      if (bEn && !aEn) return 1;
+      return a.localeCompare(b);
+    });
+    // Sort voices inside each group alphabetically.
+    for (const [, list] of entries) list.sort((a, b) => a.name.localeCompare(b.name));
+    return entries;
+  }, [voices]);
+
+  const applyPreset = (id: string) => {
+    const preset = TONE_PRESETS.find((p) => p.id === id);
+    if (!preset) return;
+    onRateChange(preset.rate);
+    onPitchChange(preset.pitch);
+  };
 
   return (
     <Popover>
@@ -46,12 +148,12 @@ export function VoiceSettingsPanel({
           <Settings2 className="w-4 h-4" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
+      <PopoverContent align="end" className="w-80 max-h-[80vh] overflow-y-auto">
         <div className="space-y-4">
           <div>
             <h4 className="font-display text-sm font-semibold text-foreground">Voice settings</h4>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Choose how Normy sounds when speaking.
+              Personalize how Normy sounds and which language you speak in.
             </p>
           </div>
 
@@ -61,8 +163,28 @@ export function VoiceSettingsPanel({
             </p>
           ) : (
             <>
+              {/* Tone presets */}
               <div className="space-y-1.5">
-                <Label className="text-xs">Voice</Label>
+                <Label className="text-xs flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3" />
+                  Tone presets
+                </Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {TONE_PRESETS.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => applyPreset(p.id)}
+                      className="text-xs px-2.5 py-1 rounded-full bg-muted hover:bg-accent hover:text-accent-foreground transition-colors"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Voice picker grouped by language/accent */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Voice & accent</Label>
                 <Select
                   value={voiceURI ?? undefined}
                   onValueChange={onVoiceChange}
@@ -71,27 +193,44 @@ export function VoiceSettingsPanel({
                     <SelectValue placeholder={voices.length ? "Default" : "Loading voices…"} />
                   </SelectTrigger>
                   <SelectContent className="max-h-72">
-                    {englishVoices.length > 0 && (
-                      <>
-                        {englishVoices.map((v) => (
+                    {voiceGroups.map(([lang, list]) => (
+                      <SelectGroup key={lang}>
+                        <SelectLabel className="text-xs">{languageGroupLabel(lang)}</SelectLabel>
+                        {list.map((v) => (
                           <SelectItem key={v.voiceURI} value={v.voiceURI} className="text-sm">
-                            {v.name} <span className="text-muted-foreground">({v.lang})</span>
+                            {v.name}
                           </SelectItem>
                         ))}
-                      </>
-                    )}
-                    {otherVoices.length > 0 && (
-                      <>
-                        {otherVoices.map((v) => (
-                          <SelectItem key={v.voiceURI} value={v.voiceURI} className="text-sm">
-                            {v.name} <span className="text-muted-foreground">({v.lang})</span>
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
+                      </SelectGroup>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* STT language picker */}
+              {onSttLanguageChange && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">I'll speak in…</Label>
+                  <Select
+                    value={sttLanguage ?? "en-US"}
+                    onValueChange={onSttLanguageChange}
+                  >
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {STT_LANGUAGES.map((l) => (
+                        <SelectItem key={l.code} value={l.code} className="text-sm">
+                          {l.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    The language Normy listens for when you talk.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

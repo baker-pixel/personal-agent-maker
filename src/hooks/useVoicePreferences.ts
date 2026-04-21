@@ -7,6 +7,7 @@ export interface VoicePrefs {
   tts_pitch: number;
   tts_enabled: boolean;
   voice_conversation_enabled: boolean;
+  stt_language: string;
 }
 
 const DEFAULTS: VoicePrefs = {
@@ -15,6 +16,7 @@ const DEFAULTS: VoicePrefs = {
   tts_pitch: 1.0,
   tts_enabled: false,
   voice_conversation_enabled: false,
+  stt_language: "en-US",
 };
 
 /**
@@ -37,7 +39,7 @@ export function useVoicePreferences() {
       setUserId(user.id);
       const { data } = await supabase
         .from("user_preferences")
-        .select("tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled")
+        .select("tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language")
         .eq("user_id", user.id)
         .maybeSingle();
       if (cancelled) return;
@@ -48,6 +50,7 @@ export function useVoicePreferences() {
           tts_pitch: data.tts_pitch != null ? Number(data.tts_pitch) : DEFAULTS.tts_pitch,
           tts_enabled: !!data.tts_enabled,
           voice_conversation_enabled: !!data.voice_conversation_enabled,
+          stt_language: (data as any).stt_language ?? DEFAULTS.stt_language,
         });
       }
       setLoaded(true);
@@ -71,7 +74,8 @@ export function useVoicePreferences() {
             tts_pitch: next.tts_pitch,
             tts_enabled: next.tts_enabled,
             voice_conversation_enabled: next.voice_conversation_enabled,
-          },
+            stt_language: next.stt_language,
+          } as any,
           { onConflict: "user_id" }
         );
     }, 400) as unknown as number;
