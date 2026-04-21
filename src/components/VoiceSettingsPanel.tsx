@@ -41,6 +41,8 @@ interface VoiceSettingsPanelProps {
   onStabilityChange?: (v: number) => void;
   similarity?: number;
   onSimilarityChange?: (v: number) => void;
+  // Layout: when true, render controls inline (no popover wrapper)
+  inline?: boolean;
 }
 
 // Common dictation languages for the STT picker.
