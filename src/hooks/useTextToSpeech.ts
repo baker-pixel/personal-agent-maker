@@ -20,8 +20,49 @@ export function useTextToSpeech() {
     return isNaN(v) ? 1.0 : v;
   });
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const unlockedRef = useRef(false);
+  const keepAliveRef = useRef<number | null>(null);
 
   const isSupported = typeof window !== "undefined" && "speechSynthesis" in window;
+
+  /**
+   * iOS (Safari + standalone PWA) requires SpeechSynthesis to be "unlocked"
+   * by a user gesture before it will produce audio. We speak an empty/silent
+   * utterance the first time the user interacts with voice.
+   */
+  const unlockAudio = useCallback(() => {
+    if (!isSupported || unlockedRef.current) return;
+    try {
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0;
+      u.rate = 1;
+      window.speechSynthesis.speak(u);
+      unlockedRef.current = true;
+    } catch {
+      /* ignore */
+    }
+  }, [isSupported]);
+
+  /**
+   * iOS pauses the SpeechSynthesis queue after ~15s. A periodic pause/resume
+   * "keep-alive" prevents truncation of long utterances.
+   */
+  useEffect(() => {
+    if (!isSupported) return;
+    keepAliveRef.current = window.setInterval(() => {
+      try {
+        if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        }
+      } catch {
+        /* ignore */
+      }
+    }, 10000) as unknown as number;
+    return () => {
+      if (keepAliveRef.current) window.clearInterval(keepAliveRef.current);
+    };
+  }, [isSupported]);
 
   useEffect(() => {
     localStorage.setItem("normy_tts_enabled", String(enabled));
@@ -145,6 +186,7 @@ export function useTextToSpeech() {
     speak,
     stop,
     toggle,
+    unlockAudio,
     voices,
     voiceURI,
     setVoiceURI,
