@@ -415,6 +415,108 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_rules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          label: string | null
+          pattern: string
+          priority: number
+          rule_type: Database["public"]["Enums"]["lead_rule_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          label?: string | null
+          pattern: string
+          priority?: number
+          rule_type: Database["public"]["Enums"]["lead_rule_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          label?: string | null
+          pattern?: string
+          priority?: number
+          rule_type?: Database["public"]["Enums"]["lead_rule_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      leads: {
+        Row: {
+          confidence: number
+          created_at: string
+          draft_id: string | null
+          from_email: string
+          from_name: string | null
+          gmail_message_id: string | null
+          id: string
+          notes: string | null
+          nudged_at: string | null
+          received_at: string
+          responded_at: string | null
+          snippet: string | null
+          source: string | null
+          source_type: string
+          status: Database["public"]["Enums"]["lead_status"]
+          subject: string | null
+          thread_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          draft_id?: string | null
+          from_email: string
+          from_name?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          notes?: string | null
+          nudged_at?: string | null
+          received_at?: string
+          responded_at?: string | null
+          snippet?: string | null
+          source?: string | null
+          source_type?: string
+          status?: Database["public"]["Enums"]["lead_status"]
+          subject?: string | null
+          thread_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          draft_id?: string | null
+          from_email?: string
+          from_name?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          notes?: string | null
+          nudged_at?: string | null
+          received_at?: string
+          responded_at?: string | null
+          snippet?: string | null
+          source?: string | null
+          source_type?: string
+          status?: Database["public"]["Enums"]["lead_status"]
+          subject?: string | null
+          thread_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       scheduling_preferences: {
         Row: {
           block_lunch: boolean
@@ -587,7 +689,14 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      lead_rule_type: "sender_domain" | "subject_keyword" | "recipient_inbox"
+      lead_status:
+        | "new"
+        | "drafted"
+        | "responded"
+        | "qualified"
+        | "closed"
+        | "archived"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -714,6 +823,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      lead_rule_type: ["sender_domain", "subject_keyword", "recipient_inbox"],
+      lead_status: [
+        "new",
+        "drafted",
+        "responded",
+        "qualified",
+        "closed",
+        "archived",
+      ],
+    },
   },
 } as const
