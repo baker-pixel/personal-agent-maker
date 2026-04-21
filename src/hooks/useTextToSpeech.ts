@@ -20,8 +20,11 @@ export function useTextToSpeech() {
     setIsSpeaking(false);
   }, [isSupported]);
 
-  const speak = useCallback((text: string) => {
-    if (!isSupported || !enabled) return;
+  const speak = useCallback((text: string, onComplete?: () => void) => {
+    if (!isSupported || !enabled) {
+      onComplete?.();
+      return;
+    }
 
     // Strip markdown formatting for cleaner speech
     const clean = text
