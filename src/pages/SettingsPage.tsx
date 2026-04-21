@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, MessageSquare, Mail, Eye, EyeOff, Check, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import EmailTriageSettings from "@/components/EmailTriageSettings";
+import { VoicePersonalizationSection } from "@/components/VoicePersonalizationSection";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -409,6 +410,8 @@ export default function Settings() {
         </section>
 
         <EmailTriageSettings />
+
+        <VoicePersonalizationSection />
 
         <section className="space-y-3">
           <div className="flex items-center gap-2">
