@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Mic, MicOff, Send, Loader2, Plus, PanelLeft } from "lucide-react";
+import { ArrowLeft, Mic, MicOff, Send, Loader2, Plus, PanelLeft, Volume2, VolumeX, PhoneOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useAnnieChat } from "@/hooks/useAnnieChat";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useVoiceConversation } from "@/hooks/useVoiceConversation";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
 import { DelegateSidebar } from "@/components/chat/DelegateSidebar";
 import ReactMarkdown from "react-markdown";
@@ -19,8 +19,24 @@ export default function DecisionVoice() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const chat = useAnnieChat(agentName);
-  const speech = useSpeechRecognition({
-    onResult: (text) => setInput((prev) => (prev ? prev + " " : "") + text),
+
+  // Latest agent reply (used to trigger TTS)
+  const latestAgentReply = useMemo(() => {
+    for (let i = chat.messages.length - 1; i >= 0; i--) {
+      if (chat.messages[i].role === "agent") {
+        // Strip code blocks (e.g. draft-json) before speaking
+        return chat.messages[i].text.replace(/```[\s\S]*?```/g, "").trim();
+      }
+    }
+    return null;
+  }, [chat.messages]);
+
+  const voice = useVoiceConversation({
+    onUserUtterance: (text) => {
+      chat.send(text);
+    },
+    agentReply: chat.thinking ? null : latestAgentReply,
+    thinking: chat.thinking,
   });
 
   useEffect(() => {
@@ -29,7 +45,6 @@ export default function DecisionVoice() {
 
   const handleSend = () => {
     if (!input.trim()) return;
-    speech.stopListening();
     chat.send(input.trim());
     setInput("");
   };
@@ -53,11 +68,12 @@ export default function DecisionVoice() {
             <button
               onClick={() => setSidebarOpen(true)}
               className="flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors lg:hidden mr-1"
+              aria-label="Open conversations"
             >
               <PanelLeft className="w-4 h-4" />
             </button>
             <button
-              onClick={() => navigate("/mode-select")}
+              onClick={() => { voice.stopConversation(); navigate("/mode-select"); }}
               className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -65,7 +81,14 @@ export default function DecisionVoice() {
             </button>
             <div className="flex-1" />
             <button
-              onClick={chat.reset}
+              onClick={voice.toggleTts}
+              title={voice.ttsEnabled ? "Mute Normy's voice" : "Unmute Normy's voice"}
+              className="flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors mr-1"
+            >
+              {voice.ttsEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => { voice.stopConversation(); chat.reset(); }}
               className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-accent/50"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -81,7 +104,7 @@ export default function DecisionVoice() {
             </div>
           )}
 
-          {!chat.loading && chat.messages.length === 0 && !chat.thinking && !speech.isListening && (
+          {!chat.loading && chat.messages.length === 0 && !chat.thinking && !voice.isListening && !voice.conversationActive && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -90,9 +113,30 @@ export default function DecisionVoice() {
               <div className="w-14 h-14 rounded-full bg-accent flex items-center justify-center text-accent-foreground font-bold text-xl mb-4">
                 {agentName.charAt(0)}
               </div>
-              <p className="font-display text-lg font-semibold text-foreground mb-1">I'm listening</p>
+              <p className="font-display text-lg font-semibold text-foreground mb-1">Ready to chat</p>
+              <p className="text-sm text-muted-foreground max-w-xs mb-6">
+                Tap the call button to start a hands-free conversation with {agentName}, or type below.
+              </p>
+              <p className="text-xs text-muted-foreground/70 max-w-xs">
+                Tip: on iPhone, set up "Hey Siri, talk to {agentName}" — see <a href="/normy-siri-shortcut.txt" target="_blank" rel="noreferrer" className="underline hover:text-foreground">setup guide</a>.
+              </p>
+            </motion.div>
+          )}
+
+          {voice.conversationActive && chat.messages.length === 0 && !chat.thinking && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex flex-col items-center justify-center h-full text-center pt-20"
+            >
+              <div className={`w-20 h-20 rounded-full bg-accent flex items-center justify-center text-accent-foreground font-bold text-2xl mb-4 transition-all ${voice.isListening ? "animate-pulse shadow-lg shadow-accent/40" : voice.isSpeaking ? "shadow-lg shadow-primary/40" : ""}`}>
+                {agentName.charAt(0)}
+              </div>
+              <p className="font-display text-lg font-semibold text-foreground mb-1">
+                {voice.isSpeaking ? `${agentName} is speaking…` : voice.isListening ? "Listening…" : "Ready"}
+              </p>
               <p className="text-sm text-muted-foreground max-w-xs">
-                Tap the mic and tell {agentName} what you need. {agentName} will think it through for you.
+                Just talk. {agentName} will reply out loud — you can interrupt anytime.
               </p>
             </motion.div>
           )}
@@ -137,28 +181,48 @@ export default function DecisionVoice() {
         </div>
 
         <div className="border-t bg-background sticky bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
+          {voice.conversationActive && (
+            <div className="container max-w-lg flex items-center justify-center gap-2 pt-3 px-4">
+              <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full ${
+                voice.isSpeaking
+                  ? "bg-primary/10 text-primary"
+                  : voice.isListening
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-muted text-muted-foreground"
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${voice.isSpeaking ? "bg-primary" : voice.isListening ? "bg-destructive animate-pulse" : "bg-muted-foreground"}`} />
+                {voice.isSpeaking ? `${agentName} speaking` : voice.isListening ? "Listening — interrupt anytime" : chat.thinking ? "Thinking…" : "Paused"}
+              </div>
+            </div>
+          )}
           <div className="container max-w-lg flex items-center gap-2 py-3 px-4">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder={speech.isListening ? "Listening..." : `Or type here...`}
+              placeholder={voice.conversationActive ? "Or type instead…" : "Type a message…"}
               className="flex-1"
             />
-            <VoiceWaveform isActive={speech.isListening} />
+            <VoiceWaveform isActive={voice.isListening} />
             <button
-              onClick={speech.isSupported ? speech.toggleListening : undefined}
-              disabled={!speech.isSupported}
-              title={!speech.isSupported ? "Voice input is not supported in this browser. Try Chrome or Edge." : speech.isListening ? "Stop listening" : "Start listening"}
+              onClick={voice.isSupported ? voice.toggleConversation : undefined}
+              disabled={!voice.isSupported}
+              title={
+                !voice.isSupported
+                  ? "Voice is not supported in this browser. Try Chrome, Edge, or Safari."
+                  : voice.conversationActive
+                    ? "End voice conversation"
+                    : `Start hands-free conversation with ${agentName}`
+              }
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 ${
-                !speech.isSupported
+                !voice.isSupported
                   ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
-                  : speech.isListening
-                    ? "bg-destructive text-destructive-foreground animate-pulse shadow-lg shadow-destructive/30"
+                  : voice.conversationActive
+                    ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30"
                     : "bg-accent text-accent-foreground shadow-md shadow-accent/20"
               }`}
             >
-              {speech.isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              {voice.conversationActive ? <PhoneOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
             {input.trim() && (
               <button
