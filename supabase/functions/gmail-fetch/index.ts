@@ -160,9 +160,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // List emails
-    const maxResults = url.searchParams.get("maxResults") || "20";
-    const query = url.searchParams.get("q") || "is:inbox";
+    // List emails — pull a wider window so the agent can answer about emails from earlier today
+    const maxResults = url.searchParams.get("maxResults") || "50";
+    const query = url.searchParams.get("q") || "in:inbox newer_than:2d";
 
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const messageIds = listData.messages.slice(0, 10);
+    const messageIds = listData.messages.slice(0, 40);
     const emails = await Promise.all(
       messageIds.map(async (msg: { id: string }) => {
         const msgRes = await fetch(
