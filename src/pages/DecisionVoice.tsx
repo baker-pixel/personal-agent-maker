@@ -10,6 +10,7 @@ import { DelegateSidebar } from "@/components/chat/DelegateSidebar";
 import ReactMarkdown from "react-markdown";
 import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 import { useAgent } from "@/contexts/AgentContext";
+import { VoiceSettingsPanel } from "@/components/VoiceSettingsPanel";
 
 export default function DecisionVoice() {
   const navigate = useNavigate();
@@ -87,6 +88,17 @@ export default function DecisionVoice() {
             >
               {voice.ttsEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </button>
+            <VoiceSettingsPanel
+              voices={voice.voices}
+              voiceURI={voice.voiceURI}
+              onVoiceChange={voice.setVoiceURI}
+              rate={voice.rate}
+              onRateChange={voice.setRate}
+              pitch={voice.pitch}
+              onPitchChange={voice.setPitch}
+              onPreview={voice.previewVoice}
+              isSupported={voice.ttsSupported}
+            />
             <button
               onClick={() => { voice.stopConversation(); chat.reset(); }}
               className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-accent/50"

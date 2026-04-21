@@ -1,10 +1,24 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
+const VOICE_KEY = "normy_tts_voice";
+const RATE_KEY = "normy_tts_rate";
+const PITCH_KEY = "normy_tts_pitch";
+
 export function useTextToSpeech() {
   const [enabled, setEnabled] = useState(() => {
     return localStorage.getItem("normy_tts_enabled") === "true";
   });
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceURI, setVoiceURI] = useState<string | null>(() => localStorage.getItem(VOICE_KEY));
+  const [rate, setRate] = useState<number>(() => {
+    const v = parseFloat(localStorage.getItem(RATE_KEY) || "1.05");
+    return isNaN(v) ? 1.05 : v;
+  });
+  const [pitch, setPitch] = useState<number>(() => {
+    const v = parseFloat(localStorage.getItem(PITCH_KEY) || "1.0");
+    return isNaN(v) ? 1.0 : v;
+  });
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const isSupported = typeof window !== "undefined" && "speechSynthesis" in window;
@@ -13,6 +27,32 @@ export function useTextToSpeech() {
     localStorage.setItem("normy_tts_enabled", String(enabled));
   }, [enabled]);
 
+  useEffect(() => {
+    if (voiceURI) localStorage.setItem(VOICE_KEY, voiceURI);
+  }, [voiceURI]);
+
+  useEffect(() => {
+    localStorage.setItem(RATE_KEY, String(rate));
+  }, [rate]);
+
+  useEffect(() => {
+    localStorage.setItem(PITCH_KEY, String(pitch));
+  }, [pitch]);
+
+  // Load voices (async in some browsers)
+  useEffect(() => {
+    if (!isSupported) return;
+    const load = () => {
+      const list = window.speechSynthesis.getVoices();
+      if (list.length) setVoices(list);
+    };
+    load();
+    window.speechSynthesis.onvoiceschanged = load;
+    return () => {
+      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, [isSupported]);
+
   const stop = useCallback(() => {
     if (isSupported) {
       window.speechSynthesis.cancel();
@@ -20,13 +60,25 @@ export function useTextToSpeech() {
     setIsSpeaking(false);
   }, [isSupported]);
 
+  const pickVoice = useCallback((): SpeechSynthesisVoice | undefined => {
+    if (!voices.length) return undefined;
+    if (voiceURI) {
+      const match = voices.find((v) => v.voiceURI === voiceURI);
+      if (match) return match;
+    }
+    return (
+      voices.find((v) => v.lang.startsWith("en") && v.name.includes("Google")) ||
+      voices.find((v) => v.lang.startsWith("en") && !v.localService) ||
+      voices.find((v) => v.lang.startsWith("en"))
+    );
+  }, [voices, voiceURI]);
+
   const speak = useCallback((text: string, onComplete?: () => void) => {
     if (!isSupported || !enabled) {
       onComplete?.();
       return;
     }
 
-    // Strip markdown formatting for cleaner speech
     const clean = text
       .replace(/#{1,6}\s/g, "")
       .replace(/\*\*(.+?)\*\*/g, "$1")
@@ -48,18 +100,10 @@ export function useTextToSpeech() {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.rate = 1.05;
-    utterance.pitch = 1.0;
+    utterance.rate = rate;
+    utterance.pitch = pitch;
 
-    // Try to pick a good voice
-    const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(
-      (v) => v.lang.startsWith("en") && v.name.includes("Google")
-    ) || voices.find(
-      (v) => v.lang.startsWith("en") && !v.localService
-    ) || voices.find(
-      (v) => v.lang.startsWith("en")
-    );
+    const preferred = pickVoice();
     if (preferred) utterance.voice = preferred;
 
     utterance.onstart = () => setIsSpeaking(true);
@@ -68,7 +112,7 @@ export function useTextToSpeech() {
 
     utteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
-  }, [isSupported, enabled]);
+  }, [isSupported, enabled, rate, pitch, pickVoice]);
 
   const toggle = useCallback(() => {
     setEnabled((prev) => {
@@ -80,5 +124,34 @@ export function useTextToSpeech() {
     });
   }, []);
 
-  return { enabled, isSpeaking, isSupported, speak, stop, toggle };
+  const previewVoice = useCallback(() => {
+    if (!isSupported) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance("Hi, I'm Normy. This is how I'll sound when we talk.");
+    u.rate = rate;
+    u.pitch = pitch;
+    const preferred = pickVoice();
+    if (preferred) u.voice = preferred;
+    u.onstart = () => setIsSpeaking(true);
+    u.onend = () => setIsSpeaking(false);
+    u.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(u);
+  }, [isSupported, rate, pitch, pickVoice]);
+
+  return {
+    enabled,
+    isSpeaking,
+    isSupported,
+    speak,
+    stop,
+    toggle,
+    voices,
+    voiceURI,
+    setVoiceURI,
+    rate,
+    setRate,
+    pitch,
+    setPitch,
+    previewVoice,
+  };
 }
