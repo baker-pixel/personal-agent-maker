@@ -210,10 +210,24 @@ serve(async (req) => {
           getValidToken(user.id, "google-calendar"),
         ]);
 
-        const [emails, events] = await Promise.all([
+        const adminForContacts = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        );
+
+        const [emails, events, contactsRes] = await Promise.all([
           gmailToken ? fetchRecentEmails(gmailToken, 8) : [],
           calToken ? fetchEvents(calToken, 7) : [],
+          adminForContacts
+            .from("contacts")
+            .select("name, email, company, role, notes, is_vip, last_interaction_at, last_interaction_summary, interaction_count")
+            .eq("user_id", user.id)
+            .order("is_vip", { ascending: false })
+            .order("last_interaction_at", { ascending: false, nullsFirst: false })
+            .limit(60),
         ]);
+
+        const contacts = contactsRes.data || [];
 
         if (emails.length > 0) {
           realDataContext += "\n\n--- REAL INBOX DATA (from user's actual Gmail) ---\n";
@@ -245,6 +259,15 @@ Location: ${e.location || "None"}\n`;
           }
 
           realDataContext += "\n--- END CALENDAR DATA ---\n";
+        }
+
+        if (contacts.length > 0) {
+          realDataContext += "\n\n--- CONTACT INTELLIGENCE (people the user knows) ---\n";
+          contacts.forEach((c: any) => {
+            const last = c.last_interaction_at ? new Date(c.last_interaction_at).toLocaleDateString() : "unknown";
+            realDataContext += `• ${c.name}${c.is_vip ? " ⭐VIP" : ""} <${c.email || "no-email"}>${c.role ? ` — ${c.role}` : ""}${c.company ? ` @ ${c.company}` : ""} | last: ${last} (${c.interaction_count}x)${c.notes ? ` | notes: ${c.notes}` : ""}${c.last_interaction_summary ? ` | recent: ${c.last_interaction_summary}` : ""}\n`;
+          });
+          realDataContext += "--- END CONTACTS ---\n";
         }
 
         if (!gmailToken && !calToken) {
