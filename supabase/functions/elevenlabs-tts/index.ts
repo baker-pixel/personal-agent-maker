@@ -16,6 +16,9 @@ interface TtsBody {
 const DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL"; // Sarah
 const DEFAULT_MODEL = "eleven_multilingual_v2";
 
+const clamp = (v: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, Number.isFinite(v) ? v : min));
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -59,11 +62,12 @@ Deno.serve(async (req) => {
           text,
           model_id: modelId,
           voice_settings: {
-            stability: body.stability ?? 0.5,
-            similarity_boost: body.similarity_boost ?? 0.75,
-            style: body.style ?? 0.3,
+            stability: clamp(body.stability ?? 0.5, 0, 1),
+            similarity_boost: clamp(body.similarity_boost ?? 0.75, 0, 1),
+            style: clamp(body.style ?? 0.3, 0, 1),
             use_speaker_boost: true,
-            speed: body.speed ?? 1.0,
+            // ElevenLabs requires speed between 0.7 and 1.2
+            speed: clamp(body.speed ?? 1.0, 0.7, 1.2),
           },
         }),
       }
