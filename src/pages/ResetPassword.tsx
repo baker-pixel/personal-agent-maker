@@ -15,31 +15,41 @@ export default function ResetPassword() {
   const [resetComplete, setResetComplete] = useState(false);
 
   useEffect(() => {
-    // Wait for the recovery session to be fully established
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+    let cancelled = false;
+
+    // Subscribe FIRST so we don't miss PASSWORD_RECOVERY / SIGNED_IN events
+    // that fire while Supabase processes the recovery hash from the URL.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      if (event === "PASSWORD_RECOVERY" || (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED"))) {
         setSessionReady(true);
-      } else {
-        // Listen for the session to appear (recovery token processing)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          (_event, session) => {
-            if (session) {
-              setSessionReady(true);
-              subscription.unsubscribe();
-            }
-          }
-        );
-        // Timeout after 10s
-        setTimeout(() => {
-          if (!sessionReady) {
-            toast({ title: "Session expired", description: "Please request a new reset link.", variant: "destructive" });
-            navigate("/auth");
-          }
-        }, 10000);
       }
+    });
+
+    // Then check for an already-established session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      if (session) setSessionReady(true);
+    });
+
+    // Fallback timeout — only redirects if no session ever materializes
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      setSessionReady((ready) => {
+        if (!ready) {
+          toast({ title: "Reset link expired", description: "Please request a new password reset link.", variant: "destructive" });
+          navigate("/auth");
+        }
+        return ready;
+      });
+    }, 15000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      subscription.unsubscribe();
     };
-    checkSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleReset = async (e: React.FormEvent) => {
