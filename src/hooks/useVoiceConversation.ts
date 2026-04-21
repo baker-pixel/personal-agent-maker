@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSpeechRecognition } from "./useSpeechRecognition";
 import { useTextToSpeech } from "./useTextToSpeech";
+import { usePwaEnvironment } from "./usePwaEnvironment";
 
 interface UseVoiceConversationOpts {
   onUserUtterance: (text: string) => void;
@@ -76,9 +77,13 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     }
   }, [agentReply, conversationActive, tts, speech]);
 
+  const pwa = usePwaEnvironment();
+
   const startConversation = useCallback(() => {
     setConversationActive(true);
     conversationActiveRef.current = true;
+    // Unlock iOS SpeechSynthesis on the user gesture (required for PWA)
+    tts.unlockAudio();
     // Auto-enable TTS for conversation mode
     if (!tts.enabled) tts.toggle();
     try { speech.startListening(); } catch { }
@@ -117,5 +122,9 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     setPitch: tts.setPitch,
     previewVoice: tts.previewVoice,
     ttsSupported: tts.isSupported,
+    // PWA environment flags
+    isStandalone: pwa.isStandalone,
+    isIOS: pwa.isIOS,
+    speechRecognitionBlockedByPwa: pwa.speechRecognitionBlockedByPwa,
   };
 }
