@@ -204,29 +204,47 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const speakElevenLabs = useCallback(async (text: string, onComplete?: () => void) => {
     try {
       setIsSpeaking(true);
-      const { data, error } = await supabase.functions.invoke("elevenlabs-tts", {
-        body: {
+      // Use direct fetch (not supabase.functions.invoke) because the SDK
+      // tries to JSON-parse responses, which corrupts binary audio.
+      const { data: { session } } = await supabase.auth.getSession();
+      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
+      const anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const res = await fetch(`${supabaseUrl}/functions/v1/elevenlabs-tts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": anonKey,
+          "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
+        },
+        body: JSON.stringify({
           text,
           voice_id: elevenlabsVoiceId,
           model_id: elevenlabsModelId,
           stability,
           similarity_boost: similarity,
           speed: rate,
-        },
+        }),
       });
-      if (error) throw error;
-      // data is a Blob (binary response from edge function)
-      const blob = data instanceof Blob ? data : new Blob([data as ArrayBuffer], { type: "audio/mpeg" });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Premium TTS failed (${res.status}): ${errText}`);
+      }
+      const blob = await res.blob();
+      console.log("[ElevenLabs TTS] received", blob.size, "bytes,", blob.type);
       const url = URL.createObjectURL(blob);
       if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = url;
       if (!audioRef.current) audioRef.current = new Audio();
       audioRef.current.src = url;
       audioRef.current.onended = () => { setIsSpeaking(false); onComplete?.(); };
-      audioRef.current.onerror = () => { setIsSpeaking(false); onComplete?.(); };
+      audioRef.current.onerror = (e) => {
+        console.error("[ElevenLabs TTS] audio playback error", e);
+        setIsSpeaking(false);
+        onComplete?.();
+      };
       await audioRef.current.play();
     } catch (e) {
-      console.error("ElevenLabs TTS failed, falling back to browser:", e);
+      console.error("[ElevenLabs TTS] failed, falling back to browser:", e);
       setIsSpeaking(false);
       // Fallback to browser TTS so the user still hears something
       speakBrowser(text, onComplete);
