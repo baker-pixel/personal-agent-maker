@@ -60,21 +60,23 @@ async function getValidToken(userId: string, provider: string) {
   }
 }
 
-// --- Gmail fetch ---
-async function fetchRecentEmails(accessToken: string, maxResults = 10) {
+// --- Gmail fetch with timeout ---
+async function fetchRecentEmails(accessToken: string, maxResults = 8) {
   try {
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 8000);
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=is:inbox`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
     );
     const listData = await listRes.json();
-    if (!listData.messages?.length) return [];
+    if (!listData.messages?.length) { clearTimeout(timeoutId); return []; }
 
     const emails = await Promise.all(
       listData.messages.slice(0, maxResults).map(async (msg: { id: string }) => {
         const msgRes = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
+          { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
         );
         const msgData = await msgRes.json();
         const headers = msgData.payload?.headers || [];
@@ -91,9 +93,10 @@ async function fetchRecentEmails(accessToken: string, maxResults = 10) {
         };
       })
     );
+    clearTimeout(timeoutId);
     return emails;
   } catch (e) {
-    console.error("Gmail fetch error:", e);
+    console.error("Gmail fetch error or timeout:", e);
     return [];
   }
 }
@@ -101,6 +104,8 @@ async function fetchRecentEmails(accessToken: string, maxResults = 10) {
 // --- Calendar fetch (multi-day for conflict detection) ---
 async function fetchEvents(accessToken: string, days = 7) {
   try {
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 6000);
     const now = new Date();
     const endDate = new Date(now);
     endDate.setDate(endDate.getDate() + days);
@@ -115,9 +120,10 @@ async function fetchEvents(accessToken: string, days = 7) {
 
     const calRes = await fetch(
       `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
     );
     const calData = await calRes.json();
+    clearTimeout(timeoutId);
     if (calData.error) return [];
 
     return (calData.items || []).map((event: any) => ({
@@ -133,7 +139,7 @@ async function fetchEvents(accessToken: string, days = 7) {
       conferenceLink: event.hangoutLink || "",
     }));
   } catch (e) {
-    console.error("Calendar fetch error:", e);
+    console.error("Calendar fetch error or timeout:", e);
     return [];
   }
 }
@@ -204,7 +210,7 @@ serve(async (req) => {
         ]);
 
         const [emails, events] = await Promise.all([
-          gmailToken ? fetchRecentEmails(gmailToken, 15) : [],
+          gmailToken ? fetchRecentEmails(gmailToken, 8) : [],
           calToken ? fetchEvents(calToken, 7) : [],
         ]);
 

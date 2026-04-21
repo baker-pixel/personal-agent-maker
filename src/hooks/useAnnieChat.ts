@@ -185,13 +185,15 @@ export function useAnnieChat(agentName: string) {
 
         const controller = new AbortController();
         abortRef.current = controller;
+        // Safety: if the request hangs >60s, abort so 'thinking' resolves.
+        const safetyTimer = setTimeout(() => controller.abort(), 60000);
 
         const resp = await fetch(CHAT_URL, {
           method: "POST",
           headers: authHeaders,
           body: JSON.stringify({ messages: apiMessages, agentName }),
           signal: controller.signal,
-        });
+        }).finally(() => clearTimeout(safetyTimer));
 
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({ error: "Request failed" }));
