@@ -68,6 +68,12 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     conversationActiveRef.current = conversationActive;
   }, [conversationActive]);
 
+  // Stable refs to avoid re-running the speak effect on every render
+  const ttsRef = useRef(tts);
+  ttsRef.current = tts;
+  const speechRef = useRef(speech);
+  speechRef.current = speech;
+
   // When a new agent reply comes in, speak it (if conversation active and TTS enabled)
   useEffect(() => {
     if (!agentReply || agentReply === lastSpokenReplyRef.current) return;
@@ -75,24 +81,25 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     lastSpokenReplyRef.current = agentReply;
 
     // Stop listening while we speak (mic stays available for barge-in via re-start after)
-    speech.stopListening();
+    speechRef.current.stopListening();
 
-    if (tts.enabled && tts.isSupported) {
-      tts.speak(agentReply, () => {
+    const t = ttsRef.current;
+    if (t.enabled && t.isSupported) {
+      t.speak(agentReply, () => {
         // After speaking, resume listening
         if (conversationActiveRef.current) {
           setTimeout(() => {
-            try { speech.startListening(); } catch { }
+            try { speechRef.current.startListening(); } catch { }
           }, 200);
         }
       });
     } else {
       // TTS off — just resume listening
       if (conversationActiveRef.current) {
-        setTimeout(() => { try { speech.startListening(); } catch { } }, 200);
+        setTimeout(() => { try { speechRef.current.startListening(); } catch { } }, 200);
       }
     }
-  }, [agentReply, conversationActive, tts, speech]);
+  }, [agentReply, conversationActive]);
 
   const pwa = usePwaEnvironment();
 
