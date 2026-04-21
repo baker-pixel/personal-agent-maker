@@ -98,6 +98,8 @@ export default function DecisionVoice() {
               onPitchChange={voice.setPitch}
               onPreview={voice.previewVoice}
               isSupported={voice.ttsSupported}
+              sttLanguage={voice.sttLanguage}
+              onSttLanguageChange={voice.setSttLanguage}
             />
             <button
               onClick={() => { voice.stopConversation(); chat.reset(); }}
