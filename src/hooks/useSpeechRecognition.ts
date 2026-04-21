@@ -175,7 +175,7 @@ export function useSpeechRecognition({
       recognitionRef.current = null;
       setIsListening(false);
     }
-  }, [SpeechRecognitionAPI, continuous, lang, onResult, onEnd, teardown]);
+  }, [SpeechRecognitionAPI, continuous, lang, onResult, onEnd, teardown, armSilenceTimer, clearSilenceTimer]);
 
   const toggleListening = useCallback(() => {
     if (isListening) {
@@ -187,6 +187,7 @@ export function useSpeechRecognition({
 
   useEffect(() => {
     return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       const rec = recognitionRef.current;
       if (rec) {
         teardown(rec);
