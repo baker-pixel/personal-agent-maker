@@ -141,9 +141,9 @@ export default function Steno() {
       }
 
       const ops: Promise<any>[] = [];
-      if (actionItems.length) ops.push(supabase.from("action_items").insert(actionItems));
-      if (reminders.length) ops.push(supabase.from("email_reminders").insert(reminders));
-      if (contactReminders.length) ops.push(supabase.from("contact_reminders").insert(contactReminders));
+      if (actionItems.length) ops.push(Promise.resolve(supabase.from("action_items").insert(actionItems)));
+      if (reminders.length) ops.push(Promise.resolve(supabase.from("email_reminders").insert(reminders)));
+      if (contactReminders.length) ops.push(Promise.resolve(supabase.from("contact_reminders").insert(contactReminders)));
 
       const results = await Promise.all(ops);
       const firstError = results.find((r) => r.error);

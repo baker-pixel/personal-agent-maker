@@ -17,6 +17,7 @@ import {
   AlertCircle,
   ChevronRight,
   Smartphone,
+  Mic,
 } from "lucide-react";
 
 /* ── Floating particles ── */
@@ -283,6 +284,18 @@ const officeItems = [
     position: "",
     emoji: "📱",
   },
+  {
+    id: "steno-pad",
+    label: "Steno Pad",
+    description: "Dictate tasks & reminders",
+    icon: Mic,
+    color: "from-amber-500/15 to-amber-500/5",
+    borderColor: "border-amber-500/25",
+    iconColor: "text-amber-500",
+    action: "steno",
+    position: "",
+    emoji: "🎙️",
+  },
 ];
 
 export default function Office() {
@@ -353,6 +366,9 @@ export default function Office() {
         break;
       case "sms":
         navigate("/sms-log");
+        break;
+      case "steno":
+        navigate("/steno");
         break;
     }
   }, [navigate]);
