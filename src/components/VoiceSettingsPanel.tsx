@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import { Settings2, Play, Sparkles } from "lucide-react";
+import { Settings2, Play, Sparkles, Crown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -12,6 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ELEVENLABS_VOICES, ELEVENLABS_MODELS } from "@/lib/elevenlabsVoices";
+
+type TtsProvider = "browser" | "elevenlabs";
 
 interface VoiceSettingsPanelProps {
   voices: SpeechSynthesisVoice[];
@@ -23,9 +27,20 @@ interface VoiceSettingsPanelProps {
   onPitchChange: (v: number) => void;
   onPreview: () => void;
   isSupported: boolean;
-  // New: STT language
+  // STT language
   sttLanguage?: string;
   onSttLanguageChange?: (lang: string) => void;
+  // Premium (ElevenLabs)
+  provider?: TtsProvider;
+  onProviderChange?: (p: TtsProvider) => void;
+  elevenlabsVoiceId?: string | null;
+  onElevenlabsVoiceChange?: (id: string) => void;
+  elevenlabsModelId?: string;
+  onElevenlabsModelChange?: (id: string) => void;
+  stability?: number;
+  onStabilityChange?: (v: number) => void;
+  similarity?: number;
+  onSimilarityChange?: (v: number) => void;
 }
 
 // Common dictation languages for the STT picker.
@@ -110,6 +125,8 @@ export function VoiceSettingsPanel({
   sttLanguage,
   onSttLanguageChange,
 }: VoiceSettingsPanelProps) {
+  const isPremium = provider === "elevenlabs";
+
   // Group voices by language tag (e.g. "en-US", "fr-FR"). Sort: English first, then alpha.
   const voiceGroups = useMemo(() => {
     const groups = new Map<string, SpeechSynthesisVoice[]>();
