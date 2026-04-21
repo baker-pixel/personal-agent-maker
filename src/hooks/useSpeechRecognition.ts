@@ -3,8 +3,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 interface UseSpeechRecognitionOptions {
   onResult?: (transcript: string) => void;
   onEnd?: () => void;
+  onSilenceTimeout?: () => void;
   continuous?: boolean;
   lang?: string;
+  /** Auto-stop after this many ms of no speech results. 0 or undefined disables. */
+  silenceTimeoutMs?: number;
 }
 
 interface SpeechRecognitionReturn {
