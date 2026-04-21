@@ -432,6 +432,7 @@ export type Database = {
           phone_number: string | null
           slack_notification_channel_id: string | null
           slack_notification_channel_name: string | null
+          stt_language: string | null
           tts_enabled: boolean | null
           tts_pitch: number | null
           tts_rate: number | null
@@ -447,6 +448,7 @@ export type Database = {
           phone_number?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
+          stt_language?: string | null
           tts_enabled?: boolean | null
           tts_pitch?: number | null
           tts_rate?: number | null
@@ -462,6 +464,7 @@ export type Database = {
           phone_number?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
+          stt_language?: string | null
           tts_enabled?: boolean | null
           tts_pitch?: number | null
           tts_rate?: number | null
