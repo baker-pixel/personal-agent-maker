@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useSpeechRecognition } from "./useSpeechRecognition";
 import { useTextToSpeech } from "./useTextToSpeech";
 import { usePwaEnvironment } from "./usePwaEnvironment";
+import { useVoicePreferences } from "./useVoicePreferences";
 
 interface UseVoiceConversationOpts {
   onUserUtterance: (text: string) => void;
@@ -18,10 +19,20 @@ interface UseVoiceConversationOpts {
  * - If user starts speaking while TTS is playing, cancels TTS (barge-in)
  */
 export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: UseVoiceConversationOpts) {
+  const voicePrefs = useVoicePreferences();
   const [conversationActive, setConversationActive] = useState(false);
   const conversationActiveRef = useRef(false);
   const lastSpokenReplyRef = useRef<string | null>(null);
-  const tts = useTextToSpeech();
+  const tts = useTextToSpeech({
+    remote: {
+      voiceURI: voicePrefs.prefs.tts_voice_uri,
+      rate: voicePrefs.prefs.tts_rate,
+      pitch: voicePrefs.prefs.tts_pitch,
+      enabled: voicePrefs.prefs.tts_enabled,
+      loaded: voicePrefs.loaded,
+    },
+    onChange: voicePrefs.update,
+  });
   const ttsSpeakingRef = useRef(false);
   ttsSpeakingRef.current = tts.isSpeaking;
 
