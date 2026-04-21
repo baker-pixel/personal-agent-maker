@@ -23,6 +23,11 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const [conversationActive, setConversationActive] = useState(false);
   const conversationActiveRef = useRef(false);
   const lastSpokenReplyRef = useRef<string | null>(null);
+  const thinkingRef = useRef(!!thinking);
+  useEffect(() => { thinkingRef.current = !!thinking; }, [thinking]);
+  // Forward declare so onEnd can reference it
+  const speechRef = useRef<any>(null);
+
   const tts = useTextToSpeech({
     remote: {
       voiceURI: voicePrefs.prefs.tts_voice_uri,
@@ -52,14 +57,18 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
       onUserUtterance(trimmed);
     },
     onEnd: () => {
-      // If conversation is active and we're not speaking/thinking, restart listening
-      if (conversationActiveRef.current && !ttsSpeakingRef.current && !thinking) {
-        setTimeout(() => {
-          if (conversationActiveRef.current && !ttsSpeakingRef.current) {
-            try { speech.startListening(); } catch { }
-          }
-        }, 250);
-      }
+      // If conversation is active and we're idle, restart listening shortly.
+      // Use refs (not closure) so we read the *current* thinking/speaking state.
+      if (!conversationActiveRef.current) return;
+      setTimeout(() => {
+        if (
+          conversationActiveRef.current &&
+          !ttsSpeakingRef.current &&
+          !thinkingRef.current
+        ) {
+          try { speechRef.current?.startListening(); } catch { /* ignore */ }
+        }
+      }, 250);
     },
   });
 
@@ -70,7 +79,6 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
 
   // Stable refs to avoid re-running the speak effect on every render
   const ttsRef = useRef(tts);
-  const speechRef = useRef(speech);
   ttsRef.current = tts;
   speechRef.current = speech;
 
@@ -81,25 +89,39 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     lastSpokenReplyRef.current = agentReply;
 
     // Stop listening while we speak (mic stays available for barge-in via re-start after)
-    speechRef.current.stopListening();
+    speechRef.current?.stopListening();
 
     const t = ttsRef.current;
-    if (t.enabled && t.isSupported) {
-      t.speak(agentReply, () => {
-        // After speaking, resume listening
-        if (conversationActiveRef.current) {
-          setTimeout(() => {
-            try { speechRef.current.startListening(); } catch { }
-          }, 200);
-        }
-      });
-    } else {
-      // TTS off — just resume listening
+    const resume = () => {
       if (conversationActiveRef.current) {
-        setTimeout(() => { try { speechRef.current.startListening(); } catch { } }, 200);
+        setTimeout(() => { try { speechRef.current?.startListening(); } catch { /* ignore */ } }, 200);
       }
+    };
+    if (t.enabled && t.isSupported) {
+      t.speak(agentReply, resume);
+    } else {
+      resume();
     }
   }, [agentReply, conversationActive]);
+
+  // Watchdog: if conversation is active but nothing is happening (not listening,
+  // not speaking, not thinking), kick off listening again. Prevents the
+  // "stuck on Paused" state when onEnd misses or a restart attempt fails silently.
+  useEffect(() => {
+    if (!conversationActive) return;
+    if (speech.isListening || tts.isSpeaking || thinking) return;
+    const id = setTimeout(() => {
+      if (
+        conversationActiveRef.current &&
+        !ttsSpeakingRef.current &&
+        !thinkingRef.current &&
+        !speechRef.current?.isListening
+      ) {
+        try { speechRef.current?.startListening(); } catch { /* ignore */ }
+      }
+    }, 600);
+    return () => clearTimeout(id);
+  }, [conversationActive, speech.isListening, tts.isSpeaking, thinking]);
 
   const pwa = usePwaEnvironment();
 
