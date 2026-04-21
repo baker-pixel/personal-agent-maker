@@ -23,6 +23,11 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const [conversationActive, setConversationActive] = useState(false);
   const conversationActiveRef = useRef(false);
   const lastSpokenReplyRef = useRef<string | null>(null);
+  const thinkingRef = useRef(!!thinking);
+  useEffect(() => { thinkingRef.current = !!thinking; }, [thinking]);
+  // Forward declare so onEnd can reference it
+  const speechRef = useRef<any>(null);
+
   const tts = useTextToSpeech({
     remote: {
       voiceURI: voicePrefs.prefs.tts_voice_uri,
@@ -52,14 +57,18 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
       onUserUtterance(trimmed);
     },
     onEnd: () => {
-      // If conversation is active and we're not speaking/thinking, restart listening
-      if (conversationActiveRef.current && !ttsSpeakingRef.current && !thinking) {
-        setTimeout(() => {
-          if (conversationActiveRef.current && !ttsSpeakingRef.current) {
-            try { speech.startListening(); } catch { }
-          }
-        }, 250);
-      }
+      // If conversation is active and we're idle, restart listening shortly.
+      // Use refs (not closure) so we read the *current* thinking/speaking state.
+      if (!conversationActiveRef.current) return;
+      setTimeout(() => {
+        if (
+          conversationActiveRef.current &&
+          !ttsSpeakingRef.current &&
+          !thinkingRef.current
+        ) {
+          try { speechRef.current?.startListening(); } catch { /* ignore */ }
+        }
+      }, 250);
     },
   });
 
