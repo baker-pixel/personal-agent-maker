@@ -163,8 +163,11 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const stop = useCallback(() => {
     if (isSupported) window.speechSynthesis.cancel();
     if (audioRef.current) {
+      // Detach handlers BEFORE clearing src so we don't fire spurious onerror
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
       try { audioRef.current.pause(); } catch { /* ignore */ }
-      audioRef.current.src = "";
+      try { audioRef.current.removeAttribute("src"); audioRef.current.load(); } catch { /* ignore */ }
     }
     if (audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current);
