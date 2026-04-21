@@ -193,6 +193,13 @@ export default function DecisionVoice() {
         </div>
 
         <div className="border-t bg-background sticky bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
+          {voice.speechRecognitionBlockedByPwa && (
+            <div className="container max-w-lg pt-3 px-4">
+              <div className="text-xs bg-muted/60 text-muted-foreground rounded-lg px-3 py-2 leading-snug">
+                Voice input isn't available in the installed Normy app on iOS. {agentName} can still <strong>speak replies</strong> here — for full hands-free voice, open Normy in Safari.
+              </div>
+            </div>
+          )}
           {voice.conversationActive && (
             <div className="container max-w-lg flex items-center justify-center gap-2 pt-3 px-4">
               <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full ${
@@ -220,11 +227,13 @@ export default function DecisionVoice() {
               onClick={voice.isSupported ? voice.toggleConversation : undefined}
               disabled={!voice.isSupported}
               title={
-                !voice.isSupported
-                  ? "Voice is not supported in this browser. Try Chrome, Edge, or Safari."
-                  : voice.conversationActive
-                    ? "End voice conversation"
-                    : `Start hands-free conversation with ${agentName}`
+                voice.speechRecognitionBlockedByPwa
+                  ? "Voice input isn't available in the installed app on iOS. Open Normy in Safari to use voice."
+                  : !voice.isSupported
+                    ? "Voice is not supported in this browser. Try Chrome, Edge, or Safari."
+                    : voice.conversationActive
+                      ? "End voice conversation"
+                      : `Start hands-free conversation with ${agentName}`
               }
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 ${
                 !voice.isSupported
