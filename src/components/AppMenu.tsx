@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { Menu, Mail, Calendar, LayoutDashboard, Settings, LogOut, Home, Building2 } from "lucide-react";
+import { Menu, Mail, Calendar, LayoutDashboard, Settings, LogOut, Home, Building2, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAgent } from "@/contexts/AgentContext";
 import {
@@ -21,6 +21,7 @@ export default function AppMenu() {
     { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { label: "Email", path: "/email", icon: Mail },
     { label: "Calendar", path: "/calendar", icon: Calendar },
+    { label: "Contacts", path: "/contacts", icon: Users },
   ];
 
   const handleSignOut = async () => {
