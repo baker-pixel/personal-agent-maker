@@ -1,0 +1,29 @@
+How to set up "Hey Siri, talk to Normy" on iPhone
+====================================================
+
+Because Normy is installed as a web app (PWA), Siri can launch it for you
+with a custom Shortcut. Here's the 60-second setup:
+
+1) Make sure Normy is on your home screen
+   - Open https://normyagent.com in Safari
+   - Tap the Share icon → "Add to Home Screen" → Add
+
+2) Create the Shortcut
+   - Open the Shortcuts app on your iPhone
+   - Tap the "+" in the top right
+   - Tap "Add Action" → search for "Open URL"
+   - Paste this URL:   https://normyagent.com/decision/voice
+   - Tap the Shortcut name at the top → rename to:  Talk to Normy
+   - Tap "Done"
+
+3) Assign your Siri phrase
+   - Long-press the new "Talk to Normy" shortcut
+   - Tap "Details" → "Add to Siri"  (or just say "Hey Siri, add ___")
+   - Record your phrase (e.g. "Talk to Normy" or "Hey Normy")
+
+4) Try it
+   - Say "Hey Siri, Talk to Normy"
+   - Normy will open straight into voice mode — tap the mic and start talking.
+
+Tip: You can also pin the Shortcut to your Lock Screen or back-tap on
+iPhone (Settings → Accessibility → Touch → Back Tap) for one-tap access.
