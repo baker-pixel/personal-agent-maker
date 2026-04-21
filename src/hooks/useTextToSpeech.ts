@@ -40,7 +40,10 @@ export function useTextToSpeech() {
       .replace(/\n/g, " ")
       .trim();
 
-    if (!clean) return;
+    if (!clean) {
+      onComplete?.();
+      return;
+    }
 
     window.speechSynthesis.cancel();
 
@@ -60,8 +63,8 @@ export function useTextToSpeech() {
     if (preferred) utterance.voice = preferred;
 
     utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+    utterance.onend = () => { setIsSpeaking(false); onComplete?.(); };
+    utterance.onerror = () => { setIsSpeaking(false); onComplete?.(); };
 
     utteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
