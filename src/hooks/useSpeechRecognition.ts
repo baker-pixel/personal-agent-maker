@@ -168,6 +168,20 @@ export function useSpeechRecognition({
       recognition.start();
       setIsListening(true);
       setTranscript("");
+      // Safety: if onstart never fires within 1.5s, clear the starting guard so
+      // the watchdog can retry. Some browsers (esp. Safari/PWA) silently fail.
+      setTimeout(() => {
+        if (startingRef.current) {
+          startingRef.current = false;
+          // If recognition never actually started, clean it up so next attempt is fresh.
+          if (recognitionRef.current === recognition) {
+            try { recognition.abort(); } catch { /* ignore */ }
+            teardown(recognition);
+            recognitionRef.current = null;
+            setIsListening(false);
+          }
+        }
+      }, 1500);
     } catch (e) {
       // start() throws if already started — clean up.
       startingRef.current = false;
