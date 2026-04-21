@@ -124,6 +124,16 @@ export function VoiceSettingsPanel({
   isSupported,
   sttLanguage,
   onSttLanguageChange,
+  provider = "browser",
+  onProviderChange,
+  elevenlabsVoiceId,
+  onElevenlabsVoiceChange,
+  elevenlabsModelId,
+  onElevenlabsModelChange,
+  stability = 0.5,
+  onStabilityChange,
+  similarity = 0.75,
+  onSimilarityChange,
 }: VoiceSettingsPanelProps) {
   const isPremium = provider === "elevenlabs";
 
