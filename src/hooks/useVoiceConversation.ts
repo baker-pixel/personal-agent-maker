@@ -93,19 +93,21 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const startConversation = useCallback(() => {
     setConversationActive(true);
     conversationActiveRef.current = true;
+    voicePrefs.update({ voice_conversation_enabled: true });
     // Unlock iOS SpeechSynthesis on the user gesture (required for PWA)
     tts.unlockAudio();
     // Auto-enable TTS for conversation mode
     if (!tts.enabled) tts.toggle();
     try { speech.startListening(); } catch { }
-  }, [speech, tts]);
+  }, [speech, tts, voicePrefs]);
 
   const stopConversation = useCallback(() => {
     setConversationActive(false);
     conversationActiveRef.current = false;
+    voicePrefs.update({ voice_conversation_enabled: false });
     speech.stopListening();
     tts.stop();
-  }, [speech, tts]);
+  }, [speech, tts, voicePrefs]);
 
   const toggleConversation = useCallback(() => {
     if (conversationActive) stopConversation();
