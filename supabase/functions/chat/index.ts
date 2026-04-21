@@ -104,6 +104,8 @@ async function fetchRecentEmails(accessToken: string, maxResults = 8) {
 // --- Calendar fetch (multi-day for conflict detection) ---
 async function fetchEvents(accessToken: string, days = 7) {
   try {
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 6000);
     const now = new Date();
     const endDate = new Date(now);
     endDate.setDate(endDate.getDate() + days);
@@ -118,9 +120,10 @@ async function fetchEvents(accessToken: string, days = 7) {
 
     const calRes = await fetch(
       `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
     );
     const calData = await calRes.json();
+    clearTimeout(timeoutId);
     if (calData.error) return [];
 
     return (calData.items || []).map((event: any) => ({
@@ -136,7 +139,7 @@ async function fetchEvents(accessToken: string, days = 7) {
       conferenceLink: event.hangoutLink || "",
     }));
   } catch (e) {
-    console.error("Calendar fetch error:", e);
+    console.error("Calendar fetch error or timeout:", e);
     return [];
   }
 }
