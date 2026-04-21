@@ -127,6 +127,8 @@ export function useSpeechRecognition({
 
       const combined = finalTranscript || interimTranscript;
       setTranscript(combined);
+      // Any speech activity (interim or final) resets the silence timer.
+      if (combined) armSilenceTimer();
       if (finalTranscript) {
         const trimmed = finalTranscript.trim();
         const now = Date.now();
@@ -143,6 +145,7 @@ export function useSpeechRecognition({
       if (recognitionRef.current === recognition) {
         recognitionRef.current = null;
       }
+      clearSilenceTimer();
       setIsListening(false);
       if (!stoppingRef.current) onEnd?.();
     };
@@ -151,11 +154,13 @@ export function useSpeechRecognition({
       if (event.error !== "aborted" && event.error !== "no-speech") {
         console.error("Speech recognition error:", event.error);
       }
+      clearSilenceTimer();
       setIsListening(false);
     };
 
     recognition.onstart = () => {
       startingRef.current = false;
+      armSilenceTimer();
     };
 
     recognitionRef.current = recognition;
