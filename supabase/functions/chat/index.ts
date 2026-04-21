@@ -215,7 +215,7 @@ serve(async (req) => {
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
         );
 
-        const [emails, events, contactsRes] = await Promise.all([
+        const [emails, events, contactsRes, leadsRes] = await Promise.all([
           gmailToken ? fetchRecentEmails(gmailToken, 8) : [],
           calToken ? fetchEvents(calToken, 7) : [],
           adminForContacts
@@ -225,9 +225,17 @@ serve(async (req) => {
             .order("is_vip", { ascending: false })
             .order("last_interaction_at", { ascending: false, nullsFirst: false })
             .limit(60),
+          adminForContacts
+            .from("leads")
+            .select("from_name, from_email, subject, source, status, confidence, received_at")
+            .eq("user_id", user.id)
+            .in("status", ["new", "drafted"])
+            .order("received_at", { ascending: false })
+            .limit(20),
         ]);
 
         const contacts = contactsRes.data || [];
+        const hotLeads = leadsRes.data || [];
 
         if (emails.length > 0) {
           realDataContext += "\n\n--- REAL INBOX DATA (from user's actual Gmail) ---\n";
@@ -259,6 +267,15 @@ Location: ${e.location || "None"}\n`;
           }
 
           realDataContext += "\n--- END CALENDAR DATA ---\n";
+        }
+
+        if (hotLeads.length > 0) {
+          realDataContext += "\n\n--- 🔥 HOT LEADS (unresponded inquiries — TOP PRIORITY) ---\n";
+          hotLeads.forEach((l: any) => {
+            const ago = Math.round((Date.now() - new Date(l.received_at).getTime()) / 60000);
+            realDataContext += `• ${l.from_name || l.from_email} via ${l.source || "unknown"} — "${l.subject}" (${ago} min ago, ${l.status})\n`;
+          });
+          realDataContext += "--- END HOT LEADS ---\nIMPORTANT: When the user asks 'what's important' or 'what should I do first', always surface hot leads at the top — these are revenue opportunities.\n";
         }
 
         if (contacts.length > 0) {
