@@ -220,11 +220,13 @@ export default function DecisionVoice() {
               onClick={voice.isSupported ? voice.toggleConversation : undefined}
               disabled={!voice.isSupported}
               title={
-                !voice.isSupported
-                  ? "Voice is not supported in this browser. Try Chrome, Edge, or Safari."
-                  : voice.conversationActive
-                    ? "End voice conversation"
-                    : `Start hands-free conversation with ${agentName}`
+                voice.speechRecognitionBlockedByPwa
+                  ? "Voice input isn't available in the installed app on iOS. Open Normy in Safari to use voice."
+                  : !voice.isSupported
+                    ? "Voice is not supported in this browser. Try Chrome, Edge, or Safari."
+                    : voice.conversationActive
+                      ? "End voice conversation"
+                      : `Start hands-free conversation with ${agentName}`
               }
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 ${
                 !voice.isSupported
