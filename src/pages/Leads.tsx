@@ -112,7 +112,11 @@ export default function Leads() {
     if (!newRule.pattern.trim()) return toast.error("Pattern required");
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { error } = await supabase.from("lead_rules").insert({ ...newRule, user_id: user.id });
+    const { error } = await supabase.from("lead_rules").insert({
+      ...newRule,
+      rule_type: newRule.rule_type as "sender_domain" | "subject_keyword" | "recipient_inbox",
+      user_id: user.id,
+    });
     if (error) return toast.error("Failed to add rule");
     toast.success("Rule added");
     setNewRule({ rule_type: "sender_domain", pattern: "", label: "", priority: 70 });
