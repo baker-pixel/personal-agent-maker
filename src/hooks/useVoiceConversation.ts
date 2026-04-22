@@ -3,6 +3,7 @@ import { useSpeechRecognition } from "./useSpeechRecognition";
 import { useTextToSpeech } from "./useTextToSpeech";
 import { usePwaEnvironment } from "./usePwaEnvironment";
 import { useVoicePreferences } from "./useVoicePreferences";
+import { toast } from "sonner";
 
 interface UseVoiceConversationOpts {
   onUserUtterance: (text: string) => void;
@@ -46,29 +47,68 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const ttsSpeakingRef = useRef(false);
   ttsSpeakingRef.current = tts.isSpeaking;
 
+  // Track consecutive error count for exponential backoff
+  const errorCountRef = useRef(0);
+  const lastErrorAtRef = useRef(0);
+  const pausedByVisibilityRef = useRef(false);
+
   const speech = useSpeechRecognition({
     continuous: false,
     lang: voicePrefs.prefs.stt_language || "en-US",
     onResult: (text) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+      // Successful result resets error backoff
+      errorCountRef.current = 0;
       // Barge-in: stop any ongoing TTS
       if (ttsSpeakingRef.current) tts.stop();
       onUserUtterance(trimmed);
+    },
+    onError: (err) => {
+      errorCountRef.current += 1;
+      lastErrorAtRef.current = Date.now();
+      // Critical errors: stop the loop and tell the user
+      if (err === "not-allowed" || err === "service-not-allowed") {
+        toast.error("Microphone access denied. Enable mic permission in your browser settings to use voice.");
+        setConversationActive(false);
+        conversationActiveRef.current = false;
+        return;
+      }
+      if (err === "audio-capture") {
+        toast.error("No microphone detected. Check your audio device and try again.");
+        setConversationActive(false);
+        conversationActiveRef.current = false;
+        return;
+      }
+      if (err === "network") {
+        // Transient — let the watchdog retry with backoff
+        if (errorCountRef.current === 3) {
+          toast.warning("Voice recognition is having trouble connecting. Retrying…");
+        }
+      }
+      // After many consecutive errors, stop trying so we don't burn CPU
+      if (errorCountRef.current >= 8) {
+        toast.error("Voice recognition keeps failing. Pausing — tap the mic to retry.");
+        setConversationActive(false);
+        conversationActiveRef.current = false;
+      }
     },
     onEnd: () => {
       // If conversation is active and we're idle, restart listening shortly.
       // Use refs (not closure) so we read the *current* thinking/speaking state.
       if (!conversationActiveRef.current) return;
+      // Backoff if we're in an error storm: 250ms base, doubling up to 4s.
+      const backoff = Math.min(250 * Math.pow(2, errorCountRef.current), 4000);
       setTimeout(() => {
         if (
           conversationActiveRef.current &&
           !ttsSpeakingRef.current &&
-          !thinkingRef.current
+          !thinkingRef.current &&
+          !pausedByVisibilityRef.current
         ) {
           try { speechRef.current?.startListening(); } catch { /* ignore */ }
         }
-      }, 250);
+      }, backoff);
     },
   });
 
