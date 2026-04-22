@@ -196,7 +196,12 @@ export function useAnnieChat(agentName: string) {
         const resp = await fetch(CHAT_URL, {
           method: "POST",
           headers: authHeaders,
-          body: JSON.stringify({ messages: apiMessages, agentName }),
+          body: JSON.stringify({
+            messages: apiMessages,
+            agentName,
+            clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            clientNowIso: new Date().toISOString(),
+          }),
           signal: controller.signal,
         }).finally(() => clearTimeout(safetyTimer));
 

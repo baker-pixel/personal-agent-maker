@@ -257,7 +257,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, agentName } = await req.json();
+    const { messages, agentName, clientTimezone, clientNowIso } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -275,9 +275,20 @@ serve(async (req) => {
       console.log(`[memory] summarized ${older.length} older turns, kept ${recent.length} recent`);
     }
 
-    const now = new Date();
-    const timeOfDay = now.getHours() < 12 ? "morning" : now.getHours() < 17 ? "afternoon" : "evening";
-    const today = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    // Use the user's local time/timezone (sent from the client) so the model
+    // doesn't think it's "evening" when the server's UTC clock says so.
+    const tz = (typeof clientTimezone === "string" && clientTimezone) || "UTC";
+    const now = clientNowIso ? new Date(clientNowIso) : new Date();
+    const hourInTz = Number(
+      new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: tz }).format(now)
+    );
+    const timeOfDay = hourInTz < 12 ? "morning" : hourInTz < 17 ? "afternoon" : "evening";
+    const today = new Intl.DateTimeFormat("en-US", {
+      weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: tz,
+    }).format(now);
+    const currentTimeStr = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric", minute: "2-digit", hour12: true, timeZone: tz, timeZoneName: "short",
+    }).format(now);
 
     let realDataContext = "";
     const authHeader = req.headers.get("Authorization");
