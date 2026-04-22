@@ -507,7 +507,7 @@ When you draft email replies, include a structured JSON block so the user can sa
 \`\`\`
 
 Keep draft bodies concise and professional. Only show drafts when the user asks you to draft something.
-${realDataContext}`;
+${conversationMemoryNote}${realDataContext}`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -521,7 +521,7 @@ ${realDataContext}`;
           model: "google/gemini-3-flash-preview",
           messages: [
             { role: "system", content: systemPrompt },
-            ...messages,
+            ...effectiveMessages,
           ],
           stream: true,
         }),
