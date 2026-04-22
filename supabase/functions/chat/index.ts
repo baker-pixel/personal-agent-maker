@@ -359,8 +359,10 @@ serve(async (req) => {
         // Aggregate emails across all Gmail accounts; track per-account fetch errors
         const allEmails: any[] = [];
         const gmailErrors: string[] = [];
+        const gmailReauth: string[] = [];
         for (const r of gmailResults as any[]) {
-          if (r?.error) gmailErrors.push(`${r.account}: ${r.error}`);
+          if (r?.needsReauth) gmailReauth.push(r.account);
+          else if (r?.error) gmailErrors.push(`${r.account}: ${r.error}`);
           if (r?.emails) allEmails.push(...r.emails);
         }
         allEmails.sort((a, b) => {
@@ -371,6 +373,7 @@ serve(async (req) => {
 
         const events = (calendarResult as any).events || [];
         const calendarError = (calendarResult as any).error;
+        const calendarNeedsReauth = (calendarResult as any).needsReauth;
         const contacts = contactsRes.data || [];
         const hotLeads = leadsRes.data || [];
         const actionItems = actionItemsRes.data || [];
@@ -388,12 +391,15 @@ Date: ${e.date}
 Preview: ${e.snippet}\n`;
           });
           realDataContext += "\n--- END INBOX DATA ---\n";
-        } else if (gmailAccounts.length > 0 && gmailErrors.length === 0) {
+        } else if (gmailAccounts.length > 0 && gmailErrors.length === 0 && gmailReauth.length === 0) {
           realDataContext += "\n\n[Inbox is empty for the last 2 days — no recent messages.]\n";
         }
 
+        if (gmailReauth.length > 0) {
+          realDataContext += `\n\n[🔌 RECONNECT NEEDED: Google access expired for: ${gmailReauth.join(", ")}. Tell the user clearly: "I lost access to your Gmail (${gmailReauth.join(", ")}). Please reconnect via the plug icon → Integrations." Do NOT invent emails. Do NOT pretend you have access.]\n`;
+        }
         if (gmailErrors.length > 0) {
-          realDataContext += `\n\n[⚠️ Could not fetch emails from: ${gmailErrors.join("; ")}. Tell the user honestly that you couldn't pull their inbox right now and suggest reconnecting via the Integrations page if it persists. Do NOT invent emails.]\n`;
+          realDataContext += `\n\n[⚠️ Could not fetch emails from: ${gmailErrors.join("; ")}. Tell the user honestly. Do NOT invent emails.]\n`;
         }
 
         if (events.length > 0) {
