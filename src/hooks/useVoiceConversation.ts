@@ -132,17 +132,61 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     speechRef.current?.stopListening();
 
     const t = ttsRef.current;
+    let watchdogId: ReturnType<typeof setTimeout> | null = null;
+    let resumed = false;
     const resume = () => {
+      if (resumed) return;
+      resumed = true;
+      if (watchdogId) { clearTimeout(watchdogId); watchdogId = null; }
       if (conversationActiveRef.current) {
         setTimeout(() => { try { speechRef.current?.startListening(); } catch { /* ignore */ } }, 200);
       }
     };
     if (t.enabled && t.isSupported) {
       t.speak(agentReply, resume);
+      // Watchdog: if TTS never fires onend (e.g. iOS PWA glitch), force-resume
+      // after a generous timeout based on text length (~120 chars/sec read aloud
+      // at slowest, plus 8s buffer; cap at 60s).
+      const estMs = Math.min(60000, 8000 + agentReply.length * 80);
+      watchdogId = setTimeout(() => {
+        if (!resumed) {
+          console.warn("[voice] TTS watchdog fired — forcing stop & resume");
+          try { t.stop(); } catch { /* ignore */ }
+          resume();
+        }
+      }, estMs);
     } else {
       resume();
     }
   }, [agentReply, conversationActive]);
+
+  // Tab visibility: pause listening when hidden, resume when visible.
+  // Browsers throttle/kill SpeechRecognition on hidden tabs which causes
+  // "stuck" states when the user comes back.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (conversationActiveRef.current) {
+          pausedByVisibilityRef.current = true;
+          try { speechRef.current?.stopListening(); } catch { /* ignore */ }
+          try { ttsRef.current?.stop(); } catch { /* ignore */ }
+        }
+      } else if (pausedByVisibilityRef.current) {
+        pausedByVisibilityRef.current = false;
+        // Reset error count after a visibility-driven pause; the previous
+        // failures are stale.
+        errorCountRef.current = 0;
+        if (conversationActiveRef.current) {
+          setTimeout(() => {
+            try { speechRef.current?.startListening(); } catch { /* ignore */ }
+          }, 300);
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   // Watchdog: if conversation is active but nothing is happening (not listening,
   // not speaking, not thinking), kick off listening again. Re-runs on an interval
@@ -156,6 +200,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
         conversationActiveRef.current &&
         !ttsSpeakingRef.current &&
         !thinkingRef.current &&
+        !pausedByVisibilityRef.current &&
         !speechRef.current?.isListening
       ) {
         try { speechRef.current?.startListening(); } catch { /* ignore */ }
