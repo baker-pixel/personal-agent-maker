@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import { ArrowLeft, Mic, MicOff, Send, Loader2, Plus, PanelLeft, Volume2, VolumeX, PhoneOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -17,9 +18,28 @@ export default function DecisionVoice() {
   const { agentName } = useAgent();
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [firstName, setFirstName] = useState<string>("");
+  const greetedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const chat = useAnnieChat(agentName);
+
+  // Resolve the user's first name for the greeting
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const u = data.user;
+      const meta = (u?.user_metadata ?? {}) as Record<string, any>;
+      const raw =
+        meta.first_name ||
+        meta.given_name ||
+        meta.full_name ||
+        meta.name ||
+        (u?.email ? u.email.split("@")[0] : "");
+      const first = String(raw).trim().split(/\s+/)[0] || "";
+      // Capitalize if it came from an email handle
+      setFirstName(first ? first.charAt(0).toUpperCase() + first.slice(1) : "");
+    });
+  }, []);
 
   // Latest agent reply (used to trigger TTS)
   const latestAgentReply = useMemo(() => {
@@ -32,13 +52,53 @@ export default function DecisionVoice() {
     return null;
   }, [chat.messages]);
 
+  // Greeting spoken once when the voice conversation first starts
+  const greeting = useMemo(() => {
+    const who = firstName ? firstName : "there";
+    return `Hey ${who}, how can I help?`;
+  }, [firstName]);
+
+  const [pendingGreeting, setPendingGreeting] = useState<string | null>(null);
+
   const voice = useVoiceConversation({
     onUserUtterance: (text) => {
       chat.send(text);
     },
-    agentReply: chat.thinking ? null : latestAgentReply,
+    // Speak the greeting first; then defer to the live conversation thread
+    agentReply: pendingGreeting ?? (chat.thinking ? null : latestAgentReply),
     thinking: chat.thinking,
   });
+
+  // Once the conversation becomes active, queue the greeting (only once per page visit)
+  useEffect(() => {
+    if (voice.conversationActive && !greetedRef.current && chat.messages.length === 0) {
+      greetedRef.current = true;
+      setPendingGreeting(greeting);
+      // Clear after a tick so subsequent agent replies still trigger TTS via latestAgentReply
+      const t = setTimeout(() => setPendingGreeting(null), 500);
+      return () => clearTimeout(t);
+    }
+  }, [voice.conversationActive, greeting, chat.messages.length]);
+
+  // Auto-start the voice conversation on the first user gesture anywhere on the page.
+  // Browser autoplay policies require a user gesture before audio can play, so we
+  // attach a one-shot listener instead of calling startConversation() on mount.
+  useEffect(() => {
+    if (!voice.isSupported) return;
+    if (voice.speechRecognitionBlockedByPwa) return;
+    if (voice.conversationActive) return;
+    if (greetedRef.current) return;
+    const start = () => {
+      if (greetedRef.current || voice.conversationActive) return;
+      try { voice.startConversation(); } catch { /* ignore */ }
+    };
+    window.addEventListener("pointerdown", start, { once: true });
+    window.addEventListener("keydown", start, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", start);
+      window.removeEventListener("keydown", start);
+    };
+  }, [voice.isSupported, voice.speechRecognitionBlockedByPwa, voice.conversationActive, voice.startConversation]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
