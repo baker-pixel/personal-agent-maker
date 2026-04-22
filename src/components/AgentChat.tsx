@@ -160,6 +160,11 @@ export const AgentChat = () => {
       upsertAssistant("⚠️ Connection error. Please try again.");
     }
 
+    // Persist assistant response
+    if (convIdRef.current && assistantSoFar) {
+      persistMessage(convIdRef.current, "assistant", assistantSoFar);
+    }
+
     setIsLoading(false);
   };
 
