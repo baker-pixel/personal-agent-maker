@@ -8,28 +8,10 @@ const corsHeaders = {
 };
 
 // --- Token helpers ---
-async function getValidToken(userId: string, provider: string) {
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
-
-  const { data: tokenRow, error } = await adminClient
-    .from("google_oauth_tokens")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("provider", provider)
-    .maybeSingle();
-
-  if (error || !tokenRow) return null;
-
+async function refreshIfNeeded(adminClient: any, tokenRow: any) {
   const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) {
-    return tokenRow.access_token;
-  }
-
+  if (expiresAt > new Date(Date.now() + 60000)) return tokenRow.access_token;
   if (!tokenRow.refresh_token) return null;
-
   try {
     const response = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -43,7 +25,6 @@ async function getValidToken(userId: string, provider: string) {
     });
     const data = await response.json();
     if (data.error) return null;
-
     await adminClient
       .from("google_oauth_tokens")
       .update({
@@ -51,13 +32,46 @@ async function getValidToken(userId: string, provider: string) {
         token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq("user_id", userId)
-      .eq("provider", provider);
-
+      .eq("id", tokenRow.id);
     return data.access_token;
   } catch {
     return null;
   }
+}
+
+async function getValidToken(userId: string, provider: string) {
+  const adminClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+  const { data: tokenRow, error } = await adminClient
+    .from("google_oauth_tokens")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("provider", provider)
+    .maybeSingle();
+  if (error || !tokenRow) return null;
+  return await refreshIfNeeded(adminClient, tokenRow);
+}
+
+// Get ALL Gmail tokens for a user (multi-account support)
+async function getAllGmailTokens(userId: string): Promise<{ token: string; email: string }[]> {
+  const adminClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+  const { data: rows } = await adminClient
+    .from("google_oauth_tokens")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("provider", "gmail");
+  if (!rows || rows.length === 0) return [];
+  const results: { token: string; email: string }[] = [];
+  for (const row of rows) {
+    const t = await refreshIfNeeded(adminClient, row);
+    if (t) results.push({ token: t, email: row.email || "primary" });
+  }
+  return results;
 }
 
 // --- Gmail fetch with timeout ---
