@@ -86,10 +86,18 @@ async function fetchRecentEmails(accessToken: string, maxResults = 30, accountLa
     );
     if (!listRes.ok) {
       clearTimeout(timeoutId);
-      return { emails: [], error: `Gmail API returned ${listRes.status}`, account: accountLabel };
+      const needsReauth = listRes.status === 401 || listRes.status === 403;
+      return {
+        emails: [],
+        error: needsReauth
+          ? `authentication expired (HTTP ${listRes.status}) — user needs to reconnect this account`
+          : `Gmail API returned ${listRes.status}`,
+        needsReauth,
+        account: accountLabel,
+      };
     }
     const listData = await listRes.json();
-    if (!listData.messages?.length) { clearTimeout(timeoutId); return { emails: [], error: null, account: accountLabel }; }
+    if (!listData.messages?.length) { clearTimeout(timeoutId); return { emails: [], error: null, needsReauth: false, account: accountLabel }; }
 
     const emails = await Promise.all(
       listData.messages.slice(0, maxResults).map(async (msg: { id: string }) => {
@@ -114,10 +122,10 @@ async function fetchRecentEmails(accessToken: string, maxResults = 30, accountLa
       })
     );
     clearTimeout(timeoutId);
-    return { emails, error: null, account: accountLabel };
+    return { emails, error: null, needsReauth: false, account: accountLabel };
   } catch (e) {
     console.error("Gmail fetch error or timeout:", e);
-    return { emails: [], error: e instanceof Error ? e.message : "fetch failed", account: accountLabel };
+    return { emails: [], error: e instanceof Error ? e.message : "fetch failed", needsReauth: false, account: accountLabel };
   }
 }
 
@@ -144,11 +152,18 @@ async function fetchEvents(accessToken: string, days = 7) {
     );
     if (!calRes.ok) {
       clearTimeout(timeoutId);
-      return { events: [], error: `Calendar API returned ${calRes.status}` };
+      const needsReauth = calRes.status === 401 || calRes.status === 403;
+      return {
+        events: [],
+        error: needsReauth
+          ? `authentication expired (HTTP ${calRes.status}) — user needs to reconnect calendar`
+          : `Calendar API returned ${calRes.status}`,
+        needsReauth,
+      };
     }
     const calData = await calRes.json();
     clearTimeout(timeoutId);
-    if (calData.error) return { events: [], error: calData.error.message || "calendar error" };
+    if (calData.error) return { events: [], error: calData.error.message || "calendar error", needsReauth: false };
 
     const events = (calData.items || []).map((event: any) => ({
       summary: event.summary || "(No title)",
@@ -162,10 +177,10 @@ async function fetchEvents(accessToken: string, days = 7) {
       location: event.location || "",
       conferenceLink: event.hangoutLink || "",
     }));
-    return { events, error: null };
+    return { events, error: null, needsReauth: false };
   } catch (e) {
     console.error("Calendar fetch error or timeout:", e);
-    return { events: [], error: e instanceof Error ? e.message : "fetch failed" };
+    return { events: [], error: e instanceof Error ? e.message : "fetch failed", needsReauth: false };
   }
 }
 
