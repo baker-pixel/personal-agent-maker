@@ -148,12 +148,15 @@ Rules:
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  console.log("[daily-briefing-cron] handler invoked, method=", req.method);
+
   // Require service-role bearer token (sent by pg_cron) — this prevents
   // anyone from triggering briefings for every user from the outside.
   const authHeader = req.headers.get("Authorization") || "";
   const expected = `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+  console.log("[daily-briefing-cron] auth header present:", authHeader.length, "expected length:", expected.length, "match:", authHeader === expected);
   if (authHeader !== expected) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    return new Response(JSON.stringify({ error: "Unauthorized", reason: "auth-mismatch" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
