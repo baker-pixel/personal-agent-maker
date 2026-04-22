@@ -483,6 +483,59 @@ Location: ${e.location || "None"}\n`;
           realDataContext += "--- END CONTACTS ---\n";
         }
 
+        // ---- PEOPLE DIRECTORY: name → email lookup pool ----
+        // Combine contacts + leads + recent email senders + calendar attendees so
+        // the model can resolve "send a note to Jay Niblick" → his email without
+        // the user having to remember it.
+        const directory = new Map<string, { name: string; email: string; sources: Set<string> }>();
+        const addPerson = (rawName: string | null | undefined, rawEmail: string | null | undefined, source: string) => {
+          if (!rawEmail) return;
+          const email = String(rawEmail).trim().toLowerCase();
+          if (!email || !email.includes("@")) return;
+          const name = (rawName || "").trim() || email.split("@")[0];
+          const existing = directory.get(email);
+          if (existing) {
+            existing.sources.add(source);
+            // Prefer a longer/more complete name
+            if (name.length > existing.name.length) existing.name = name;
+          } else {
+            directory.set(email, { name, email, sources: new Set([source]) });
+          }
+        };
+
+        contacts.forEach((c: any) => addPerson(c.name, c.email, "contacts"));
+        hotLeads.forEach((l: any) => addPerson(l.from_name, l.from_email, "leads"));
+
+        // Mine recent inbox senders. e.from is typically formatted as: `"Jay Niblick" <jay@x.com>` or just `jay@x.com`.
+        const parseFromHeader = (from: string): { name: string; email: string } | null => {
+          if (!from) return null;
+          const m = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+          if (m) return { name: m[1].trim(), email: m[2].trim() };
+          if (from.includes("@")) return { name: "", email: from.trim() };
+          return null;
+        };
+        allEmails.slice(0, 50).forEach((e: any) => {
+          const parsed = parseFromHeader(e.from || "");
+          if (parsed) addPerson(parsed.name, parsed.email, "inbox");
+        });
+
+        // Calendar attendees (each event.attendees may have name+email)
+        events.forEach((ev: any) => {
+          (ev.attendees || []).forEach((a: any) => addPerson(a.name, a.email, "calendar"));
+        });
+
+        if (directory.size > 0) {
+          realDataContext += "\n\n--- PEOPLE DIRECTORY (name → email lookup) ---\n";
+          realDataContext += "Use this when the user names a person but doesn't give an email. Match on full name, first name, or last name.\n";
+          // Cap to keep prompt size reasonable
+          const dirEntries = [...directory.values()].slice(0, 120);
+          dirEntries.forEach((p) => {
+            realDataContext += `• ${p.name} <${p.email}> [${[...p.sources].join(",")}]\n`;
+          });
+          realDataContext += "--- END PEOPLE DIRECTORY ---\n";
+        }
+
+
         if (gmailAccounts.length === 0 && !calToken) {
           realDataContext += "\n\n[No Google accounts connected. If the user asks about emails or calendar, let them know they can connect via Integrations (plug icon in the top right).]\n";
         }
