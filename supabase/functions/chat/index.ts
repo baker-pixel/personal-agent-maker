@@ -525,15 +525,93 @@ Location: ${e.location || "None"}\n`;
         });
 
         if (directory.size > 0) {
+          // Common English nickname ↔ formal name pairs (bidirectional).
+          const NICKNAMES: Record<string, string[]> = {
+            jay: ["jason", "james", "jacob"],
+            jason: ["jay"], james: ["jim", "jimmy", "jamie", "jay"], jacob: ["jake", "jay"],
+            jim: ["james"], jimmy: ["james"], jamie: ["james"], jake: ["jacob"],
+            mike: ["michael"], michael: ["mike", "mikey"], mikey: ["michael"],
+            bob: ["robert"], rob: ["robert"], bobby: ["robert"], robbie: ["robert"], robert: ["bob", "rob", "bobby", "robbie"],
+            bill: ["william"], will: ["william"], billy: ["william"], willy: ["william"], william: ["bill", "will", "billy"],
+            tom: ["thomas"], tommy: ["thomas"], thomas: ["tom", "tommy"],
+            dan: ["daniel"], danny: ["daniel"], daniel: ["dan", "danny"],
+            dave: ["david"], davy: ["david"], david: ["dave"],
+            chris: ["christopher", "christine", "christina"], christopher: ["chris"], christine: ["chris"],
+            matt: ["matthew"], matty: ["matthew"], matthew: ["matt"],
+            nick: ["nicholas"], nicholas: ["nick"],
+            alex: ["alexander", "alexandra", "alexis"], alexander: ["alex"], alexandra: ["alex"],
+            sam: ["samuel", "samantha"], samuel: ["sam"], samantha: ["sam"],
+            ben: ["benjamin"], benjamin: ["ben"], benji: ["benjamin"],
+            joe: ["joseph"], joey: ["joseph"], joseph: ["joe", "joey"],
+            tony: ["anthony"], anthony: ["tony"],
+            steve: ["steven", "stephen"], steven: ["steve"], stephen: ["steve"],
+            rick: ["richard"], richie: ["richard"], dick: ["richard"], richard: ["rick", "richie"],
+            kate: ["katherine", "kathryn", "katie"], katie: ["katherine"], kathy: ["katherine"], katherine: ["kate", "katie", "kathy"], kathryn: ["kate", "katie"],
+            liz: ["elizabeth"], beth: ["elizabeth"], lizzy: ["elizabeth"], eliza: ["elizabeth"], elizabeth: ["liz", "beth", "lizzy", "eliza"],
+            sue: ["susan"], susie: ["susan"], susan: ["sue", "susie"],
+            peggy: ["margaret"], maggie: ["margaret"], meg: ["margaret"], margaret: ["peggy", "maggie", "meg"],
+            jen: ["jennifer"], jenny: ["jennifer"], jennifer: ["jen", "jenny"],
+            patty: ["patricia"], pat: ["patricia", "patrick"], patricia: ["patty", "pat"], patrick: ["pat"],
+            abby: ["abigail"], abigail: ["abby"],
+            andy: ["andrew"], drew: ["andrew"], andrew: ["andy", "drew"],
+            ed: ["edward"], eddie: ["edward"], ted: ["edward", "theodore"], teddy: ["theodore"], edward: ["ed", "eddie", "ted"], theodore: ["ted", "teddy"],
+            charlie: ["charles"], chuck: ["charles"], charles: ["charlie", "chuck"],
+            ron: ["ronald"], ronnie: ["ronald"], ronald: ["ron", "ronnie"],
+            greg: ["gregory"], gregory: ["greg"],
+            ken: ["kenneth"], kenny: ["kenneth"], kenneth: ["ken", "kenny"],
+          };
+          const expandFirst = (first: string): string[] => {
+            const f = first.toLowerCase();
+            const out = new Set<string>([f]);
+            (NICKNAMES[f] || []).forEach((n) => out.add(n));
+            return [...out];
+          };
+
           realDataContext += "\n\n--- PEOPLE DIRECTORY (name → email lookup) ---\n";
-          realDataContext += "Use this when the user names a person but doesn't give an email. Match on full name, first name, or last name.\n";
-          // Cap to keep prompt size reasonable
+          realDataContext += "Format per line: <Display Name> <email> | aliases: <comma-separated lookup tokens> | sources\n";
+          realDataContext += "When the user names someone, match against the display name OR any alias token (case-insensitive).\n";
           const dirEntries = [...directory.values()].slice(0, 120);
           dirEntries.forEach((p) => {
-            realDataContext += `• ${p.name} <${p.email}> [${[...p.sources].join(",")}]\n`;
+            const aliases = new Set<string>();
+            const cleaned = p.name.replace(/[",]/g, " ").replace(/\s+/g, " ").trim();
+            if (cleaned) aliases.add(cleaned.toLowerCase());
+
+            const parts = cleaned.split(" ").filter(Boolean);
+            if (parts.length >= 2) {
+              const first = parts[0];
+              const last = parts[parts.length - 1];
+              // Single tokens
+              aliases.add(first.toLowerCase());
+              aliases.add(last.toLowerCase());
+              // Swapped: "Niblick Jay" and "Niblick, Jay"
+              aliases.add(`${last} ${first}`.toLowerCase());
+              aliases.add(`${last}, ${first}`.toLowerCase());
+              // Initials: "J Niblick", "J. Niblick", "Jay N"
+              aliases.add(`${first[0]} ${last}`.toLowerCase());
+              aliases.add(`${first[0]}. ${last}`.toLowerCase());
+              aliases.add(`${first} ${last[0]}`.toLowerCase());
+              // Nickname expansions on first name
+              expandFirst(first).forEach((alt) => {
+                if (alt !== first.toLowerCase()) {
+                  aliases.add(alt);
+                  aliases.add(`${alt} ${last}`.toLowerCase());
+                  aliases.add(`${last} ${alt}`.toLowerCase());
+                  aliases.add(`${last}, ${alt}`.toLowerCase());
+                }
+              });
+            } else if (parts.length === 1) {
+              aliases.add(parts[0].toLowerCase());
+              expandFirst(parts[0]).forEach((alt) => aliases.add(alt));
+            }
+            // Email local-part as last-resort token
+            aliases.add(p.email.split("@")[0].toLowerCase());
+
+            const aliasList = [...aliases].filter(Boolean).join(", ");
+            realDataContext += `• ${p.name} <${p.email}> | aliases: ${aliasList} | [${[...p.sources].join(",")}]\n`;
           });
           realDataContext += "--- END PEOPLE DIRECTORY ---\n";
         }
+
 
 
         if (gmailAccounts.length === 0 && !calToken) {
@@ -604,7 +682,7 @@ When the user asks about their emails, meetings, calendar, or anything related t
 
 ## Resolving People by Name (CRITICAL)
 When the user refers to someone by name (e.g., "send Jay Niblick a calendar invite", "email Sarah", "tell Mike I'll be late") and does NOT provide an email address:
-1. **Look them up in the PEOPLE DIRECTORY below** (and CONTACT INTELLIGENCE / HOT LEADS / inbox / calendar). Match on full name, first name, last name, or obvious nicknames (Mike→Michael, Jay→Jason/James, etc.).
+1. **Look them up in the PEOPLE DIRECTORY below** (and CONTACT INTELLIGENCE / HOT LEADS / inbox / calendar). Match the user's spoken name (case-insensitive) against either the display name OR any token in the entry's "aliases:" list — these already include first name, last name, swapped order ("Niblick Jay", "Niblick, Jay"), initials ("J Niblick"), and common nicknames (Jay↔Jason/James, Mike↔Michael, Liz↔Elizabeth, Kate↔Katherine, etc.). If the user's spoken name appears in any alias list, that's a match.
 2. **If you find exactly one match**, use that email automatically — do not ask the user to confirm the address. Just proceed and quietly mention who you're sending to ("Sending to Jay Niblick at jay@…").
 3. **If you find multiple plausible matches** (e.g., two "Sarahs"), briefly ask which one — list them by name + company/role, not just email.
 4. **If you find no match**, say so honestly and ask the user for the email address. Do NOT guess or fabricate an email like "jay.niblick@example.com".
