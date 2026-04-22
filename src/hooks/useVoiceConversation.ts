@@ -214,6 +214,8 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const startConversation = useCallback(() => {
     setConversationActive(true);
     conversationActiveRef.current = true;
+    errorCountRef.current = 0;
+    pausedByVisibilityRef.current = false;
     voicePrefs.update({ voice_conversation_enabled: true });
     // Unlock iOS SpeechSynthesis on the user gesture (required for PWA)
     tts.unlockAudio();
