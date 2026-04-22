@@ -86,10 +86,18 @@ async function fetchRecentEmails(accessToken: string, maxResults = 30, accountLa
     );
     if (!listRes.ok) {
       clearTimeout(timeoutId);
-      return { emails: [], error: `Gmail API returned ${listRes.status}`, account: accountLabel };
+      const needsReauth = listRes.status === 401 || listRes.status === 403;
+      return {
+        emails: [],
+        error: needsReauth
+          ? `authentication expired (HTTP ${listRes.status}) — user needs to reconnect this account`
+          : `Gmail API returned ${listRes.status}`,
+        needsReauth,
+        account: accountLabel,
+      };
     }
     const listData = await listRes.json();
-    if (!listData.messages?.length) { clearTimeout(timeoutId); return { emails: [], error: null, account: accountLabel }; }
+    if (!listData.messages?.length) { clearTimeout(timeoutId); return { emails: [], error: null, needsReauth: false, account: accountLabel }; }
 
     const emails = await Promise.all(
       listData.messages.slice(0, maxResults).map(async (msg: { id: string }) => {
@@ -114,10 +122,10 @@ async function fetchRecentEmails(accessToken: string, maxResults = 30, accountLa
       })
     );
     clearTimeout(timeoutId);
-    return { emails, error: null, account: accountLabel };
+    return { emails, error: null, needsReauth: false, account: accountLabel };
   } catch (e) {
     console.error("Gmail fetch error or timeout:", e);
-    return { emails: [], error: e instanceof Error ? e.message : "fetch failed", account: accountLabel };
+    return { emails: [], error: e instanceof Error ? e.message : "fetch failed", needsReauth: false, account: accountLabel };
   }
 }
 
@@ -144,11 +152,18 @@ async function fetchEvents(accessToken: string, days = 7) {
     );
     if (!calRes.ok) {
       clearTimeout(timeoutId);
-      return { events: [], error: `Calendar API returned ${calRes.status}` };
+      const needsReauth = calRes.status === 401 || calRes.status === 403;
+      return {
+        events: [],
+        error: needsReauth
+          ? `authentication expired (HTTP ${calRes.status}) — user needs to reconnect calendar`
+          : `Calendar API returned ${calRes.status}`,
+        needsReauth,
+      };
     }
     const calData = await calRes.json();
     clearTimeout(timeoutId);
-    if (calData.error) return { events: [], error: calData.error.message || "calendar error" };
+    if (calData.error) return { events: [], error: calData.error.message || "calendar error", needsReauth: false };
 
     const events = (calData.items || []).map((event: any) => ({
       summary: event.summary || "(No title)",
@@ -162,10 +177,10 @@ async function fetchEvents(accessToken: string, days = 7) {
       location: event.location || "",
       conferenceLink: event.hangoutLink || "",
     }));
-    return { events, error: null };
+    return { events, error: null, needsReauth: false };
   } catch (e) {
     console.error("Calendar fetch error or timeout:", e);
-    return { events: [], error: e instanceof Error ? e.message : "fetch failed" };
+    return { events: [], error: e instanceof Error ? e.message : "fetch failed", needsReauth: false };
   }
 }
 
@@ -344,8 +359,10 @@ serve(async (req) => {
         // Aggregate emails across all Gmail accounts; track per-account fetch errors
         const allEmails: any[] = [];
         const gmailErrors: string[] = [];
+        const gmailReauth: string[] = [];
         for (const r of gmailResults as any[]) {
-          if (r?.error) gmailErrors.push(`${r.account}: ${r.error}`);
+          if (r?.needsReauth) gmailReauth.push(r.account);
+          else if (r?.error) gmailErrors.push(`${r.account}: ${r.error}`);
           if (r?.emails) allEmails.push(...r.emails);
         }
         allEmails.sort((a, b) => {
@@ -356,6 +373,7 @@ serve(async (req) => {
 
         const events = (calendarResult as any).events || [];
         const calendarError = (calendarResult as any).error;
+        const calendarNeedsReauth = (calendarResult as any).needsReauth;
         const contacts = contactsRes.data || [];
         const hotLeads = leadsRes.data || [];
         const actionItems = actionItemsRes.data || [];
@@ -373,12 +391,15 @@ Date: ${e.date}
 Preview: ${e.snippet}\n`;
           });
           realDataContext += "\n--- END INBOX DATA ---\n";
-        } else if (gmailAccounts.length > 0 && gmailErrors.length === 0) {
+        } else if (gmailAccounts.length > 0 && gmailErrors.length === 0 && gmailReauth.length === 0) {
           realDataContext += "\n\n[Inbox is empty for the last 2 days — no recent messages.]\n";
         }
 
+        if (gmailReauth.length > 0) {
+          realDataContext += `\n\n[🔌 RECONNECT NEEDED: Google access expired for: ${gmailReauth.join(", ")}. Tell the user clearly: "I lost access to your Gmail (${gmailReauth.join(", ")}). Please reconnect via the plug icon → Integrations." Do NOT invent emails. Do NOT pretend you have access.]\n`;
+        }
         if (gmailErrors.length > 0) {
-          realDataContext += `\n\n[⚠️ Could not fetch emails from: ${gmailErrors.join("; ")}. Tell the user honestly that you couldn't pull their inbox right now and suggest reconnecting via the Integrations page if it persists. Do NOT invent emails.]\n`;
+          realDataContext += `\n\n[⚠️ Could not fetch emails from: ${gmailErrors.join("; ")}. Tell the user honestly. Do NOT invent emails.]\n`;
         }
 
         if (events.length > 0) {
@@ -403,7 +424,11 @@ Location: ${e.location || "None"}\n`;
         }
 
         if (calendarError) {
-          realDataContext += `\n\n[⚠️ Could not fetch calendar: ${calendarError}. Tell the user honestly. Do NOT invent meetings.]\n`;
+          if (calendarNeedsReauth) {
+            realDataContext += `\n\n[🔌 RECONNECT NEEDED: Google Calendar access expired. Tell the user: "I lost access to your calendar. Please reconnect via the plug icon → Integrations." Do NOT invent meetings.]\n`;
+          } else {
+            realDataContext += `\n\n[⚠️ Could not fetch calendar: ${calendarError}. Tell the user honestly. Do NOT invent meetings.]\n`;
+          }
         }
 
         if (hotLeads.length > 0) {
@@ -531,21 +556,29 @@ ${conversationMemoryNote}${realDataContext}`;
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
+          JSON.stringify({ error: "I'm getting too many requests right now — give me a moment and try again." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add funds in Settings > Workspace > Usage." }),
+          JSON.stringify({ error: "AI credits exhausted. Add funds in Settings → Workspace → Usage to keep chatting." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const text = await response.text();
+      if (response.status >= 500) {
+        const text = await response.text().catch(() => "");
+        console.error("AI gateway 5xx:", response.status, text);
+        return new Response(
+          JSON.stringify({ error: "The AI service is temporarily unavailable. Please try again in a minute." }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const text = await response.text().catch(() => "");
       console.error("AI gateway error:", response.status, text);
       return new Response(
-        JSON.stringify({ error: "AI service unavailable" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "AI service returned an error. Please try again." }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -554,9 +587,17 @@ ${conversationMemoryNote}${realDataContext}`;
     });
   } catch (e) {
     console.error("chat error:", e);
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    // Network failure reaching the gateway
+    const isNetwork = /fetch|network|timeout|abort/i.test(msg);
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        error: isNetwork
+          ? "Couldn't reach the AI service. Check your connection and try again."
+          : "Something went wrong on my end. Please try again.",
+        detail: msg,
+      }),
+      { status: isNetwork ? 503 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

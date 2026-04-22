@@ -4,6 +4,7 @@ import { useAgent } from "@/contexts/AgentContext";
 import { Send, Loader2, Zap, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
+import { toast } from "@/hooks/use-toast";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -104,6 +105,10 @@ export const AgentChat = () => {
       });
     };
 
+    const controller = new AbortController();
+    // Safety: if the request hangs >60s, abort so loading resolves.
+    const safetyTimer = setTimeout(() => controller.abort(), 60000);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const resp = await fetch(CHAT_URL, {
@@ -116,12 +121,22 @@ export const AgentChat = () => {
           messages: [...messages, userMsg],
           agentName,
         }),
+        signal: controller.signal,
       });
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: "Request failed" }));
-        upsertAssistant(`⚠️ ${err.error || "Something went wrong. Please try again."}`);
+        const errorMsg = err.error || "Something went wrong. Please try again.";
+        let title = "Oops";
+        if (resp.status === 429) title = "Slow down";
+        else if (resp.status === 402) title = "Out of AI credits";
+        else if (resp.status === 401 || resp.status === 403) title = "Please sign in again";
+        else if (resp.status === 503) title = "AI service offline";
+        toast({ title, description: errorMsg, variant: "destructive" });
+        upsertAssistant(`⚠️ ${errorMsg}`);
+        if (convIdRef.current) persistMessage(convIdRef.current, "assistant", `⚠️ ${errorMsg}`);
         setIsLoading(false);
+        clearTimeout(safetyTimer);
         return;
       }
 
@@ -155,9 +170,19 @@ export const AgentChat = () => {
           }
         }
       }
-    } catch (e) {
-      console.error(e);
-      upsertAssistant("⚠️ Connection error. Please try again.");
+    } catch (e: any) {
+      if (e?.name === "AbortError") {
+        const msg = "Request timed out. Please try again.";
+        toast({ title: "Timed out", description: msg, variant: "destructive" });
+        upsertAssistant(`⚠️ ${msg}`);
+      } else {
+        console.error(e);
+        const msg = "Connection error. Please check your network and try again.";
+        toast({ title: "Connection error", description: msg, variant: "destructive" });
+        upsertAssistant(`⚠️ ${msg}`);
+      }
+    } finally {
+      clearTimeout(safetyTimer);
     }
 
     // Persist assistant response

@@ -203,8 +203,14 @@ export function useAnnieChat(agentName: string) {
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({ error: "Request failed" }));
           const errorMsg = err.error || "Something went wrong. Please try again.";
-          toast({ title: "Oops", description: errorMsg, variant: "destructive" });
+          let title = "Oops";
+          if (resp.status === 429) title = "Slow down";
+          else if (resp.status === 402) title = "Out of AI credits";
+          else if (resp.status === 401 || resp.status === 403) title = "Please sign in again";
+          else if (resp.status === 503) title = "AI service offline";
+          toast({ title, description: errorMsg, variant: "destructive" });
           upsertAssistant(`⚠️ ${errorMsg}`);
+          if (convIdRef.current) persistMessage(convIdRef.current, "assistant", `⚠️ ${errorMsg}`);
           setThinking(false);
           return;
         }
