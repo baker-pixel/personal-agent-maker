@@ -199,6 +199,7 @@ export function useAnnieChat(agentName: string, mode: "text" | "voice" = "text")
           body: JSON.stringify({
             messages: apiMessages,
             agentName,
+            mode,
             clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             clientNowIso: new Date().toISOString(),
           }),

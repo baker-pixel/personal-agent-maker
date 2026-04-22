@@ -22,7 +22,7 @@ export default function DecisionVoice() {
   const greetedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const chat = useAnnieChat(agentName);
+  const chat = useAnnieChat(agentName, "voice");
 
   // Resolve the user's first name for the greeting
   useEffect(() => {
