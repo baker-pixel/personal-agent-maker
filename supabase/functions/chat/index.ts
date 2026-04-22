@@ -61,17 +61,21 @@ async function getValidToken(userId: string, provider: string) {
 }
 
 // --- Gmail fetch with timeout ---
-async function fetchRecentEmails(accessToken: string, maxResults = 30) {
+// Returns { emails, error } so the caller can distinguish empty inbox from a failed fetch.
+async function fetchRecentEmails(accessToken: string, maxResults = 30, accountLabel = "") {
   try {
     const ctrl = new AbortController();
     const timeoutId = setTimeout(() => ctrl.abort(), 10000);
-    // Pull last ~2 days so the agent can answer about earlier-today emails (lunch, morning, etc.)
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=in:inbox newer_than:2d`,
       { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
     );
+    if (!listRes.ok) {
+      clearTimeout(timeoutId);
+      return { emails: [], error: `Gmail API returned ${listRes.status}`, account: accountLabel };
+    }
     const listData = await listRes.json();
-    if (!listData.messages?.length) { clearTimeout(timeoutId); return []; }
+    if (!listData.messages?.length) { clearTimeout(timeoutId); return { emails: [], error: null, account: accountLabel }; }
 
     const emails = await Promise.all(
       listData.messages.slice(0, maxResults).map(async (msg: { id: string }) => {
@@ -91,14 +95,15 @@ async function fetchRecentEmails(accessToken: string, maxResults = 30) {
           date: getHeader("Date"),
           snippet: msgData.snippet,
           isUnread: (msgData.labelIds || []).includes("UNREAD"),
+          account: accountLabel,
         };
       })
     );
     clearTimeout(timeoutId);
-    return emails;
+    return { emails, error: null, account: accountLabel };
   } catch (e) {
     console.error("Gmail fetch error or timeout:", e);
-    return [];
+    return { emails: [], error: e instanceof Error ? e.message : "fetch failed", account: accountLabel };
   }
 }
 
@@ -123,11 +128,15 @@ async function fetchEvents(accessToken: string, days = 7) {
       `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
       { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
     );
+    if (!calRes.ok) {
+      clearTimeout(timeoutId);
+      return { events: [], error: `Calendar API returned ${calRes.status}` };
+    }
     const calData = await calRes.json();
     clearTimeout(timeoutId);
-    if (calData.error) return [];
+    if (calData.error) return { events: [], error: calData.error.message || "calendar error" };
 
-    return (calData.items || []).map((event: any) => ({
+    const events = (calData.items || []).map((event: any) => ({
       summary: event.summary || "(No title)",
       start: event.start?.dateTime || event.start?.date,
       end: event.end?.dateTime || event.end?.date,
@@ -139,9 +148,10 @@ async function fetchEvents(accessToken: string, days = 7) {
       location: event.location || "",
       conferenceLink: event.hangoutLink || "",
     }));
+    return { events, error: null };
   } catch (e) {
     console.error("Calendar fetch error or timeout:", e);
-    return [];
+    return { events: [], error: e instanceof Error ? e.message : "fetch failed" };
   }
 }
 
