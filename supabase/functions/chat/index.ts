@@ -201,6 +201,41 @@ function needsRealData(latestMessage: string): { emails: boolean; calendar: bool
   };
 }
 
+// --- Sliding-window memory: keep recent turns verbatim, summarize older ones ---
+const RECENT_TURNS_KEEP = 30; // last N messages sent verbatim
+const SUMMARY_TRIGGER = 40;   // only summarize when total exceeds this
+
+async function summarizeOlderMessages(older: any[], apiKey: string): Promise<string> {
+  if (older.length === 0) return "";
+  const transcript = older
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${(m.content || "").slice(0, 600)}`)
+    .join("\n");
+  try {
+    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Summarize the following conversation between a user and their AI executive assistant. Capture: (1) key facts the user shared about themselves, their work, contacts, and projects; (2) decisions made; (3) outstanding tasks/drafts/follow-ups; (4) tone preferences. Be dense and factual — no filler. Max 300 words.",
+          },
+          { role: "user", content: transcript },
+        ],
+        stream: false,
+      }),
+    });
+    if (!resp.ok) return "";
+    const data = await resp.json();
+    return data.choices?.[0]?.message?.content || "";
+  } catch (e) {
+    console.error("summarization failed:", e);
+    return "";
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -210,6 +245,20 @@ serve(async (req) => {
     const { messages, agentName } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+    // Apply sliding window: if conversation is long, summarize older turns
+    let conversationMemoryNote = "";
+    let effectiveMessages = messages;
+    if (Array.isArray(messages) && messages.length > SUMMARY_TRIGGER) {
+      const older = messages.slice(0, messages.length - RECENT_TURNS_KEEP);
+      const recent = messages.slice(messages.length - RECENT_TURNS_KEEP);
+      const summary = await summarizeOlderMessages(older, LOVABLE_API_KEY);
+      if (summary) {
+        conversationMemoryNote = `\n\n## CONVERSATION MEMORY (summary of earlier turns — treat as established context)\n${summary}\n`;
+      }
+      effectiveMessages = recent;
+      console.log(`[memory] summarized ${older.length} older turns, kept ${recent.length} recent`);
+    }
 
     const now = new Date();
     const timeOfDay = now.getHours() < 12 ? "morning" : now.getHours() < 17 ? "afternoon" : "evening";
