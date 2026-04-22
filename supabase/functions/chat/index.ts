@@ -483,6 +483,59 @@ Location: ${e.location || "None"}\n`;
           realDataContext += "--- END CONTACTS ---\n";
         }
 
+        // ---- PEOPLE DIRECTORY: name → email lookup pool ----
+        // Combine contacts + leads + recent email senders + calendar attendees so
+        // the model can resolve "send a note to Jay Niblick" → his email without
+        // the user having to remember it.
+        const directory = new Map<string, { name: string; email: string; sources: Set<string> }>();
+        const addPerson = (rawName: string | null | undefined, rawEmail: string | null | undefined, source: string) => {
+          if (!rawEmail) return;
+          const email = String(rawEmail).trim().toLowerCase();
+          if (!email || !email.includes("@")) return;
+          const name = (rawName || "").trim() || email.split("@")[0];
+          const existing = directory.get(email);
+          if (existing) {
+            existing.sources.add(source);
+            // Prefer a longer/more complete name
+            if (name.length > existing.name.length) existing.name = name;
+          } else {
+            directory.set(email, { name, email, sources: new Set([source]) });
+          }
+        };
+
+        contacts.forEach((c: any) => addPerson(c.name, c.email, "contacts"));
+        hotLeads.forEach((l: any) => addPerson(l.from_name, l.from_email, "leads"));
+
+        // Mine recent inbox senders. e.from is typically formatted as: `"Jay Niblick" <jay@x.com>` or just `jay@x.com`.
+        const parseFromHeader = (from: string): { name: string; email: string } | null => {
+          if (!from) return null;
+          const m = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+          if (m) return { name: m[1].trim(), email: m[2].trim() };
+          if (from.includes("@")) return { name: "", email: from.trim() };
+          return null;
+        };
+        allEmails.slice(0, 50).forEach((e: any) => {
+          const parsed = parseFromHeader(e.from || "");
+          if (parsed) addPerson(parsed.name, parsed.email, "inbox");
+        });
+
+        // Calendar attendees (each event.attendees may have name+email)
+        events.forEach((ev: any) => {
+          (ev.attendees || []).forEach((a: any) => addPerson(a.name, a.email, "calendar"));
+        });
+
+        if (directory.size > 0) {
+          realDataContext += "\n\n--- PEOPLE DIRECTORY (name → email lookup) ---\n";
+          realDataContext += "Use this when the user names a person but doesn't give an email. Match on full name, first name, or last name.\n";
+          // Cap to keep prompt size reasonable
+          const dirEntries = [...directory.values()].slice(0, 120);
+          dirEntries.forEach((p) => {
+            realDataContext += `• ${p.name} <${p.email}> [${[...p.sources].join(",")}]\n`;
+          });
+          realDataContext += "--- END PEOPLE DIRECTORY ---\n";
+        }
+
+
         if (gmailAccounts.length === 0 && !calToken) {
           realDataContext += "\n\n[No Google accounts connected. If the user asks about emails or calendar, let them know they can connect via Integrations (plug icon in the top right).]\n";
         }
@@ -548,6 +601,15 @@ When the user asks about their emails, meetings, calendar, or anything related t
 - NEVER invent, guess, or hallucinate URLs, links, or file paths. This includes Google Docs, Sheets, Drive links, websites, or any other URL.
 - If the user asks about a specific document or link, tell them to check their email or calendar for the actual link — do NOT make one up.
 - You may only reference URLs that appear explicitly in the real data provided below.
+
+## Resolving People by Name (CRITICAL)
+When the user refers to someone by name (e.g., "send Jay Niblick a calendar invite", "email Sarah", "tell Mike I'll be late") and does NOT provide an email address:
+1. **Look them up in the PEOPLE DIRECTORY below** (and CONTACT INTELLIGENCE / HOT LEADS / inbox / calendar). Match on full name, first name, last name, or obvious nicknames (Mike→Michael, Jay→Jason/James, etc.).
+2. **If you find exactly one match**, use that email automatically — do not ask the user to confirm the address. Just proceed and quietly mention who you're sending to ("Sending to Jay Niblick at jay@…").
+3. **If you find multiple plausible matches** (e.g., two "Sarahs"), briefly ask which one — list them by name + company/role, not just email.
+4. **If you find no match**, say so honestly and ask the user for the email address. Do NOT guess or fabricate an email like "jay.niblick@example.com".
+5. When drafting an email or calendar invite, populate the to_email and to_name fields in the draft-json block from the directory match.
+
 
 ## Core Capabilities
 - Smart email triage, auto-draft replies, follow-up detection
