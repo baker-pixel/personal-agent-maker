@@ -1,1 +1,4 @@
 project_id = "hkkejeegacinadsavnjh"
+
+[functions.daily-briefing-cron]
+verify_jwt = false
