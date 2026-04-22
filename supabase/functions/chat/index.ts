@@ -424,7 +424,11 @@ Location: ${e.location || "None"}\n`;
         }
 
         if (calendarError) {
-          realDataContext += `\n\n[⚠️ Could not fetch calendar: ${calendarError}. Tell the user honestly. Do NOT invent meetings.]\n`;
+          if (calendarNeedsReauth) {
+            realDataContext += `\n\n[🔌 RECONNECT NEEDED: Google Calendar access expired. Tell the user: "I lost access to your calendar. Please reconnect via the plug icon → Integrations." Do NOT invent meetings.]\n`;
+          } else {
+            realDataContext += `\n\n[⚠️ Could not fetch calendar: ${calendarError}. Tell the user honestly. Do NOT invent meetings.]\n`;
+          }
         }
 
         if (hotLeads.length > 0) {
