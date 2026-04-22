@@ -8,6 +8,15 @@ import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 type Message = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+const DETAIL_TITLE = "Detail";
+
+async function persistMessage(conversationId: string, role: string, content: string) {
+  await supabase.from("chat_messages").insert({ conversation_id: conversationId, role, content });
+  await supabase
+    .from("chat_conversations")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", conversationId);
+}
 
 export const AgentChat = () => {
   const { agentName } = useAgent();
@@ -16,10 +25,46 @@ export const AgentChat = () => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const convIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Resume most recent Detail conversation on mount (within 24h, capped at 200 msgs)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user || cancelled) return;
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: existing } = await supabase
+        .from("chat_conversations")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .eq("title", DETAIL_TITLE)
+        .gte("updated_at", cutoff)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      if (!existing || existing.length === 0 || cancelled) return;
+      convIdRef.current = existing[0].id;
+      const { data: msgs } = await supabase
+        .from("chat_messages")
+        .select("role, content, created_at")
+        .eq("conversation_id", existing[0].id)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (msgs && msgs.length > 0 && !cancelled) {
+        setMessages(
+          [...msgs].reverse().map((m) => ({
+            role: m.role === "user" ? "user" as const : "assistant" as const,
+            content: m.content,
+          }))
+        );
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -29,6 +74,20 @@ export const AgentChat = () => {
     setInput("");
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
+
+    // Ensure a conversation exists, then persist user message
+    if (!convIdRef.current) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: created } = await supabase
+          .from("chat_conversations")
+          .insert({ user_id: session.user.id, title: DETAIL_TITLE })
+          .select("id")
+          .single();
+        if (created) convIdRef.current = created.id;
+      }
+    }
+    if (convIdRef.current) persistMessage(convIdRef.current, "user", text);
 
     let assistantSoFar = "";
 
@@ -101,6 +160,11 @@ export const AgentChat = () => {
       upsertAssistant("⚠️ Connection error. Please try again.");
     }
 
+    // Persist assistant response
+    if (convIdRef.current && assistantSoFar) {
+      persistMessage(convIdRef.current, "assistant", assistantSoFar);
+    }
+
     setIsLoading(false);
   };
 
@@ -120,7 +184,7 @@ export const AgentChat = () => {
         </div>
         {messages.length > 0 && (
           <button
-            onClick={() => setMessages([])}
+            onClick={() => { setMessages([]); convIdRef.current = null; }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-muted text-muted-foreground hover:text-destructive transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />

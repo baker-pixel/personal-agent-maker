@@ -53,14 +53,17 @@ export function useAnnieChat(agentName: string) {
     setLoading(true);
     convIdRef.current = conversationId;
     setActiveConversationId(conversationId);
+    // Cap at last 200 messages to avoid huge payloads on long conversations
     const { data: msgs } = await supabase
       .from("chat_messages")
-      .select("role, content")
+      .select("role, content, created_at")
       .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false })
+      .limit(200);
     if (msgs && msgs.length > 0) {
+      const ordered = [...msgs].reverse();
       setMessages(
-        msgs.map((m) => ({
+        ordered.map((m) => ({
           role: m.role === "user" ? "user" as const : "agent" as const,
           text: m.content,
         }))
@@ -107,13 +110,15 @@ export function useAnnieChat(agentName: string) {
 
         const { data: msgs } = await supabase
           .from("chat_messages")
-          .select("role, content")
+          .select("role, content, created_at")
           .eq("conversation_id", convId)
-          .order("created_at", { ascending: true });
+          .order("created_at", { ascending: false })
+          .limit(200);
 
         if (msgs && msgs.length > 0 && !cancelled) {
+          const ordered = [...msgs].reverse();
           setMessages(
-            msgs.map((m) => ({
+            ordered.map((m) => ({
               role: m.role === "user" ? "user" as const : "agent" as const,
               text: m.content,
             }))
