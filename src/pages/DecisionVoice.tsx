@@ -18,9 +18,28 @@ export default function DecisionVoice() {
   const { agentName } = useAgent();
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [firstName, setFirstName] = useState<string>("");
+  const greetedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const chat = useAnnieChat(agentName);
+
+  // Resolve the user's first name for the greeting
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const u = data.user;
+      const meta = (u?.user_metadata ?? {}) as Record<string, any>;
+      const raw =
+        meta.first_name ||
+        meta.given_name ||
+        meta.full_name ||
+        meta.name ||
+        (u?.email ? u.email.split("@")[0] : "");
+      const first = String(raw).trim().split(/\s+/)[0] || "";
+      // Capitalize if it came from an email handle
+      setFirstName(first ? first.charAt(0).toUpperCase() + first.slice(1) : "");
+    });
+  }, []);
 
   // Latest agent reply (used to trigger TTS)
   const latestAgentReply = useMemo(() => {
