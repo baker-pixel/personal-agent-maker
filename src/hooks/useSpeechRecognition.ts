@@ -4,6 +4,12 @@ interface UseSpeechRecognitionOptions {
   onResult?: (transcript: string) => void;
   onEnd?: () => void;
   onSilenceTimeout?: () => void;
+  /**
+   * Called when recognition errors. Receives the SpeechRecognition error string
+   * (e.g. "not-allowed", "network", "audio-capture", "service-not-allowed").
+   * Excludes "no-speech" and "aborted" which are normal lifecycle events.
+   */
+  onError?: (error: string) => void;
   continuous?: boolean;
   lang?: string;
   /** Auto-stop after this many ms of no speech results. 0 or undefined disables. */
@@ -23,10 +29,13 @@ export function useSpeechRecognition({
   onResult,
   onEnd,
   onSilenceTimeout,
+  onError,
   continuous = true,
   lang = "en-US",
   silenceTimeoutMs = 0,
 }: UseSpeechRecognitionOptions = {}): SpeechRecognitionReturn {
+  const onErrorRef = useRef(onError);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const recognitionRef = useRef<any>(null);
@@ -151,8 +160,10 @@ export function useSpeechRecognition({
     };
 
     recognition.onerror = (event: any) => {
-      if (event.error !== "aborted" && event.error !== "no-speech") {
-        console.error("Speech recognition error:", event.error);
+      const err = event?.error || "unknown";
+      if (err !== "aborted" && err !== "no-speech") {
+        console.error("Speech recognition error:", err);
+        try { onErrorRef.current?.(err); } catch { /* ignore */ }
       }
       clearSilenceTimer();
       setIsListening(false);
