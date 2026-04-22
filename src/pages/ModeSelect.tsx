@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { Mic } from "lucide-react";
 import { useAgent } from "@/contexts/AgentContext";
 
 export default function ModeSelect() {
@@ -19,10 +20,28 @@ export default function ModeSelect() {
         </h1>
 
         <div className="w-full">
+          <motion.button
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => navigate("/decision/voice")}
+            aria-label={`Talk to ${agentName}`}
+            className="group mx-auto mb-10 flex flex-col items-center gap-3"
+          >
+            <span className="relative flex items-center justify-center w-32 h-32 sm:w-36 sm:h-36 rounded-full bg-gradient-to-br from-accent to-primary text-accent-foreground shadow-xl shadow-accent/30 transition-shadow group-hover:shadow-2xl group-hover:shadow-accent/40">
+              <span className="absolute inset-0 rounded-full bg-accent/30 animate-ping opacity-60" />
+              <Mic className="w-12 h-12 sm:w-14 sm:h-14 relative z-10" strokeWidth={2.5} />
+            </span>
+            <span className="font-display text-lg font-semibold text-foreground">Tap to talk</span>
+            <span className="text-xs text-muted-foreground -mt-1">Start a voice chat with {agentName}</span>
+          </motion.button>
+
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
+            transition={{ delay: 0.25 }}
             className="rounded-2xl border-[3px] border-accent bg-card p-6 shadow-lg shadow-accent/10 hover:shadow-xl transition-shadow relative"
           >
             <h2 className="font-display text-xl font-semibold text-foreground mb-1">Decision Mode–Delegate</h2>
