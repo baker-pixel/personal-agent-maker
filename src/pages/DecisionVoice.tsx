@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import { ArrowLeft, Mic, MicOff, Send, Loader2, Plus, PanelLeft, Volume2, VolumeX, PhoneOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
