@@ -603,6 +603,70 @@ ${conversationMemoryNote}${realDataContext}`;
       );
     }
 
+    // For voice mode, tee the SSE stream so we can compute simple metrics
+    // (sentence count + whether extended pacing was requested/produced) without
+    // delaying the user-facing stream.
+    if (isVoice && response.body) {
+      const lastUserMsg = [...effectiveMessages].reverse().find((m: any) => m?.role === "user");
+      const userText: string = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
+      const EXTENDED_TRIGGERS = /\b(tell me more|more detail|details?|walk me through|explain|read it (to me|aloud)|the full thing|everything|in depth|in-depth|summari[sz]e the whole|what did they say exactly|go deeper|elaborate|long(er)? version)\b/i;
+      const userRequestedExtended = EXTENDED_TRIGGERS.test(userText);
+
+      const [clientStream, metricsStream] = response.body.tee();
+
+      (async () => {
+        try {
+          const reader = metricsStream.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let assistantText = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let idx: number;
+            while ((idx = buffer.indexOf("\n")) !== -1) {
+              const line = buffer.slice(0, idx).replace(/\r$/, "");
+              buffer = buffer.slice(idx + 1);
+              if (!line.startsWith("data: ")) continue;
+              const payload = line.slice(6).trim();
+              if (!payload || payload === "[DONE]") continue;
+              try {
+                const parsed = JSON.parse(payload);
+                const delta = parsed.choices?.[0]?.delta?.content;
+                if (typeof delta === "string") assistantText += delta;
+              } catch { /* ignore partial */ }
+            }
+          }
+          const sentences = assistantText
+            .replace(/\s+/g, " ")
+            .split(/(?<=[.!?])\s+(?=[A-Z0-9"'(])/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 1);
+          const sentenceCount = sentences.length;
+          const wordCount = assistantText.trim().split(/\s+/).filter(Boolean).length;
+          const extendedProduced = sentenceCount > 2;
+          const triggerMatch = extendedProduced === userRequestedExtended ? "ok"
+            : userRequestedExtended ? "missed-extended"
+            : "over-extended";
+          console.log(`[voice-metrics] ${JSON.stringify({
+            sentences: sentenceCount,
+            words: wordCount,
+            userRequestedExtended,
+            extendedProduced,
+            triggerMatch,
+            userPreview: userText.slice(0, 80),
+          })}`);
+        } catch (err) {
+          console.error("[voice-metrics] failed:", err);
+        }
+      })();
+
+      return new Response(clientStream, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      });
+    }
+
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
