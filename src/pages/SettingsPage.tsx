@@ -4,6 +4,7 @@ import { ArrowLeft, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, Me
 import { supabase } from "@/integrations/supabase/client";
 import EmailTriageSettings from "@/components/EmailTriageSettings";
 import { VoicePersonalizationSection } from "@/components/VoicePersonalizationSection";
+import DailyBriefingRunner from "@/components/DailyBriefingRunner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -433,6 +434,14 @@ export default function Settings() {
               </div>
             ))}
           </div>
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-accent" />
+            <h2 className="font-display font-semibold">Background Jobs</h2>
+          </div>
+          <DailyBriefingRunner />
         </section>
 
         <Button onClick={save} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
