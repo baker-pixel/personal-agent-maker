@@ -27,7 +27,7 @@ async function persistMessage(conversationId: string, role: string, content: str
     .eq("id", conversationId);
 }
 
-export function useAnnieChat(agentName: string) {
+export function useAnnieChat(agentName: string, mode: "text" | "voice" = "text") {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [thinking, setThinking] = useState(false);
   const [loading, setLoading] = useState(true);
