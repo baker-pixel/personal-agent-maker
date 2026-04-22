@@ -243,6 +243,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     isSpeaking: tts.isSpeaking,
     isSupported: speech.isSupported,
     transcript: speech.transcript,
+    prefsLoaded: voicePrefs.loaded,
     ttsEnabled: tts.enabled,
     toggleTts: tts.toggle,
     startConversation,

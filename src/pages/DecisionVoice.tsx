@@ -69,16 +69,18 @@ export default function DecisionVoice() {
     thinking: chat.thinking,
   });
 
-  // Once the conversation becomes active, queue the greeting (only once per page visit)
+  // Once the conversation becomes active AND voice prefs are loaded, queue the
+  // greeting (only once per page visit). Waiting on prefsLoaded ensures the
+  // greeting uses the user's saved ElevenLabs voice rather than the default.
   useEffect(() => {
-    if (voice.conversationActive && !greetedRef.current && chat.messages.length === 0) {
+    if (voice.conversationActive && voice.prefsLoaded && !greetedRef.current && chat.messages.length === 0) {
       greetedRef.current = true;
       setPendingGreeting(greeting);
       // Clear after a tick so subsequent agent replies still trigger TTS via latestAgentReply
       const t = setTimeout(() => setPendingGreeting(null), 500);
       return () => clearTimeout(t);
     }
-  }, [voice.conversationActive, greeting, chat.messages.length]);
+  }, [voice.conversationActive, voice.prefsLoaded, greeting, chat.messages.length]);
 
   // Auto-start the voice conversation on the first user gesture anywhere on the page.
   // Browser autoplay policies require a user gesture before audio can play, so we
