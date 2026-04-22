@@ -531,21 +531,29 @@ ${conversationMemoryNote}${realDataContext}`;
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
+          JSON.stringify({ error: "I'm getting too many requests right now — give me a moment and try again." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add funds in Settings > Workspace > Usage." }),
+          JSON.stringify({ error: "AI credits exhausted. Add funds in Settings → Workspace → Usage to keep chatting." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const text = await response.text();
+      if (response.status >= 500) {
+        const text = await response.text().catch(() => "");
+        console.error("AI gateway 5xx:", response.status, text);
+        return new Response(
+          JSON.stringify({ error: "The AI service is temporarily unavailable. Please try again in a minute." }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const text = await response.text().catch(() => "");
       console.error("AI gateway error:", response.status, text);
       return new Response(
-        JSON.stringify({ error: "AI service unavailable" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "AI service returned an error. Please try again." }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -554,9 +562,17 @@ ${conversationMemoryNote}${realDataContext}`;
     });
   } catch (e) {
     console.error("chat error:", e);
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    // Network failure reaching the gateway
+    const isNetwork = /fetch|network|timeout|abort/i.test(msg);
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        error: isNetwork
+          ? "Couldn't reach the AI service. Check your connection and try again."
+          : "Something went wrong on my end. Please try again.",
+        detail: msg,
+      }),
+      { status: isNetwork ? 503 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
