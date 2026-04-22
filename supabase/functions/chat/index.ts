@@ -8,28 +8,10 @@ const corsHeaders = {
 };
 
 // --- Token helpers ---
-async function getValidToken(userId: string, provider: string) {
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
-
-  const { data: tokenRow, error } = await adminClient
-    .from("google_oauth_tokens")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("provider", provider)
-    .maybeSingle();
-
-  if (error || !tokenRow) return null;
-
+async function refreshIfNeeded(adminClient: any, tokenRow: any) {
   const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) {
-    return tokenRow.access_token;
-  }
-
+  if (expiresAt > new Date(Date.now() + 60000)) return tokenRow.access_token;
   if (!tokenRow.refresh_token) return null;
-
   try {
     const response = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -43,7 +25,6 @@ async function getValidToken(userId: string, provider: string) {
     });
     const data = await response.json();
     if (data.error) return null;
-
     await adminClient
       .from("google_oauth_tokens")
       .update({
@@ -51,27 +32,64 @@ async function getValidToken(userId: string, provider: string) {
         token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq("user_id", userId)
-      .eq("provider", provider);
-
+      .eq("id", tokenRow.id);
     return data.access_token;
   } catch {
     return null;
   }
 }
 
+async function getValidToken(userId: string, provider: string) {
+  const adminClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+  const { data: tokenRow, error } = await adminClient
+    .from("google_oauth_tokens")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("provider", provider)
+    .maybeSingle();
+  if (error || !tokenRow) return null;
+  return await refreshIfNeeded(adminClient, tokenRow);
+}
+
+// Get ALL Gmail tokens for a user (multi-account support)
+async function getAllGmailTokens(userId: string): Promise<{ token: string; email: string }[]> {
+  const adminClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+  const { data: rows } = await adminClient
+    .from("google_oauth_tokens")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("provider", "gmail");
+  if (!rows || rows.length === 0) return [];
+  const results: { token: string; email: string }[] = [];
+  for (const row of rows) {
+    const t = await refreshIfNeeded(adminClient, row);
+    if (t) results.push({ token: t, email: row.email || "primary" });
+  }
+  return results;
+}
+
 // --- Gmail fetch with timeout ---
-async function fetchRecentEmails(accessToken: string, maxResults = 30) {
+// Returns { emails, error } so the caller can distinguish empty inbox from a failed fetch.
+async function fetchRecentEmails(accessToken: string, maxResults = 30, accountLabel = "") {
   try {
     const ctrl = new AbortController();
     const timeoutId = setTimeout(() => ctrl.abort(), 10000);
-    // Pull last ~2 days so the agent can answer about earlier-today emails (lunch, morning, etc.)
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=in:inbox newer_than:2d`,
       { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
     );
+    if (!listRes.ok) {
+      clearTimeout(timeoutId);
+      return { emails: [], error: `Gmail API returned ${listRes.status}`, account: accountLabel };
+    }
     const listData = await listRes.json();
-    if (!listData.messages?.length) { clearTimeout(timeoutId); return []; }
+    if (!listData.messages?.length) { clearTimeout(timeoutId); return { emails: [], error: null, account: accountLabel }; }
 
     const emails = await Promise.all(
       listData.messages.slice(0, maxResults).map(async (msg: { id: string }) => {
@@ -91,14 +109,15 @@ async function fetchRecentEmails(accessToken: string, maxResults = 30) {
           date: getHeader("Date"),
           snippet: msgData.snippet,
           isUnread: (msgData.labelIds || []).includes("UNREAD"),
+          account: accountLabel,
         };
       })
     );
     clearTimeout(timeoutId);
-    return emails;
+    return { emails, error: null, account: accountLabel };
   } catch (e) {
     console.error("Gmail fetch error or timeout:", e);
-    return [];
+    return { emails: [], error: e instanceof Error ? e.message : "fetch failed", account: accountLabel };
   }
 }
 
@@ -123,11 +142,15 @@ async function fetchEvents(accessToken: string, days = 7) {
       `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
       { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
     );
+    if (!calRes.ok) {
+      clearTimeout(timeoutId);
+      return { events: [], error: `Calendar API returned ${calRes.status}` };
+    }
     const calData = await calRes.json();
     clearTimeout(timeoutId);
-    if (calData.error) return [];
+    if (calData.error) return { events: [], error: calData.error.message || "calendar error" };
 
-    return (calData.items || []).map((event: any) => ({
+    const events = (calData.items || []).map((event: any) => ({
       summary: event.summary || "(No title)",
       start: event.start?.dateTime || event.start?.date,
       end: event.end?.dateTime || event.end?.date,
@@ -139,9 +162,10 @@ async function fetchEvents(accessToken: string, days = 7) {
       location: event.location || "",
       conferenceLink: event.hangoutLink || "",
     }));
+    return { events, error: null };
   } catch (e) {
     console.error("Calendar fetch error or timeout:", e);
-    return [];
+    return { events: [], error: e instanceof Error ? e.message : "fetch failed" };
   }
 }
 
@@ -205,8 +229,8 @@ serve(async (req) => {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        const [gmailToken, calToken] = await Promise.all([
-          getValidToken(user.id, "gmail"),
+        const [gmailAccounts, calToken] = await Promise.all([
+          getAllGmailTokens(user.id),
           getValidToken(user.id, "google-calendar"),
         ]);
 
@@ -215,9 +239,22 @@ serve(async (req) => {
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
         );
 
-        const [emails, events, contactsRes, leadsRes] = await Promise.all([
-          gmailToken ? fetchRecentEmails(gmailToken, 8) : [],
-          calToken ? fetchEvents(calToken, 7) : [],
+        const todayDate = new Date().toISOString().slice(0, 10);
+        const inSevenDays = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+        const [
+          gmailResults,
+          calendarResult,
+          contactsRes,
+          leadsRes,
+          actionItemsRes,
+          remindersRes,
+          briefingRes,
+        ] = await Promise.all([
+          gmailAccounts.length > 0
+            ? Promise.all(gmailAccounts.map((acc) => fetchRecentEmails(acc.token, 8, acc.email)))
+            : Promise.resolve([]),
+          calToken ? fetchEvents(calToken, 7) : Promise.resolve({ events: [], error: null }),
           adminForContacts
             .from("contacts")
             .select("name, email, company, role, notes, is_vip, last_interaction_at, last_interaction_summary, interaction_count")
@@ -232,21 +269,67 @@ serve(async (req) => {
             .in("status", ["new", "drafted"])
             .order("received_at", { ascending: false })
             .limit(20),
+          adminForContacts
+            .from("action_items")
+            .select("title, description, priority, status, due_date, assignee, source")
+            .eq("user_id", user.id)
+            .in("status", ["open", "in_progress"])
+            .order("due_date", { ascending: true, nullsFirst: false })
+            .limit(30),
+          adminForContacts
+            .from("email_reminders")
+            .select("email_subject, email_from, email_snippet, remind_at, status")
+            .eq("user_id", user.id)
+            .eq("status", "pending")
+            .lte("remind_at", inSevenDays + "T23:59:59Z")
+            .order("remind_at", { ascending: true })
+            .limit(20),
+          adminForContacts
+            .from("daily_briefings")
+            .select("summary, briefing_date, email_count, meeting_count, urgent_items")
+            .eq("user_id", user.id)
+            .eq("briefing_date", todayDate)
+            .maybeSingle(),
         ]);
 
+        // Aggregate emails across all Gmail accounts; track per-account fetch errors
+        const allEmails: any[] = [];
+        const gmailErrors: string[] = [];
+        for (const r of gmailResults as any[]) {
+          if (r?.error) gmailErrors.push(`${r.account}: ${r.error}`);
+          if (r?.emails) allEmails.push(...r.emails);
+        }
+        allEmails.sort((a, b) => {
+          const da = new Date(a.date || 0).getTime();
+          const db = new Date(b.date || 0).getTime();
+          return db - da;
+        });
+
+        const events = (calendarResult as any).events || [];
+        const calendarError = (calendarResult as any).error;
         const contacts = contactsRes.data || [];
         const hotLeads = leadsRes.data || [];
+        const actionItems = actionItemsRes.data || [];
+        const reminders = remindersRes.data || [];
+        const todaysBriefing = briefingRes.data;
 
-        if (emails.length > 0) {
-          realDataContext += "\n\n--- REAL INBOX DATA (from user's actual Gmail) ---\n";
-          emails.forEach((e: any, i: number) => {
-            realDataContext += `\n[Email ${i + 1}] ${e.isUnread ? "🔵 UNREAD" : ""}
+        if (allEmails.length > 0) {
+          const accountNote = gmailAccounts.length > 1 ? ` (across ${gmailAccounts.length} connected accounts)` : "";
+          realDataContext += `\n\n--- REAL INBOX DATA${accountNote} ---\n`;
+          allEmails.slice(0, 16).forEach((e: any, i: number) => {
+            realDataContext += `\n[Email ${i + 1}] ${e.isUnread ? "🔵 UNREAD" : ""}${gmailAccounts.length > 1 ? ` [${e.account}]` : ""}
 From: ${e.from}
 Subject: ${e.subject}
 Date: ${e.date}
 Preview: ${e.snippet}\n`;
           });
           realDataContext += "\n--- END INBOX DATA ---\n";
+        } else if (gmailAccounts.length > 0 && gmailErrors.length === 0) {
+          realDataContext += "\n\n[Inbox is empty for the last 2 days — no recent messages.]\n";
+        }
+
+        if (gmailErrors.length > 0) {
+          realDataContext += `\n\n[⚠️ Could not fetch emails from: ${gmailErrors.join("; ")}. Tell the user honestly that you couldn't pull their inbox right now and suggest reconnecting via the Integrations page if it persists. Do NOT invent emails.]\n`;
         }
 
         if (events.length > 0) {
@@ -265,8 +348,13 @@ Location: ${e.location || "None"}\n`;
             conflicts.forEach(c => { realDataContext += c + "\n"; });
             realDataContext += "--- END CONFLICTS ---\n";
           }
-
           realDataContext += "\n--- END CALENDAR DATA ---\n";
+        } else if (calToken && !calendarError) {
+          realDataContext += "\n\n[No calendar events scheduled for the next 7 days.]\n";
+        }
+
+        if (calendarError) {
+          realDataContext += `\n\n[⚠️ Could not fetch calendar: ${calendarError}. Tell the user honestly. Do NOT invent meetings.]\n`;
         }
 
         if (hotLeads.length > 0) {
@@ -278,6 +366,28 @@ Location: ${e.location || "None"}\n`;
           realDataContext += "--- END HOT LEADS ---\nIMPORTANT: When the user asks 'what's important' or 'what should I do first', always surface hot leads at the top — these are revenue opportunities.\n";
         }
 
+        if (actionItems.length > 0) {
+          realDataContext += "\n\n--- OPEN ACTION ITEMS / TASKS ---\n";
+          actionItems.forEach((a: any) => {
+            const due = a.due_date ? ` (due ${a.due_date})` : "";
+            const who = a.assignee ? ` [${a.assignee}]` : "";
+            realDataContext += `• [${a.priority}] ${a.title}${due}${who}${a.description ? ` — ${a.description}` : ""}\n`;
+          });
+          realDataContext += "--- END ACTION ITEMS ---\n";
+        }
+
+        if (reminders.length > 0) {
+          realDataContext += "\n\n--- UPCOMING EMAIL REMINDERS (next 7 days) ---\n";
+          reminders.forEach((r: any) => {
+            realDataContext += `• ${new Date(r.remind_at).toLocaleString()} — "${r.email_subject}" from ${r.email_from}\n`;
+          });
+          realDataContext += "--- END REMINDERS ---\n";
+        }
+
+        if (todaysBriefing) {
+          realDataContext += `\n\n--- TODAY'S DAILY BRIEFING (already generated) ---\n${todaysBriefing.summary}\n--- END BRIEFING ---\n`;
+        }
+
         if (contacts.length > 0) {
           realDataContext += "\n\n--- CONTACT INTELLIGENCE (people the user knows) ---\n";
           contacts.forEach((c: any) => {
@@ -287,8 +397,8 @@ Location: ${e.location || "None"}\n`;
           realDataContext += "--- END CONTACTS ---\n";
         }
 
-        if (!gmailToken && !calToken) {
-          realDataContext += "\n\n[No accounts connected. If the user asks about emails or calendar, let them know they can connect via Integrations (plug icon in the top right).]\n";
+        if (gmailAccounts.length === 0 && !calToken) {
+          realDataContext += "\n\n[No Google accounts connected. If the user asks about emails or calendar, let them know they can connect via Integrations (plug icon in the top right).]\n";
         }
       }
     }
