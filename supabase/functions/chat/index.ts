@@ -586,10 +586,18 @@ Location: ${e.location || "None"}\n`;
               // Swapped: "Niblick Jay" and "Niblick, Jay"
               aliases.add(`${last} ${first}`.toLowerCase());
               aliases.add(`${last}, ${first}`.toLowerCase());
-              // Initials: "J Niblick", "J. Niblick", "Jay N"
+              // Initials & partials: "J Niblick", "J. Niblick", "Jay N", "Jay N."
               aliases.add(`${first[0]} ${last}`.toLowerCase());
               aliases.add(`${first[0]}. ${last}`.toLowerCase());
               aliases.add(`${first} ${last[0]}`.toLowerCase());
+              aliases.add(`${first} ${last[0]}.`.toLowerCase());
+              // Middle tokens (e.g. "Mary Jane Watson" → also alias "Jane")
+              if (parts.length > 2) {
+                for (let i = 1; i < parts.length - 1; i++) {
+                  aliases.add(parts[i].toLowerCase());
+                  aliases.add(`${parts[i]} ${last}`.toLowerCase());
+                }
+              }
               // Nickname expansions on first name
               expandFirst(first).forEach((alt) => {
                 if (alt !== first.toLowerCase()) {
