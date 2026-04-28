@@ -13,7 +13,7 @@ const departments = [
     capabilities: [
       { name: "Email", icon: Mail, active: true, path: "/email" },
       { name: "Calendar", icon: Calendar, active: true, path: "/calendar" },
-      { name: "Files", icon: FileText, active: false, path: "" },
+      { name: "Files", icon: FileText, active: true, path: "/files" },
       { name: "Contacts", icon: Contact, active: false, path: "" },
       { name: "Tasks", icon: ListTodo, active: false, path: "" },
     ],
