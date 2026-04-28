@@ -25,6 +25,7 @@ const Office3D = lazy(() => import("./pages/Office3D"));
 import EodWrapup from "./pages/EodWrapup";
 import SmsLog from "./pages/SmsLog";
 import Steno from "./pages/Steno";
+import StenoHistory from "./pages/StenoHistory";
 import Contacts from "./pages/Contacts";
 import Leads from "./pages/Leads";
 import AppHeader from "./components/AppHeader";
@@ -109,6 +110,7 @@ const App = () => {
               <Route path="/settings" element={<ProtectedRoute session={session}><SettingsPage /></ProtectedRoute>} />
               <Route path="/sms-log" element={<ProtectedRoute session={session}><SmsLog /></ProtectedRoute>} />
               <Route path="/steno" element={<ProtectedRoute session={session}><Steno /></ProtectedRoute>} />
+              <Route path="/steno/history" element={<ProtectedRoute session={session}><StenoHistory /></ProtectedRoute>} />
               <Route path="/contacts" element={<ProtectedRoute session={session}><Contacts /></ProtectedRoute>} />
               <Route path="/leads" element={<ProtectedRoute session={session}><Leads /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />

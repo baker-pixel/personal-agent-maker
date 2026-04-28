@@ -284,6 +284,12 @@ export default function Steno() {
             <span className="text-sm font-medium">Back</span>
           </button>
           <div className="flex-1" />
+          <button
+            onClick={() => { speech.stopListening(); navigate("/steno/history"); }}
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mr-3"
+          >
+            History
+          </button>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center">
               <Sparkles className="w-3.5 h-3.5 text-accent" />
