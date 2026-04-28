@@ -377,6 +377,40 @@ export default function Steno() {
                             className="font-medium text-sm h-9"
                           />
                           {/* Type-specific fields */}
+                          {it.type === "calendar_event" && (
+                            <div className="space-y-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <Input
+                                  type="date"
+                                  value={it.event_date || ""}
+                                  onChange={(e) => updateItem(it.id, { event_date: e.target.value })}
+                                  className="h-9 text-xs"
+                                />
+                                <Input
+                                  type="time"
+                                  value={it.event_time || ""}
+                                  onChange={(e) => updateItem(it.id, { event_time: e.target.value, all_day: e.target.value ? false : true })}
+                                  placeholder="Time"
+                                  className="h-9 text-xs"
+                                />
+                              </div>
+                              <Input
+                                value={it.location || ""}
+                                onChange={(e) => updateItem(it.id, { location: e.target.value })}
+                                placeholder="Location (optional)"
+                                className="h-9 text-xs"
+                              />
+                              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={it.all_day !== false && !it.event_time}
+                                  onChange={(e) => updateItem(it.id, { all_day: e.target.checked, event_time: e.target.checked ? undefined : it.event_time })}
+                                  className="rounded"
+                                />
+                                All day
+                              </label>
+                            </div>
+                          )}
                           {(it.type === "task" || it.type === "followup") && (
                             <div className="grid grid-cols-2 gap-2">
                               <Input
