@@ -320,45 +320,78 @@ export default function CalendarView() {
               <div className="grid grid-cols-7 gap-1 mb-4">
                 {weekDays.map((day, i) => {
                   const d = weekDates[i];
-                  const isToday = d.toISOString().slice(0, 10) === today;
+                  const dateStr = d.toISOString().slice(0, 10);
+                  const isToday = dateStr === today;
+                  const isSelected = selectedDate === dateStr;
+                  const dayHasEvents = events.some((e) => getDateKey(e.start) === dateStr);
                   return (
-                    <div key={day} className="text-center">
+                    <button
+                      key={day}
+                      onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                      className="text-center group focus:outline-none"
+                    >
                       <p className="text-xs text-muted-foreground mb-1">{day}</p>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center mx-auto text-sm font-medium ${isToday ? "bg-accent text-accent-foreground" : ""}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center mx-auto text-sm font-medium transition-colors ${
+                        isSelected ? "bg-foreground text-background" :
+                        isToday ? "bg-accent text-accent-foreground" :
+                        "group-hover:bg-muted"
+                      }`}>
                         {d.getDate()}
                       </div>
-                    </div>
+                      {dayHasEvents && !isSelected && !isToday && (
+                        <div className="w-1 h-1 rounded-full bg-accent mx-auto mt-1" />
+                      )}
+                    </button>
                   );
                 })}
               </div>
 
-              {todayEvents.length > 0 && (
+              {selectedDate ? (
                 <div className="mb-6">
-                  <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">Today — {formatDate(new Date().toISOString())}</h2>
+                  <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">
+                    {formatDate(new Date(selectedDate + "T12:00:00").toISOString())}
+                  </h2>
                   <div className="space-y-2">
-                    {todayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
+                    {(() => {
+                      const dayEvents = events.filter((e) => getDateKey(e.start) === selectedDate);
+                      if (dayEvents.length === 0) {
+                        return <p className="text-sm text-muted-foreground py-6 text-center">No events on this day.</p>;
+                      }
+                      return dayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />);
+                    })()}
                   </div>
                 </div>
-              )}
-
-              {Object.keys(upcomingByDate).length > 0 && (
-                <div>
-                  <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">Upcoming</h2>
-                  <div className="space-y-4">
-                    {Object.entries(upcomingByDate).map(([dateKey, dayEvents]) => (
-                      <div key={dateKey}>
-                        <p className="text-xs text-muted-foreground mb-2">{formatDate(dayEvents[0].start)}</p>
-                        <div className="space-y-2">
-                          {dayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
-                        </div>
+              ) : (
+                <>
+                  {todayEvents.length > 0 && (
+                    <div className="mb-6">
+                      <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">Today — {formatDate(new Date().toISOString())}</h2>
+                      <div className="space-y-2">
+                        {todayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    </div>
+                  )}
 
-              {todayEvents.length === 0 && upcomingEvents.length === 0 && (
-                <p className="text-sm text-muted-foreground py-10 text-center">No upcoming events this week.</p>
+                  {Object.keys(upcomingByDate).length > 0 && (
+                    <div>
+                      <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">Upcoming</h2>
+                      <div className="space-y-4">
+                        {Object.entries(upcomingByDate).map(([dateKey, dayEvents]) => (
+                          <div key={dateKey}>
+                            <p className="text-xs text-muted-foreground mb-2">{formatDate(dayEvents[0].start)}</p>
+                            <div className="space-y-2">
+                              {dayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {todayEvents.length === 0 && upcomingEvents.length === 0 && (
+                    <p className="text-sm text-muted-foreground py-10 text-center">No upcoming events this week.</p>
+                  )}
+                </>
               )}
             </>
           )}
