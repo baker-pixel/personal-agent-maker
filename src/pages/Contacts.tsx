@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, Search, Star, StarOff, Mail, Calendar as CalIcon, Users } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { Loader2, RefreshCw, Search, Star, StarOff, Mail, Calendar as CalIcon, Users, Sparkles, Cake, Clock } from "lucide-react";
+import { formatDistanceToNow, differenceInDays, format } from "date-fns";
 
 type Contact = {
   id: string;
@@ -23,12 +23,18 @@ type Contact = {
   last_interaction_source: string | null;
   last_interaction_summary: string | null;
   interaction_count: number;
+  ai_summary: string | null;
+  ai_topics: string[] | null;
+  enriched_at: string | null;
+  birthday: string | null;
+  stay_in_touch_days: number | null;
 };
 
 export default function Contacts() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [enriching, setEnriching] = useState(false);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Contact | null>(null);
 
@@ -41,7 +47,7 @@ export default function Contacts() {
       .order("last_interaction_at", { ascending: false, nullsFirst: false })
       .limit(500);
     if (error) toast.error("Failed to load contacts");
-    setContacts(data || []);
+    setContacts((data as any) || []);
     setLoading(false);
   };
 
@@ -67,6 +73,24 @@ export default function Contacts() {
     setContacts((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_vip: !x.is_vip } : x)));
   };
 
+  const enrichContact = async () => {
+    if (!editing) return;
+    setEnriching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("contact-enrich", {
+        body: { contactId: editing.id },
+      });
+      if (error) throw error;
+      toast.success(data?.emailsAnalyzed ? `Analyzed ${data.emailsAnalyzed} emails` : "Enriched");
+      setEditing({ ...editing, ai_summary: data.summary, ai_topics: data.topics, enriched_at: new Date().toISOString() });
+      load();
+    } catch (e: any) {
+      toast.error(e?.message || "AI enrichment failed");
+    } finally {
+      setEnriching(false);
+    }
+  };
+
   const saveEdit = async () => {
     if (!editing) return;
     const { error } = await supabase
@@ -76,6 +100,8 @@ export default function Contacts() {
         company: editing.company,
         role: editing.role,
         notes: editing.notes,
+        birthday: editing.birthday || null,
+        stay_in_touch_days: editing.stay_in_touch_days || null,
       })
       .eq("id", editing.id);
     if (error) return toast.error("Failed to save");
@@ -91,9 +117,33 @@ export default function Contacts() {
       c.name?.toLowerCase().includes(s) ||
       c.email?.toLowerCase().includes(s) ||
       c.company?.toLowerCase().includes(s) ||
-      c.role?.toLowerCase().includes(s)
+      c.role?.toLowerCase().includes(s) ||
+      c.ai_topics?.some((t) => t.toLowerCase().includes(s))
     );
   });
+
+  // Stay-in-touch reminders: VIPs or contacts with stay_in_touch_days set, who haven't been heard from
+  const reminders = useMemo(() => {
+    const today = new Date();
+    const stale = contacts
+      .filter((c) => {
+        const interval = c.stay_in_touch_days || (c.is_vip ? 30 : null);
+        if (!interval || !c.last_interaction_at) return false;
+        const days = differenceInDays(today, new Date(c.last_interaction_at));
+        return days >= interval;
+      })
+      .slice(0, 3);
+
+    const birthdays = contacts.filter((c) => {
+      if (!c.birthday) return false;
+      const b = new Date(c.birthday);
+      const next = new Date(today.getFullYear(), b.getMonth(), b.getDate());
+      const days = differenceInDays(next, today);
+      return days >= 0 && days <= 14;
+    }).slice(0, 3);
+
+    return { stale, birthdays };
+  }, [contacts]);
 
   return (
     <div className="min-h-screen bg-background pt-[env(safe-area-inset-top)]">
@@ -113,10 +163,34 @@ export default function Contacts() {
           </Button>
         </div>
 
+        {(reminders.stale.length > 0 || reminders.birthdays.length > 0) && (
+          <Card className="p-4 bg-accent/5 border-accent/20">
+            <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-accent" /> Stay in touch
+            </h3>
+            <div className="space-y-1.5">
+              {reminders.birthdays.map((c) => (
+                <div key={`b-${c.id}`} className="flex items-center gap-2 text-sm cursor-pointer hover:text-accent" onClick={() => setEditing(c)}>
+                  <Cake className="w-3.5 h-3.5 text-accent" />
+                  <span className="font-medium">{c.name}</span>
+                  <span className="text-muted-foreground text-xs">birthday {format(new Date(c.birthday!), "MMM d")}</span>
+                </div>
+              ))}
+              {reminders.stale.map((c) => (
+                <div key={`s-${c.id}`} className="flex items-center gap-2 text-sm cursor-pointer hover:text-accent" onClick={() => setEditing(c)}>
+                  <Clock className="w-3.5 h-3.5 text-accent" />
+                  <span className="font-medium">{c.name}</span>
+                  <span className="text-muted-foreground text-xs">last heard {formatDistanceToNow(new Date(c.last_interaction_at!), { addSuffix: true })}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name, email, company..."
+            placeholder="Search by name, email, company, topic..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -147,7 +221,17 @@ export default function Contacts() {
                       {c.role && <span className="text-xs text-muted-foreground">{c.role}{c.company ? ` · ${c.company}` : ""}</span>}
                     </div>
                     {c.email && <p className="text-sm text-muted-foreground truncate">{c.email}</p>}
-                    {c.last_interaction_summary && (
+                    {c.ai_summary && (
+                      <p className="text-xs text-foreground/80 mt-1.5 line-clamp-2 italic">{c.ai_summary}</p>
+                    )}
+                    {c.ai_topics && c.ai_topics.length > 0 && (
+                      <div className="flex gap-1 mt-1.5 flex-wrap">
+                        {c.ai_topics.slice(0, 4).map((t) => (
+                          <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent">{t}</span>
+                        ))}
+                      </div>
+                    )}
+                    {c.last_interaction_summary && !c.ai_summary && (
                       <p className="text-xs text-muted-foreground mt-1 truncate flex items-center gap-1">
                         {c.last_interaction_source === "calendar" ? <CalIcon className="w-3 h-3" /> : <Mail className="w-3 h-3" />}
                         {c.last_interaction_summary}
@@ -172,15 +256,57 @@ export default function Contacts() {
       </div>
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Edit contact</DialogTitle></DialogHeader>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editing?.name}</DialogTitle></DialogHeader>
           {editing && (
             <div className="space-y-3">
+              {/* AI Summary section */}
+              <Card className="p-3 bg-accent/5 border-accent/20">
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="flex items-center gap-1.5 text-xs font-semibold text-accent">
+                    <Sparkles className="w-3.5 h-3.5" /> AI Brief
+                  </Label>
+                  <Button size="sm" variant="ghost" onClick={enrichContact} disabled={enriching} className="h-7 text-xs">
+                    {enriching ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+                    {editing.ai_summary ? "Regenerate" : "Generate"}
+                  </Button>
+                </div>
+                {editing.ai_summary ? (
+                  <>
+                    <p className="text-sm text-foreground/90">{editing.ai_summary}</p>
+                    {editing.ai_topics && editing.ai_topics.length > 0 && (
+                      <div className="flex gap-1 mt-2 flex-wrap">
+                        {editing.ai_topics.map((t) => (
+                          <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent">{t}</span>
+                        ))}
+                      </div>
+                    )}
+                    {editing.enriched_at && (
+                      <p className="text-[10px] text-muted-foreground mt-2">Updated {formatDistanceToNow(new Date(editing.enriched_at), { addSuffix: true })}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Click Generate to scan recent emails and build a brief.</p>
+                )}
+              </Card>
+
               <div><Label>Name</Label><Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
               <div><Label>Email</Label><Input value={editing.email || ""} disabled /></div>
-              <div><Label>Company</Label><Input value={editing.company || ""} onChange={(e) => setEditing({ ...editing, company: e.target.value })} /></div>
-              <div><Label>Role</Label><Input value={editing.role || ""} onChange={(e) => setEditing({ ...editing, role: e.target.value })} /></div>
-              <div><Label>Notes</Label><Textarea rows={4} value={editing.notes || ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} placeholder="Anything Normy should remember about this person..." /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Company</Label><Input value={editing.company || ""} onChange={(e) => setEditing({ ...editing, company: e.target.value })} /></div>
+                <div><Label>Role</Label><Input value={editing.role || ""} onChange={(e) => setEditing({ ...editing, role: e.target.value })} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="flex items-center gap-1"><Cake className="w-3 h-3" /> Birthday</Label>
+                  <Input type="date" value={editing.birthday || ""} onChange={(e) => setEditing({ ...editing, birthday: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1"><Clock className="w-3 h-3" /> Reach out every</Label>
+                  <Input type="number" placeholder="days" value={editing.stay_in_touch_days || ""} onChange={(e) => setEditing({ ...editing, stay_in_touch_days: e.target.value ? parseInt(e.target.value) : null })} />
+                </div>
+              </div>
+              <div><Label>Notes</Label><Textarea rows={3} value={editing.notes || ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} placeholder="Anything Normy should remember about this person..." /></div>
               <p className="text-xs text-muted-foreground">{editing.interaction_count} interactions tracked</p>
             </div>
           )}
