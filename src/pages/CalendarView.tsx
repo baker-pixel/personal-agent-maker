@@ -88,6 +88,7 @@ export default function CalendarView() {
   const [error, setError] = useState<string | null>(null);
   const [needsReconnect, setNeedsReconnect] = useState(false);
   const [view, setView] = useState<"day" | "week" | "month">("week");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [agentSheetOpen, setAgentSheetOpen] = useState(false);
   const [agentInput, setAgentInput] = useState("");
