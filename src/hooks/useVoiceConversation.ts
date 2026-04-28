@@ -61,8 +61,6 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
 
   const onUserUtteranceRef = useRef(onUserUtterance);
   useEffect(() => { onUserUtteranceRef.current = onUserUtterance; }, [onUserUtterance]);
-  const ttsRef = useRef(tts);
-  ttsRef.current = tts;
 
   const flushPending = () => {
     if (pauseTimerRef.current) {
