@@ -15,15 +15,18 @@ Your job: parse the transcript into clean, structured items. Be generous in extr
 Today's date is ${new Date().toISOString().slice(0, 10)} (${new Date().toLocaleDateString("en-US", { weekday: "long" })}). Resolve relative dates ("tomorrow", "next Friday", "in 2 weeks") to absolute YYYY-MM-DD.
 
 Item types:
+- "calendar_event": a real event happening at a time/place — concerts, dinners, meetings, appointments, flights, parties. Has title, event_date (YYYY-MM-DD), optional event_time (HH:MM 24h), optional event_end_time, location, all_day (true if no time given). Goes on Google Calendar.
 - "task": something to do (project work, errands, deliverables). Has title, optional due_date, priority.
 - "reminder": a one-off time-based nudge (call X, email Y back). Has title, optional remind_at (ISO datetime).
 - "contact_reminder": birthdays, anniversaries, recurring personal touches. Has contact_name, reminder_date (YYYY-MM-DD), reminder_type (birthday/anniversary/check-in), recurring (true for birthdays/anniversaries).
 - "followup": something to follow up on later (no specific date needed). Becomes a task with priority=low.
 
-Keep titles short and imperative ("Call Sarah", "Review Q3 deck"). Strip filler ("um", "remind me to", "I need to").`;
+Decision rule: if the user mentions an event happening at a specific time/place ("Luke Combs concert Saturday", "dinner with Mark Friday 7pm", "flight to NYC Tuesday"), it's a calendar_event — NOT a task. Tasks are things to *do*, events are things to *attend*.
+
+Keep titles short and clean ("Luke Combs concert", "Call Sarah", "Review Q3 deck"). Strip filler ("um", "remind me to", "I need to", "add to my calendar").`;
 
 interface ExtractedItem {
-  type: "task" | "reminder" | "contact_reminder" | "followup";
+  type: "task" | "reminder" | "contact_reminder" | "followup" | "calendar_event";
   title?: string;
   description?: string;
   due_date?: string;
@@ -33,6 +36,11 @@ interface ExtractedItem {
   reminder_date?: string;
   reminder_type?: string;
   recurring?: boolean;
+  event_date?: string;
+  event_time?: string;
+  event_end_time?: string;
+  location?: string;
+  all_day?: boolean;
 }
 
 serve(async (req) => {
@@ -76,8 +84,8 @@ serve(async (req) => {
                     items: {
                       type: "object",
                       properties: {
-                        type: { type: "string", enum: ["task", "reminder", "contact_reminder", "followup"] },
-                        title: { type: "string", description: "Short imperative title" },
+                        type: { type: "string", enum: ["task", "reminder", "contact_reminder", "followup", "calendar_event"] },
+                        title: { type: "string", description: "Short clean title" },
                         description: { type: "string", description: "Optional extra detail" },
                         due_date: { type: "string", description: "YYYY-MM-DD for tasks" },
                         priority: { type: "string", enum: ["low", "medium", "high"] },
@@ -86,6 +94,11 @@ serve(async (req) => {
                         reminder_date: { type: "string", description: "YYYY-MM-DD for contact_reminder" },
                         reminder_type: { type: "string", description: "birthday | anniversary | check-in" },
                         recurring: { type: "boolean" },
+                        event_date: { type: "string", description: "YYYY-MM-DD for calendar_event" },
+                        event_time: { type: "string", description: "HH:MM (24h) for calendar_event start" },
+                        event_end_time: { type: "string", description: "HH:MM (24h) for calendar_event end" },
+                        location: { type: "string", description: "Venue/place for calendar_event" },
+                        all_day: { type: "boolean", description: "True if no specific time given" },
                       },
                       required: ["type", "title"],
                       additionalProperties: false,
