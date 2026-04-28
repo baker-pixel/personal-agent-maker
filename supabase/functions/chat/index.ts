@@ -334,7 +334,7 @@ serve(async (req) => {
           calToken ? fetchEvents(calToken, 7) : Promise.resolve({ events: [], error: null }),
           adminForContacts
             .from("contacts")
-            .select("name, email, company, role, notes, is_vip, last_interaction_at, last_interaction_summary, interaction_count")
+            .select("name, email, company, role, notes, is_vip, last_interaction_at, last_interaction_summary, interaction_count, ai_summary, ai_topics, birthday")
             .eq("user_id", user.id)
             .order("is_vip", { ascending: false })
             .order("last_interaction_at", { ascending: false, nullsFirst: false })
@@ -500,7 +500,10 @@ Location: ${e.location || "None"}\n`;
           realDataContext += "\n\n--- CONTACT INTELLIGENCE (people the user knows) ---\n";
           contacts.forEach((c: any) => {
             const last = c.last_interaction_at ? new Date(c.last_interaction_at).toLocaleDateString() : "unknown";
-            realDataContext += `• ${c.name}${c.is_vip ? " ⭐VIP" : ""} <${c.email || "no-email"}>${c.role ? ` — ${c.role}` : ""}${c.company ? ` @ ${c.company}` : ""} | last: ${last} (${c.interaction_count}x)${c.notes ? ` | notes: ${c.notes}` : ""}${c.last_interaction_summary ? ` | recent: ${c.last_interaction_summary}` : ""}\n`;
+            const aiBrief = c.ai_summary ? ` | AI brief: ${c.ai_summary}` : "";
+            const topics = c.ai_topics && c.ai_topics.length ? ` | topics: ${c.ai_topics.join(", ")}` : "";
+            const bday = c.birthday ? ` | birthday: ${c.birthday}` : "";
+            realDataContext += `• ${c.name}${c.is_vip ? " ⭐VIP" : ""} <${c.email || "no-email"}>${c.role ? ` — ${c.role}` : ""}${c.company ? ` @ ${c.company}` : ""} | last: ${last} (${c.interaction_count}x)${c.notes ? ` | notes: ${c.notes}` : ""}${c.last_interaction_summary ? ` | recent: ${c.last_interaction_summary}` : ""}${aiBrief}${topics}${bday}\n`;
           });
           realDataContext += "--- END CONTACTS ---\n";
         }
