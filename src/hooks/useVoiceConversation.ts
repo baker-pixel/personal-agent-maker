@@ -59,7 +59,12 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const pendingTranscriptRef = useRef<string>("");
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const flushPending = useCallback(() => {
+  const onUserUtteranceRef = useRef(onUserUtterance);
+  useEffect(() => { onUserUtteranceRef.current = onUserUtterance; }, [onUserUtterance]);
+  const ttsRef = useRef(tts);
+  ttsRef.current = tts;
+
+  const flushPending = () => {
     if (pauseTimerRef.current) {
       clearTimeout(pauseTimerRef.current);
       pauseTimerRef.current = null;
@@ -68,9 +73,11 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     pendingTranscriptRef.current = "";
     if (!buffered) return;
     errorCountRef.current = 0;
-    if (ttsSpeakingRef.current) tts.stop();
-    onUserUtterance(buffered);
-  }, [onUserUtterance, tts]);
+    if (ttsSpeakingRef.current) {
+      try { ttsRef.current?.stop(); } catch { /* ignore */ }
+    }
+    onUserUtteranceRef.current?.(buffered);
+  };
 
   const speech = useSpeechRecognition({
     continuous: false,
@@ -78,11 +85,9 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     onResult: (text) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      // Append this fragment to the pending buffer (with spacing).
       pendingTranscriptRef.current = (
         pendingTranscriptRef.current ? pendingTranscriptRef.current + " " : ""
       ) + trimmed;
-      // Reset / arm the pause timer — only submit after sustained silence.
       if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
       pauseTimerRef.current = setTimeout(() => {
         pauseTimerRef.current = null;
