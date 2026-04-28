@@ -28,7 +28,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const thinkingRef = useRef(!!thinking);
   useEffect(() => { thinkingRef.current = !!thinking; }, [thinking]);
   // Forward declare so onEnd can reference it
-  const speechRef = useRef<any>(null);
+  const speechRef = useRef<ReturnType<typeof useSpeechRecognition> | null>(null);
 
   const tts = useTextToSpeech({
     remote: {
@@ -234,7 +234,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     tts.unlockAudio();
     // Auto-enable TTS for conversation mode
     if (!tts.enabled) tts.toggle();
-    try { speech.startListening(); } catch { }
+    try { speech.startListening(); } catch { /* ignore */ }
   }, [speech, tts, voicePrefs]);
 
   const stopConversation = useCallback(() => {
