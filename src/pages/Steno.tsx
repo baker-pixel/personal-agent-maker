@@ -109,6 +109,45 @@ export default function Steno() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
 
+      // 1) Persist the Steno session (transcript + AI summary) so it can be recalled later
+      const transcriptText = transcriptRef.current.trim() || transcript.trim();
+      let sessionId: string | null = null;
+      if (transcriptText) {
+        let title = "Steno session";
+        let summary = "";
+        let topics: string[] = [];
+        try {
+          const { data: sumData } = await supabase.functions.invoke("steno-summarize", {
+            body: { transcript: transcriptText },
+          });
+          if (sumData && !sumData.error) {
+            title = sumData.title || title;
+            summary = sumData.summary || "";
+            topics = Array.isArray(sumData.topics) ? sumData.topics : [];
+          }
+        } catch (e) {
+          console.warn("[Steno] summarize failed, saving without summary", e);
+        }
+        const { data: sessRow, error: sessErr } = await supabase
+          .from("steno_sessions")
+          .insert({
+            user_id: user.id,
+            title,
+            transcript: transcriptText,
+            summary: summary || null,
+            topics,
+            item_count: items.length,
+            session_date: new Date().toISOString().slice(0, 10),
+          })
+          .select("id")
+          .single();
+        if (sessErr) {
+          console.error("[Steno] session save failed", sessErr);
+        } else {
+          sessionId = (sessRow as any)?.id || null;
+        }
+      }
+
       const actionItems: any[] = [];
       const reminders: any[] = [];
       const contactReminders: any[] = [];
@@ -131,6 +170,7 @@ export default function Steno() {
             priority: it.priority || (it.type === "followup" ? "low" : "medium"),
             status: "open",
             source: "steno",
+            steno_session_id: sessionId,
           });
         } else if (it.type === "reminder") {
           reminders.push({
@@ -140,6 +180,7 @@ export default function Steno() {
             email_snippet: it.description || null,
             remind_at: it.remind_at || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
             status: "pending",
+            steno_session_id: sessionId,
           });
         } else if (it.type === "contact_reminder") {
           contactReminders.push({
@@ -149,6 +190,7 @@ export default function Steno() {
             reminder_type: it.reminder_type || "check-in",
             recurring: it.recurring ?? false,
             notes: it.description || null,
+            steno_session_id: sessionId,
           });
         }
       }
@@ -242,6 +284,12 @@ export default function Steno() {
             <span className="text-sm font-medium">Back</span>
           </button>
           <div className="flex-1" />
+          <button
+            onClick={() => { speech.stopListening(); navigate("/steno/history"); }}
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mr-3"
+          >
+            History
+          </button>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center">
               <Sparkles className="w-3.5 h-3.5 text-accent" />

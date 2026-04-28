@@ -326,6 +326,7 @@ serve(async (req) => {
           actionItemsRes,
           remindersRes,
           briefingRes,
+          stenoSessionsRes,
         ] = await Promise.all([
           gmailAccounts.length > 0
             ? Promise.all(gmailAccounts.map((acc) => fetchRecentEmails(acc.token, 8, acc.email)))
@@ -366,6 +367,12 @@ serve(async (req) => {
             .eq("user_id", user.id)
             .eq("briefing_date", todayDate)
             .maybeSingle(),
+          adminForContacts
+            .from("steno_sessions")
+            .select("title, summary, topics, transcript, item_count, created_at, session_date")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(15),
         ]);
 
         // Aggregate emails across all Gmail accounts; track per-account fetch errors
@@ -391,6 +398,7 @@ serve(async (req) => {
         const actionItems = actionItemsRes.data || [];
         const reminders = remindersRes.data || [];
         const todaysBriefing = briefingRes.data;
+        const stenoSessions = stenoSessionsRes.data || [];
 
         if (allEmails.length > 0) {
           const accountNote = gmailAccounts.length > 1 ? ` (across ${gmailAccounts.length} connected accounts)` : "";
@@ -472,6 +480,20 @@ Location: ${e.location || "None"}\n`;
 
         if (todaysBriefing) {
           realDataContext += `\n\n--- TODAY'S DAILY BRIEFING (already generated) ---\n${todaysBriefing.summary}\n--- END BRIEFING ---\n`;
+        }
+
+        if (stenoSessions.length > 0) {
+          realDataContext += "\n\n--- STENO PAD SESSIONS (user's recent dictations — long-term memory) ---\n";
+          realDataContext += "These are the user's own past brain dumps. Reference them when they ask 'what did I say about X', 'remind me what I noted', or anything where their own past thoughts/notes are relevant. Quote sparingly — don't dump full transcripts unless asked.\n";
+          stenoSessions.forEach((s: any, i: number) => {
+            const when = new Date(s.created_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+            const topicStr = (s.topics && s.topics.length) ? ` | topics: ${s.topics.join(", ")}` : "";
+            const sum = s.summary ? `\n   summary: ${s.summary}` : "";
+            // Truncate transcript to keep token cost sane; full text available on the History page.
+            const tx = (s.transcript || "").slice(0, 600);
+            realDataContext += `\n[Session ${i + 1}] ${when} — "${s.title}" (${s.item_count} items)${topicStr}${sum}\n   transcript excerpt: ${tx}${s.transcript && s.transcript.length > 600 ? "…" : ""}\n`;
+          });
+          realDataContext += "--- END STENO SESSIONS ---\n";
         }
 
         if (contacts.length > 0) {
