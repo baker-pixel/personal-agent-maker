@@ -26,6 +26,7 @@ export type Database = {
           priority: string
           source: string | null
           status: string
+          steno_session_id: string | null
           title: string
           updated_at: string
           user_id: string
@@ -41,6 +42,7 @@ export type Database = {
           priority?: string
           source?: string | null
           status?: string
+          steno_session_id?: string | null
           title: string
           updated_at?: string
           user_id: string
@@ -56,11 +58,20 @@ export type Database = {
           priority?: string
           source?: string | null
           status?: string
+          steno_session_id?: string | null
           title?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "action_items_steno_session_id_fkey"
+            columns: ["steno_session_id"]
+            isOneToOne: false
+            referencedRelation: "steno_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chat_conversations: {
         Row: {
@@ -132,6 +143,7 @@ export type Database = {
           recurring: boolean
           reminder_date: string
           reminder_type: string
+          steno_session_id: string | null
           updated_at: string
           user_id: string
         }
@@ -145,6 +157,7 @@ export type Database = {
           recurring?: boolean
           reminder_date: string
           reminder_type?: string
+          steno_session_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -158,10 +171,19 @@ export type Database = {
           recurring?: boolean
           reminder_date?: string
           reminder_type?: string
+          steno_session_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contact_reminders_steno_session_id_fkey"
+            columns: ["steno_session_id"]
+            isOneToOne: false
+            referencedRelation: "steno_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       contacts: {
         Row: {
@@ -316,6 +338,7 @@ export type Database = {
           id: string
           remind_at: string
           status: string
+          steno_session_id: string | null
           user_id: string
         }
         Insert: {
@@ -326,6 +349,7 @@ export type Database = {
           id?: string
           remind_at: string
           status?: string
+          steno_session_id?: string | null
           user_id: string
         }
         Update: {
@@ -336,9 +360,18 @@ export type Database = {
           id?: string
           remind_at?: string
           status?: string
+          steno_session_id?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "email_reminders_steno_session_id_fkey"
+            columns: ["steno_session_id"]
+            isOneToOne: false
+            referencedRelation: "steno_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_triage_preferences: {
         Row: {
@@ -581,6 +614,45 @@ export type Database = {
           id?: string
           messages?: Json
           phone_number?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      steno_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          item_count: number
+          session_date: string
+          summary: string | null
+          title: string
+          topics: string[]
+          transcript: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_count?: number
+          session_date?: string
+          summary?: string | null
+          title?: string
+          topics?: string[]
+          transcript: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_count?: number
+          session_date?: string
+          summary?: string | null
+          title?: string
+          topics?: string[]
+          transcript?: string
           updated_at?: string
           user_id?: string
         }
