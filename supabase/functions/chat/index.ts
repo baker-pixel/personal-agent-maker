@@ -326,6 +326,7 @@ serve(async (req) => {
           actionItemsRes,
           remindersRes,
           briefingRes,
+          stenoSessionsRes,
         ] = await Promise.all([
           gmailAccounts.length > 0
             ? Promise.all(gmailAccounts.map((acc) => fetchRecentEmails(acc.token, 8, acc.email)))
@@ -366,6 +367,12 @@ serve(async (req) => {
             .eq("user_id", user.id)
             .eq("briefing_date", todayDate)
             .maybeSingle(),
+          adminForContacts
+            .from("steno_sessions")
+            .select("title, summary, topics, transcript, item_count, created_at, session_date")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(15),
         ]);
 
         // Aggregate emails across all Gmail accounts; track per-account fetch errors
