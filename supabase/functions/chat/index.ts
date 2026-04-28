@@ -482,6 +482,20 @@ Location: ${e.location || "None"}\n`;
           realDataContext += `\n\n--- TODAY'S DAILY BRIEFING (already generated) ---\n${todaysBriefing.summary}\n--- END BRIEFING ---\n`;
         }
 
+        if (stenoSessions.length > 0) {
+          realDataContext += "\n\n--- STENO PAD SESSIONS (user's recent dictations — long-term memory) ---\n";
+          realDataContext += "These are the user's own past brain dumps. Reference them when they ask 'what did I say about X', 'remind me what I noted', or anything where their own past thoughts/notes are relevant. Quote sparingly — don't dump full transcripts unless asked.\n";
+          stenoSessions.forEach((s: any, i: number) => {
+            const when = new Date(s.created_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+            const topicStr = (s.topics && s.topics.length) ? ` | topics: ${s.topics.join(", ")}` : "";
+            const sum = s.summary ? `\n   summary: ${s.summary}` : "";
+            // Truncate transcript to keep token cost sane; full text available on the History page.
+            const tx = (s.transcript || "").slice(0, 600);
+            realDataContext += `\n[Session ${i + 1}] ${when} — "${s.title}" (${s.item_count} items)${topicStr}${sum}\n   transcript excerpt: ${tx}${s.transcript && s.transcript.length > 600 ? "…" : ""}\n`;
+          });
+          realDataContext += "--- END STENO SESSIONS ---\n";
+        }
+
         if (contacts.length > 0) {
           realDataContext += "\n\n--- CONTACT INTELLIGENCE (people the user knows) ---\n";
           contacts.forEach((c: any) => {
