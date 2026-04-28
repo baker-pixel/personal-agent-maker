@@ -170,6 +170,7 @@ export default function Steno() {
             priority: it.priority || (it.type === "followup" ? "low" : "medium"),
             status: "open",
             source: "steno",
+            steno_session_id: sessionId,
           });
         } else if (it.type === "reminder") {
           reminders.push({
@@ -179,6 +180,7 @@ export default function Steno() {
             email_snippet: it.description || null,
             remind_at: it.remind_at || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
             status: "pending",
+            steno_session_id: sessionId,
           });
         } else if (it.type === "contact_reminder") {
           contactReminders.push({
@@ -188,6 +190,7 @@ export default function Steno() {
             reminder_type: it.reminder_type || "check-in",
             recurring: it.recurring ?? false,
             notes: it.description || null,
+            steno_session_id: sessionId,
           });
         }
       }
