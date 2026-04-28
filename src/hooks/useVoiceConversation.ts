@@ -53,17 +53,41 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const lastErrorAtRef = useRef(0);
   const pausedByVisibilityRef = useRef(false);
 
+  // Buffer final transcripts so a brief pause (thinking) doesn't cut the user off.
+  // We accumulate fragments and only submit after PAUSE_MS of true silence.
+  const PAUSE_MS = 2500;
+  const pendingTranscriptRef = useRef<string>("");
+  const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushPending = useCallback(() => {
+    if (pauseTimerRef.current) {
+      clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = null;
+    }
+    const buffered = pendingTranscriptRef.current.trim();
+    pendingTranscriptRef.current = "";
+    if (!buffered) return;
+    errorCountRef.current = 0;
+    if (ttsSpeakingRef.current) tts.stop();
+    onUserUtterance(buffered);
+  }, [onUserUtterance, tts]);
+
   const speech = useSpeechRecognition({
     continuous: false,
     lang: voicePrefs.prefs.stt_language || "en-US",
     onResult: (text) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      // Successful result resets error backoff
-      errorCountRef.current = 0;
-      // Barge-in: stop any ongoing TTS
-      if (ttsSpeakingRef.current) tts.stop();
-      onUserUtterance(trimmed);
+      // Append this fragment to the pending buffer (with spacing).
+      pendingTranscriptRef.current = (
+        pendingTranscriptRef.current ? pendingTranscriptRef.current + " " : ""
+      ) + trimmed;
+      // Reset / arm the pause timer — only submit after sustained silence.
+      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = setTimeout(() => {
+        pauseTimerRef.current = null;
+        flushPending();
+      }, PAUSE_MS);
     },
     onError: (err) => {
       errorCountRef.current += 1;
