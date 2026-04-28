@@ -644,6 +644,11 @@ Location: ${e.location || "None"}\n`;
 
 
 
+        // File search capability hint (read-only — Drive + Gmail attachments)
+        realDataContext += "\n\n--- FILE SEARCH AVAILABLE ---\n";
+        realDataContext += "The user has a Files page at /files where they can search across Google Drive and Gmail attachments using natural language (read-only — you cannot delete or modify files). When the user asks to find a file, document, attachment, contract, PDF, deck, spreadsheet, etc., suggest the Files page as a Next Step. Example asks: 'find the contract Sarah sent', 'where's the Q3 deck', 'pull up that invoice from Acme'.\n";
+        realDataContext += "--- END FILE SEARCH ---\n";
+
         if (gmailAccounts.length === 0 && !calToken) {
           realDataContext += "\n\n[No Google accounts connected. If the user asks about emails or calendar, let them know they can connect via Integrations (plug icon in the top right).]\n";
         }

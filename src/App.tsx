@@ -27,6 +27,7 @@ import SmsLog from "./pages/SmsLog";
 import Steno from "./pages/Steno";
 import StenoHistory from "./pages/StenoHistory";
 import Contacts from "./pages/Contacts";
+import Files from "./pages/Files";
 import Leads from "./pages/Leads";
 import AppHeader from "./components/AppHeader";
 import InstallBanner from "./components/InstallBanner";
@@ -112,6 +113,7 @@ const App = () => {
               <Route path="/steno" element={<ProtectedRoute session={session}><Steno /></ProtectedRoute>} />
               <Route path="/steno/history" element={<ProtectedRoute session={session}><StenoHistory /></ProtectedRoute>} />
               <Route path="/contacts" element={<ProtectedRoute session={session}><Contacts /></ProtectedRoute>} />
+              <Route path="/files" element={<ProtectedRoute session={session}><Files /></ProtectedRoute>} />
               <Route path="/leads" element={<ProtectedRoute session={session}><Leads /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>

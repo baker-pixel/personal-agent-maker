@@ -32,6 +32,10 @@ Deno.serve(async (req) => {
       "profile",
       "https://www.googleapis.com/auth/gmail.modify",
       "https://www.googleapis.com/auth/calendar",
+      // READ-ONLY Drive access. Google enforces this at the token level —
+      // any write/delete/trash API call will be rejected by Google. Normy CANNOT
+      // delete, move, rename, or modify any file in the user's Drive.
+      "https://www.googleapis.com/auth/drive.readonly",
     ].join(" ");
 
     const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
