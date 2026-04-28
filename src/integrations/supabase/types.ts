@@ -187,6 +187,9 @@ export type Database = {
       }
       contacts: {
         Row: {
+          ai_summary: string | null
+          ai_topics: string[] | null
+          birthday: string | null
           company: string | null
           created_at: string
           email: string | null
@@ -201,11 +204,15 @@ export type Database = {
           notes: string | null
           phone: string | null
           role: string | null
+          stay_in_touch_days: number | null
           tags: string[]
           updated_at: string
           user_id: string
         }
         Insert: {
+          ai_summary?: string | null
+          ai_topics?: string[] | null
+          birthday?: string | null
           company?: string | null
           created_at?: string
           email?: string | null
@@ -220,11 +227,15 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           role?: string | null
+          stay_in_touch_days?: number | null
           tags?: string[]
           updated_at?: string
           user_id: string
         }
         Update: {
+          ai_summary?: string | null
+          ai_topics?: string[] | null
+          birthday?: string | null
           company?: string | null
           created_at?: string
           email?: string | null
@@ -239,6 +250,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           role?: string | null
+          stay_in_touch_days?: number | null
           tags?: string[]
           updated_at?: string
           user_id?: string
