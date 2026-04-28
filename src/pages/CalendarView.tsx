@@ -88,6 +88,7 @@ export default function CalendarView() {
   const [error, setError] = useState<string | null>(null);
   const [needsReconnect, setNeedsReconnect] = useState(false);
   const [view, setView] = useState<"day" | "week" | "month">("week");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [agentSheetOpen, setAgentSheetOpen] = useState(false);
   const [agentInput, setAgentInput] = useState("");
@@ -319,45 +320,78 @@ export default function CalendarView() {
               <div className="grid grid-cols-7 gap-1 mb-4">
                 {weekDays.map((day, i) => {
                   const d = weekDates[i];
-                  const isToday = d.toISOString().slice(0, 10) === today;
+                  const dateStr = d.toISOString().slice(0, 10);
+                  const isToday = dateStr === today;
+                  const isSelected = selectedDate === dateStr;
+                  const dayHasEvents = events.some((e) => getDateKey(e.start) === dateStr);
                   return (
-                    <div key={day} className="text-center">
+                    <button
+                      key={day}
+                      onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                      className="text-center group focus:outline-none"
+                    >
                       <p className="text-xs text-muted-foreground mb-1">{day}</p>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center mx-auto text-sm font-medium ${isToday ? "bg-accent text-accent-foreground" : ""}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center mx-auto text-sm font-medium transition-colors ${
+                        isSelected ? "bg-foreground text-background" :
+                        isToday ? "bg-accent text-accent-foreground" :
+                        "group-hover:bg-muted"
+                      }`}>
                         {d.getDate()}
                       </div>
-                    </div>
+                      {dayHasEvents && !isSelected && !isToday && (
+                        <div className="w-1 h-1 rounded-full bg-accent mx-auto mt-1" />
+                      )}
+                    </button>
                   );
                 })}
               </div>
 
-              {todayEvents.length > 0 && (
+              {selectedDate ? (
                 <div className="mb-6">
-                  <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">Today — {formatDate(new Date().toISOString())}</h2>
+                  <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">
+                    {formatDate(new Date(selectedDate + "T12:00:00").toISOString())}
+                  </h2>
                   <div className="space-y-2">
-                    {todayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
+                    {(() => {
+                      const dayEvents = events.filter((e) => getDateKey(e.start) === selectedDate);
+                      if (dayEvents.length === 0) {
+                        return <p className="text-sm text-muted-foreground py-6 text-center">No events on this day.</p>;
+                      }
+                      return dayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />);
+                    })()}
                   </div>
                 </div>
-              )}
-
-              {Object.keys(upcomingByDate).length > 0 && (
-                <div>
-                  <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">Upcoming</h2>
-                  <div className="space-y-4">
-                    {Object.entries(upcomingByDate).map(([dateKey, dayEvents]) => (
-                      <div key={dateKey}>
-                        <p className="text-xs text-muted-foreground mb-2">{formatDate(dayEvents[0].start)}</p>
-                        <div className="space-y-2">
-                          {dayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
-                        </div>
+              ) : (
+                <>
+                  {todayEvents.length > 0 && (
+                    <div className="mb-6">
+                      <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">Today — {formatDate(new Date().toISOString())}</h2>
+                      <div className="space-y-2">
+                        {todayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    </div>
+                  )}
 
-              {todayEvents.length === 0 && upcomingEvents.length === 0 && (
-                <p className="text-sm text-muted-foreground py-10 text-center">No upcoming events this week.</p>
+                  {Object.keys(upcomingByDate).length > 0 && (
+                    <div>
+                      <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">Upcoming</h2>
+                      <div className="space-y-4">
+                        {Object.entries(upcomingByDate).map(([dateKey, dayEvents]) => (
+                          <div key={dateKey}>
+                            <p className="text-xs text-muted-foreground mb-2">{formatDate(dayEvents[0].start)}</p>
+                            <div className="space-y-2">
+                              {dayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {todayEvents.length === 0 && upcomingEvents.length === 0 && (
+                    <p className="text-sm text-muted-foreground py-10 text-center">No upcoming events this week.</p>
+                  )}
+                </>
               )}
             </>
           )}
@@ -386,18 +420,44 @@ export default function CalendarView() {
                   const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
                   const dayEvents = events.filter((e) => getDateKey(e.start) === dateStr);
                   const isToday = dateStr === today;
+                  const isSelected = selectedDate === dateStr;
                   return (
-                    <div key={d} className={`aspect-square rounded-lg p-1 border transition-colors hover:border-accent/30 cursor-pointer ${isToday ? "bg-accent/10 border-accent/30" : "border-transparent"}`}>
+                    <button
+                      key={d}
+                      onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                      className={`aspect-square rounded-lg p-1 border transition-colors hover:border-accent/30 text-left ${
+                        isSelected ? "bg-foreground/10 border-foreground/40" :
+                        isToday ? "bg-accent/10 border-accent/30" :
+                        "border-transparent"
+                      }`}
+                    >
                       <span className={`text-xs font-medium ${isToday ? "text-accent" : ""}`}>{d}</span>
                       <div className="flex flex-wrap gap-0.5 mt-0.5">
                         {dayEvents.map((e, i) => (
                           <div key={e.id} className={`w-1.5 h-1.5 rounded-full ${getColorForEvent(i)}`} />
                         ))}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
+
+              {selectedDate && (
+                <div className="mt-6">
+                  <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">
+                    {formatDate(new Date(selectedDate + "T12:00:00").toISOString())}
+                  </h2>
+                  <div className="space-y-2">
+                    {(() => {
+                      const dayEvents = events.filter((e) => getDateKey(e.start) === selectedDate);
+                      if (dayEvents.length === 0) {
+                        return <p className="text-sm text-muted-foreground py-6 text-center">No events on this day.</p>;
+                      }
+                      return dayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />);
+                    })()}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
