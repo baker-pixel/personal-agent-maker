@@ -24,10 +24,11 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const [conversationActive, setConversationActive] = useState(false);
   const conversationActiveRef = useRef(false);
   const lastSpokenReplyRef = useRef<string | null>(null);
+  const ensuredTtsAfterPrefsRef = useRef(false);
   const thinkingRef = useRef(!!thinking);
   useEffect(() => { thinkingRef.current = !!thinking; }, [thinking]);
   // Forward declare so onEnd can reference it
-  const speechRef = useRef<any>(null);
+  const speechRef = useRef<ReturnType<typeof useSpeechRecognition> | null>(null);
 
   const tts = useTextToSpeech({
     remote: {
@@ -116,6 +117,17 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   useEffect(() => {
     conversationActiveRef.current = conversationActive;
   }, [conversationActive]);
+
+  useEffect(() => {
+    if (!conversationActive || !voicePrefs.loaded || ensuredTtsAfterPrefsRef.current) return;
+    const id = window.setTimeout(() => {
+      if (!conversationActiveRef.current || ensuredTtsAfterPrefsRef.current) return;
+      ensuredTtsAfterPrefsRef.current = true;
+      const currentTts = ttsRef.current;
+      if (!currentTts.enabled) currentTts.toggle();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [conversationActive, voicePrefs.loaded]);
 
   // Stable refs to avoid re-running the speak effect on every render
   const ttsRef = useRef(tts);
@@ -212,6 +224,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const pwa = usePwaEnvironment();
 
   const startConversation = useCallback(() => {
+    ensuredTtsAfterPrefsRef.current = false;
     setConversationActive(true);
     conversationActiveRef.current = true;
     errorCountRef.current = 0;
@@ -221,12 +234,13 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     tts.unlockAudio();
     // Auto-enable TTS for conversation mode
     if (!tts.enabled) tts.toggle();
-    try { speech.startListening(); } catch { }
+    try { speech.startListening(); } catch { /* ignore */ }
   }, [speech, tts, voicePrefs]);
 
   const stopConversation = useCallback(() => {
     setConversationActive(false);
     conversationActiveRef.current = false;
+    ensuredTtsAfterPrefsRef.current = false;
     voicePrefs.update({ voice_conversation_enabled: false });
     speech.stopListening();
     tts.stop();
