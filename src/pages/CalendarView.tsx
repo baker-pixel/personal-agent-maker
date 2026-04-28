@@ -420,18 +420,44 @@ export default function CalendarView() {
                   const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
                   const dayEvents = events.filter((e) => getDateKey(e.start) === dateStr);
                   const isToday = dateStr === today;
+                  const isSelected = selectedDate === dateStr;
                   return (
-                    <div key={d} className={`aspect-square rounded-lg p-1 border transition-colors hover:border-accent/30 cursor-pointer ${isToday ? "bg-accent/10 border-accent/30" : "border-transparent"}`}>
+                    <button
+                      key={d}
+                      onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                      className={`aspect-square rounded-lg p-1 border transition-colors hover:border-accent/30 text-left ${
+                        isSelected ? "bg-foreground/10 border-foreground/40" :
+                        isToday ? "bg-accent/10 border-accent/30" :
+                        "border-transparent"
+                      }`}
+                    >
                       <span className={`text-xs font-medium ${isToday ? "text-accent" : ""}`}>{d}</span>
                       <div className="flex flex-wrap gap-0.5 mt-0.5">
                         {dayEvents.map((e, i) => (
                           <div key={e.id} className={`w-1.5 h-1.5 rounded-full ${getColorForEvent(i)}`} />
                         ))}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
+
+              {selectedDate && (
+                <div className="mt-6">
+                  <h2 className="font-display text-sm font-semibold text-muted-foreground mb-3">
+                    {formatDate(new Date(selectedDate + "T12:00:00").toISOString())}
+                  </h2>
+                  <div className="space-y-2">
+                    {(() => {
+                      const dayEvents = events.filter((e) => getDateKey(e.start) === selectedDate);
+                      if (dayEvents.length === 0) {
+                        return <p className="text-sm text-muted-foreground py-6 text-center">No events on this day.</p>;
+                      }
+                      return dayEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} />);
+                    })()}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
