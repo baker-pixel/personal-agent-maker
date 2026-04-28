@@ -112,10 +112,17 @@ export default function Steno() {
       const actionItems: any[] = [];
       const reminders: any[] = [];
       const contactReminders: any[] = [];
+      const calendarEvents: ExtractedItem[] = [];
 
       for (const it of items) {
         if (!it.title?.trim()) continue;
-        if (it.type === "task" || it.type === "followup") {
+        if (it.type === "calendar_event") {
+          if (!it.event_date) {
+            toast.error(`"${it.title}" needs a date — set one before saving.`);
+            return;
+          }
+          calendarEvents.push(it);
+        } else if (it.type === "task" || it.type === "followup") {
           actionItems.push({
             user_id: user.id,
             title: it.title.trim(),
@@ -155,7 +162,50 @@ export default function Steno() {
       const firstError = results.find((r) => r.error);
       if (firstError?.error) throw firstError.error;
 
-      toast.success(`Saved ${items.length} item${items.length === 1 ? "" : "s"} ✨`);
+      // Push calendar events to Google Calendar
+      let calendarFailed = 0;
+      let calendarReconnect = false;
+      let calendarSaved = 0;
+      for (const ev of calendarEvents) {
+        const allDay = ev.all_day !== false && !ev.event_time;
+        const start = allDay
+          ? ev.event_date!
+          : new Date(`${ev.event_date}T${ev.event_time}:00`).toISOString();
+        const end = allDay
+          ? undefined
+          : ev.event_end_time
+          ? new Date(`${ev.event_date}T${ev.event_end_time}:00`).toISOString()
+          : undefined;
+
+        const { data: cdata, error: cerr } = await supabase.functions.invoke("calendar-event-create", {
+          body: {
+            summary: ev.title.trim(),
+            description: ev.description || undefined,
+            location: ev.location || undefined,
+            start,
+            end,
+            allDay,
+          },
+        });
+        if (cerr || cdata?.error) {
+          calendarFailed++;
+          if (cdata?.code === "RECONNECT_REQUIRED" || cdata?.code === "NOT_CONNECTED") {
+            calendarReconnect = true;
+          }
+          console.error("[Steno] calendar event failed", ev.title, cerr || cdata?.error);
+        } else {
+          calendarSaved++;
+        }
+      }
+
+      if (calendarReconnect) {
+        toast.error("Google Calendar isn't connected — connect it in Integrations to save events.");
+      } else if (calendarFailed > 0) {
+        toast.error(`${calendarFailed} calendar event${calendarFailed === 1 ? "" : "s"} failed to save.`);
+      }
+
+      const otherSaved = items.length - calendarEvents.length + calendarSaved;
+      toast.success(`Saved ${otherSaved} item${otherSaved === 1 ? "" : "s"} ✨`);
       setItems([]);
       setTranscript("");
       setInterim("");
