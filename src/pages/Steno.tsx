@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Mic, Square, Loader2, Sparkles, Trash2, CheckCircle2, ListTodo, Bell, Cake, Repeat } from "lucide-react";
+import { ArrowLeft, Mic, Square, Loader2, Sparkles, Trash2, CheckCircle2, ListTodo, Bell, Cake, Repeat, CalendarDays } from "lucide-react";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAgent } from "@/contexts/AgentContext";
 
-type ItemType = "task" | "reminder" | "contact_reminder" | "followup";
+type ItemType = "task" | "reminder" | "contact_reminder" | "followup" | "calendar_event";
 
 interface ExtractedItem {
   id: string; // local id for editing
@@ -23,9 +23,15 @@ interface ExtractedItem {
   reminder_date?: string;
   reminder_type?: string;
   recurring?: boolean;
+  event_date?: string;
+  event_time?: string;
+  event_end_time?: string;
+  location?: string;
+  all_day?: boolean;
 }
 
 const TYPE_META: Record<ItemType, { label: string; icon: typeof ListTodo; tint: string }> = {
+  calendar_event: { label: "Event", icon: CalendarDays, tint: "text-violet-600 bg-violet-500/10 border-violet-500/20" },
   task: { label: "Task", icon: ListTodo, tint: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" },
   reminder: { label: "Reminder", icon: Bell, tint: "text-orange-600 bg-orange-500/10 border-orange-500/20" },
   contact_reminder: { label: "Contact", icon: Cake, tint: "text-rose-600 bg-rose-500/10 border-rose-500/20" },
