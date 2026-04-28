@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Mic, Square, Loader2, Sparkles, Trash2, CheckCircle2, ListTodo, Bell, Cake, Repeat } from "lucide-react";
+import { ArrowLeft, Mic, Square, Loader2, Sparkles, Trash2, CheckCircle2, ListTodo, Bell, Cake, Repeat, CalendarDays } from "lucide-react";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAgent } from "@/contexts/AgentContext";
 
-type ItemType = "task" | "reminder" | "contact_reminder" | "followup";
+type ItemType = "task" | "reminder" | "contact_reminder" | "followup" | "calendar_event";
 
 interface ExtractedItem {
   id: string; // local id for editing
@@ -23,9 +23,15 @@ interface ExtractedItem {
   reminder_date?: string;
   reminder_type?: string;
   recurring?: boolean;
+  event_date?: string;
+  event_time?: string;
+  event_end_time?: string;
+  location?: string;
+  all_day?: boolean;
 }
 
 const TYPE_META: Record<ItemType, { label: string; icon: typeof ListTodo; tint: string }> = {
+  calendar_event: { label: "Event", icon: CalendarDays, tint: "text-violet-600 bg-violet-500/10 border-violet-500/20" },
   task: { label: "Task", icon: ListTodo, tint: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" },
   reminder: { label: "Reminder", icon: Bell, tint: "text-orange-600 bg-orange-500/10 border-orange-500/20" },
   contact_reminder: { label: "Contact", icon: Cake, tint: "text-rose-600 bg-rose-500/10 border-rose-500/20" },
@@ -106,10 +112,17 @@ export default function Steno() {
       const actionItems: any[] = [];
       const reminders: any[] = [];
       const contactReminders: any[] = [];
+      const calendarEvents: ExtractedItem[] = [];
 
       for (const it of items) {
         if (!it.title?.trim()) continue;
-        if (it.type === "task" || it.type === "followup") {
+        if (it.type === "calendar_event") {
+          if (!it.event_date) {
+            toast.error(`"${it.title}" needs a date — set one before saving.`);
+            return;
+          }
+          calendarEvents.push(it);
+        } else if (it.type === "task" || it.type === "followup") {
           actionItems.push({
             user_id: user.id,
             title: it.title.trim(),
@@ -149,7 +162,50 @@ export default function Steno() {
       const firstError = results.find((r) => r.error);
       if (firstError?.error) throw firstError.error;
 
-      toast.success(`Saved ${items.length} item${items.length === 1 ? "" : "s"} ✨`);
+      // Push calendar events to Google Calendar
+      let calendarFailed = 0;
+      let calendarReconnect = false;
+      let calendarSaved = 0;
+      for (const ev of calendarEvents) {
+        const allDay = ev.all_day !== false && !ev.event_time;
+        const start = allDay
+          ? ev.event_date!
+          : new Date(`${ev.event_date}T${ev.event_time}:00`).toISOString();
+        const end = allDay
+          ? undefined
+          : ev.event_end_time
+          ? new Date(`${ev.event_date}T${ev.event_end_time}:00`).toISOString()
+          : undefined;
+
+        const { data: cdata, error: cerr } = await supabase.functions.invoke("calendar-event-create", {
+          body: {
+            summary: ev.title.trim(),
+            description: ev.description || undefined,
+            location: ev.location || undefined,
+            start,
+            end,
+            allDay,
+          },
+        });
+        if (cerr || cdata?.error) {
+          calendarFailed++;
+          if (cdata?.code === "RECONNECT_REQUIRED" || cdata?.code === "NOT_CONNECTED") {
+            calendarReconnect = true;
+          }
+          console.error("[Steno] calendar event failed", ev.title, cerr || cdata?.error);
+        } else {
+          calendarSaved++;
+        }
+      }
+
+      if (calendarReconnect) {
+        toast.error("Google Calendar isn't connected — connect it in Integrations to save events.");
+      } else if (calendarFailed > 0) {
+        toast.error(`${calendarFailed} calendar event${calendarFailed === 1 ? "" : "s"} failed to save.`);
+      }
+
+      const otherSaved = items.length - calendarEvents.length + calendarSaved;
+      toast.success(`Saved ${otherSaved} item${otherSaved === 1 ? "" : "s"} ✨`);
       setItems([]);
       setTranscript("");
       setInterim("");
@@ -321,6 +377,40 @@ export default function Steno() {
                             className="font-medium text-sm h-9"
                           />
                           {/* Type-specific fields */}
+                          {it.type === "calendar_event" && (
+                            <div className="space-y-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <Input
+                                  type="date"
+                                  value={it.event_date || ""}
+                                  onChange={(e) => updateItem(it.id, { event_date: e.target.value })}
+                                  className="h-9 text-xs"
+                                />
+                                <Input
+                                  type="time"
+                                  value={it.event_time || ""}
+                                  onChange={(e) => updateItem(it.id, { event_time: e.target.value, all_day: e.target.value ? false : true })}
+                                  placeholder="Time"
+                                  className="h-9 text-xs"
+                                />
+                              </div>
+                              <Input
+                                value={it.location || ""}
+                                onChange={(e) => updateItem(it.id, { location: e.target.value })}
+                                placeholder="Location (optional)"
+                                className="h-9 text-xs"
+                              />
+                              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={it.all_day !== false && !it.event_time}
+                                  onChange={(e) => updateItem(it.id, { all_day: e.target.checked, event_time: e.target.checked ? undefined : it.event_time })}
+                                  className="rounded"
+                                />
+                                All day
+                              </label>
+                            </div>
+                          )}
                           {(it.type === "task" || it.type === "followup") && (
                             <div className="grid grid-cols-2 gap-2">
                               <Input
