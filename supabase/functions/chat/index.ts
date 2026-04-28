@@ -398,6 +398,7 @@ serve(async (req) => {
         const actionItems = actionItemsRes.data || [];
         const reminders = remindersRes.data || [];
         const todaysBriefing = briefingRes.data;
+        const stenoSessions = stenoSessionsRes.data || [];
 
         if (allEmails.length > 0) {
           const accountNote = gmailAccounts.length > 1 ? ` (across ${gmailAccounts.length} connected accounts)` : "";
