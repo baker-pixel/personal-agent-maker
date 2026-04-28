@@ -109,6 +109,45 @@ export default function Steno() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
 
+      // 1) Persist the Steno session (transcript + AI summary) so it can be recalled later
+      const transcriptText = transcriptRef.current.trim() || transcript.trim();
+      let sessionId: string | null = null;
+      if (transcriptText) {
+        let title = "Steno session";
+        let summary = "";
+        let topics: string[] = [];
+        try {
+          const { data: sumData } = await supabase.functions.invoke("steno-summarize", {
+            body: { transcript: transcriptText },
+          });
+          if (sumData && !sumData.error) {
+            title = sumData.title || title;
+            summary = sumData.summary || "";
+            topics = Array.isArray(sumData.topics) ? sumData.topics : [];
+          }
+        } catch (e) {
+          console.warn("[Steno] summarize failed, saving without summary", e);
+        }
+        const { data: sessRow, error: sessErr } = await supabase
+          .from("steno_sessions")
+          .insert({
+            user_id: user.id,
+            title,
+            transcript: transcriptText,
+            summary: summary || null,
+            topics,
+            item_count: items.length,
+            session_date: new Date().toISOString().slice(0, 10),
+          })
+          .select("id")
+          .single();
+        if (sessErr) {
+          console.error("[Steno] session save failed", sessErr);
+        } else {
+          sessionId = (sessRow as any)?.id || null;
+        }
+      }
+
       const actionItems: any[] = [];
       const reminders: any[] = [];
       const contactReminders: any[] = [];
