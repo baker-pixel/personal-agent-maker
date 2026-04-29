@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +8,7 @@ import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import normyLogo from "@/assets/normy-logo.png";
 
-export default function Auth() {
+const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
   const [email, setEmail] = useState("");
@@ -66,7 +66,7 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-5">
+    <div ref={ref} className="min-h-screen bg-background flex items-center justify-center px-5">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
         <div className="flex items-center justify-center gap-2 mb-8">
           <img src={normyLogo} alt="Normy" className="h-10 w-auto" />
@@ -132,4 +132,6 @@ export default function Auth() {
       </motion.div>
     </div>
   );
-}
+});
+
+export default Auth;
