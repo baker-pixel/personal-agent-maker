@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,12 +7,27 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import normyLogo from "@/assets/normy-logo.png";
 
+const getResetParams = () => {
+  const url = new URL(window.location.href);
+  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+  const read = (key: string) => url.searchParams.get(key) || hashParams.get(key);
+
+  return {
+    url,
+    code: read("code"),
+    accessToken: read("access_token"),
+    refreshToken: read("refresh_token"),
+    tokenHash: read("token_hash"),
+    errorDesc: read("error_description"),
+  };
+};
+
 export default function ResetPassword() {
-  const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [resetComplete, setResetComplete] = useState(false);
+  const [linkError, setLinkError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -26,18 +41,22 @@ export default function ResetPassword() {
 
     const init = async () => {
       try {
-        const url = new URL(window.location.href);
-        const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
-        const code = url.searchParams.get("code");
-        const accessToken = hashParams.get("access_token");
-        const refreshToken = hashParams.get("refresh_token");
-        const errorDesc =
-          url.searchParams.get("error_description") ||
-          hashParams.get("error_description");
+        const { url, code, accessToken, refreshToken, tokenHash, errorDesc } = getResetParams();
+        const markReady = () => {
+          window.history.replaceState({}, "", url.pathname);
+          setLinkError("");
+          setSessionReady(true);
+        };
 
         if (errorDesc) {
-          toast({ title: "Reset link invalid", description: decodeURIComponent(errorDesc).replace(/\+/g, " "), variant: "destructive" });
-          navigate("/auth");
+          setLinkError(decodeURIComponent(errorDesc).replace(/\+/g, " "));
+          return;
+        }
+
+        const { data: existing } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (existing.session) {
+          markReady();
           return;
         }
 
@@ -48,12 +67,25 @@ export default function ResetPassword() {
           });
           if (cancelled) return;
           if (error) {
-            toast({ title: "Reset link expired", description: "Please request a new password reset link.", variant: "destructive" });
-            navigate("/auth");
+            const { data: fallback } = await supabase.auth.getSession();
+            if (fallback.session) markReady();
+            else setLinkError("Please request a new password reset link.");
             return;
           }
-          window.history.replaceState({}, "", url.pathname);
-          setSessionReady(true);
+          markReady();
+          return;
+        }
+
+        if (tokenHash) {
+          const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+          if (cancelled) return;
+          if (error) {
+            const { data: fallback } = await supabase.auth.getSession();
+            if (fallback.session) markReady();
+            else setLinkError("Please request a new password reset link.");
+            return;
+          }
+          markReady();
           return;
         }
 
@@ -61,20 +93,16 @@ export default function ResetPassword() {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (cancelled) return;
           if (error) {
-            toast({ title: "Reset link expired", description: "Please request a new password reset link.", variant: "destructive" });
-            navigate("/auth");
+            const { data: fallback } = await supabase.auth.getSession();
+            if (fallback.session) markReady();
+            else setLinkError("Please request a new password reset link.");
             return;
           }
-          window.history.replaceState({}, "", url.pathname);
-          setSessionReady(true);
-          return;
+          markReady();
         }
-
-        const { data: { session } } = await supabase.auth.getSession();
-        if (cancelled) return;
-        if (session) setSessionReady(true);
       } catch (err) {
         console.error("[ResetPassword] init error", err);
+        if (!cancelled) setLinkError("Please request a new password reset link.");
       }
     };
 
@@ -84,8 +112,7 @@ export default function ResetPassword() {
       if (cancelled) return;
       setSessionReady((ready) => {
         if (!ready) {
-          toast({ title: "Reset link expired", description: "Please request a new password reset link.", variant: "destructive" });
-          navigate("/auth");
+          setLinkError("Please request a new password reset link.");
         }
         return ready;
       });
@@ -96,7 +123,6 @@ export default function ResetPassword() {
       clearTimeout(timer);
       subscription.unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleReset = async (e: React.FormEvent) => {
@@ -137,7 +163,15 @@ export default function ResetPassword() {
         ) : (
           <form onSubmit={handleReset} className="space-y-4">
             <h2 className="font-display text-xl font-semibold text-center mb-2">Set new password</h2>
-            {!sessionReady && (
+            {linkError ? (
+              <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                <p className="font-medium">Reset link expired</p>
+                <p className="mt-1">{linkError}</p>
+                <Link to="/auth" className="mt-2 inline-block underline underline-offset-4">
+                  Send a new reset link
+                </Link>
+              </div>
+            ) : !sessionReady && (
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <div className="w-4 h-4 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
                 Verifying reset link…
