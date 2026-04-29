@@ -139,8 +139,10 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
           conversationActiveRef.current &&
           !ttsSpeakingRef.current &&
           !thinkingRef.current &&
-          !pausedByVisibilityRef.current
+          !pausedByVisibilityRef.current &&
+          !pendingTranscriptRef.current
         ) {
+          lastStartAttemptRef.current = Date.now();
           try { speechRef.current?.startListening(); } catch { /* ignore */ }
         }
       }, backoff);
