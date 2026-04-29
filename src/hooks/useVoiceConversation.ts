@@ -77,8 +77,11 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     onUserUtteranceRef.current?.(buffered);
   };
 
+  // Use continuous mode so mobile Safari doesn't end recognition the moment
+  // it doesn't hear speech in the first ~1s. We rely on our PAUSE_MS buffer
+  // (in onResult) to decide when the user has finished a turn.
   const speech = useSpeechRecognition({
-    continuous: false,
+    continuous: true,
     lang: voicePrefs.prefs.stt_language || "en-US",
     onResult: (text) => {
       const trimmed = text.trim();
