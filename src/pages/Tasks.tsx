@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Sparkles, Loader2, Check, X, Mail } from "lucide-react";
 import { ActionItems } from "@/components/ActionItems";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -61,8 +61,6 @@ export default function Tasks() {
 }
 
 // ---------------- Suggested tasks (AI-extracted, awaiting approval) ----------------
-import { useEffect } from "react";
-import { Check, X, Mail } from "lucide-react";
 
 interface SuggestedItem {
   id: string;
