@@ -27,14 +27,33 @@ export default function ResetPassword() {
     const init = async () => {
       try {
         const url = new URL(window.location.href);
+        const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
         const code = url.searchParams.get("code");
+        const accessToken = hashParams.get("access_token");
+        const refreshToken = hashParams.get("refresh_token");
         const errorDesc =
           url.searchParams.get("error_description") ||
-          (url.hash.match(/error_description=([^&]+)/)?.[1] ?? null);
+          hashParams.get("error_description");
 
         if (errorDesc) {
           toast({ title: "Reset link invalid", description: decodeURIComponent(errorDesc).replace(/\+/g, " "), variant: "destructive" });
           navigate("/auth");
+          return;
+        }
+
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (cancelled) return;
+          if (error) {
+            toast({ title: "Reset link expired", description: "Please request a new password reset link.", variant: "destructive" });
+            navigate("/auth");
+            return;
+          }
+          window.history.replaceState({}, "", url.pathname);
+          setSessionReady(true);
           return;
         }
 
