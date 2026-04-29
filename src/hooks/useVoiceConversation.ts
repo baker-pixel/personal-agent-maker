@@ -77,8 +77,11 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     onUserUtteranceRef.current?.(buffered);
   };
 
+  // Use continuous mode so mobile Safari doesn't end recognition the moment
+  // it doesn't hear speech in the first ~1s. We rely on our PAUSE_MS buffer
+  // (in onResult) to decide when the user has finished a turn.
   const speech = useSpeechRecognition({
-    continuous: false,
+    continuous: true,
     lang: voicePrefs.prefs.stt_language || "en-US",
     onResult: (text) => {
       const trimmed = text.trim();
@@ -125,8 +128,9 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
       // If conversation is active and we're idle, restart listening shortly.
       // Use refs (not closure) so we read the *current* thinking/speaking state.
       if (!conversationActiveRef.current) return;
-      // Backoff if we're in an error storm: 250ms base, doubling up to 4s.
-      const backoff = Math.min(250 * Math.pow(2, errorCountRef.current), 4000);
+      // Backoff if we're in an error storm: 600ms base (mobile Safari needs
+      // breathing room between recognition instances), doubling up to 4s.
+      const backoff = Math.min(600 * Math.pow(2, errorCountRef.current), 4000);
       setTimeout(() => {
         if (
           conversationActiveRef.current &&
