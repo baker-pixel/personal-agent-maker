@@ -69,6 +69,10 @@ export default function Dashboard() {
           <p className="text-muted-foreground">{agentName} is ready to help manage your business.</p>
         </div>
 
+        <div className="mb-6">
+          <TasksWidget />
+        </div>
+
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {departments.map((dept) => {
             const Icon = dept.icon;
