@@ -257,11 +257,18 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     errorCountRef.current = 0;
     pausedByVisibilityRef.current = false;
     voicePrefs.update({ voice_conversation_enabled: true });
-    // Unlock iOS SpeechSynthesis on the user gesture (required for PWA)
+    // Unlock iOS SpeechSynthesis on the user gesture (required for PWA).
+    // This MUST happen even when SpeechRecognition is unavailable (iOS PWA),
+    // so that Normy can still speak replies aloud in TTS-only mode.
     tts.unlockAudio();
     // Auto-enable TTS for conversation mode
     if (!tts.enabled) tts.toggle();
-    try { speech.startListening(); } catch { /* ignore */ }
+    // Only attempt to start the mic if SpeechRecognition is actually supported.
+    // On iOS PWA this API is missing entirely, and calling it throws / no-ops,
+    // leaving the user stuck with nothing happening.
+    if (speech.isSupported) {
+      try { speech.startListening(); } catch { /* ignore */ }
+    }
   }, [speech, tts, voicePrefs]);
 
   const stopConversation = useCallback(() => {

@@ -85,9 +85,10 @@ export default function DecisionVoice() {
   // Auto-start the voice conversation on the first user gesture anywhere on the page.
   // Browser autoplay policies require a user gesture before audio can play, so we
   // attach a one-shot listener instead of calling startConversation() on mount.
+  // NOTE: We deliberately do NOT bail out when speechRecognitionBlockedByPwa is true.
+  // On iOS PWA the mic API is missing, but TTS still works — and startConversation()
+  // will safely skip the mic call while still unlocking & enabling speech replies.
   useEffect(() => {
-    if (!voice.isSupported) return;
-    if (voice.speechRecognitionBlockedByPwa) return;
     if (voice.conversationActive) return;
     if (greetedRef.current) return;
     const start = () => {
@@ -100,7 +101,7 @@ export default function DecisionVoice() {
       window.removeEventListener("pointerdown", start);
       window.removeEventListener("keydown", start);
     };
-  }, [voice.isSupported, voice.speechRecognitionBlockedByPwa, voice.conversationActive, voice.startConversation]);
+  }, [voice.conversationActive, voice.startConversation]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -270,7 +271,7 @@ export default function DecisionVoice() {
           {voice.speechRecognitionBlockedByPwa && (
             <div className="container max-w-lg pt-3 px-4">
               <div className="text-xs bg-muted/60 text-muted-foreground rounded-lg px-3 py-2 leading-snug">
-                Voice input isn't available in the installed Normy app on iOS. {agentName} can still <strong>speak replies</strong> here — for full hands-free voice, open Normy in Safari.
+                Mic input isn't available in the installed app on iOS — type your message and {agentName} will <strong>speak the reply aloud</strong>. For full hands-free voice, open <a href="https://normyagent.com" className="underline">normyagent.com</a> in Safari.
               </div>
             </div>
           )}
@@ -298,11 +299,22 @@ export default function DecisionVoice() {
             />
             <VoiceWaveform isActive={voice.isListening} />
             <button
-              onClick={voice.isSupported ? voice.toggleConversation : undefined}
-              disabled={!voice.isSupported}
+              onClick={() => {
+                // In iOS PWA, the mic API is blocked but TTS works. Toggling
+                // here at least unlocks SpeechSynthesis on the user gesture
+                // and turns voice replies on/off, so tapping does *something*.
+                if (voice.speechRecognitionBlockedByPwa) {
+                  voice.toggleConversation();
+                  return;
+                }
+                if (voice.isSupported) voice.toggleConversation();
+              }}
+              disabled={!voice.isSupported && !voice.speechRecognitionBlockedByPwa}
               title={
                 voice.speechRecognitionBlockedByPwa
-                  ? "Voice input isn't available in the installed app on iOS. Open Normy in Safari to use voice."
+                  ? voice.conversationActive
+                    ? "Mute Normy's voice replies"
+                    : "Tap to enable Normy's voice replies (mic input not available in installed app on iOS)"
                   : !voice.isSupported
                     ? "Voice is not supported in this browser. Try Chrome, Edge, or Safari."
                     : voice.conversationActive
@@ -310,7 +322,7 @@ export default function DecisionVoice() {
                       : `Start hands-free conversation with ${agentName}`
               }
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 ${
-                !voice.isSupported
+                !voice.isSupported && !voice.speechRecognitionBlockedByPwa
                   ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
                   : voice.conversationActive
                     ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30"
