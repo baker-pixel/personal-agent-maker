@@ -241,7 +241,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   // (>=2.5s since last start attempt) AND there is no buffered transcript the
   // user is actively dictating. Otherwise the watchdog races with `onstart`
   // and aborts the user mid-sentence ("stops before I can speak").
-  const lastStartAttemptRef = useRef(0);
+  // (lastStartAttemptRef is declared near the top of the hook)
   useEffect(() => {
     if (!conversationActive) return;
     if (speech.isListening || tts.isSpeaking || thinking) return;
