@@ -15,8 +15,9 @@ const addParams = (sets: URLSearchParams[], raw: string) => {
   sets.push(new URLSearchParams(value));
 };
 
-export const getPasswordRecoveryParams = (href = window.location.href): PasswordRecoveryParams => {
-  const url = new URL(href, window.location.origin);
+export const getPasswordRecoveryParams = (href = typeof window !== "undefined" ? window.location.href : "https://localhost/"): PasswordRecoveryParams => {
+  const baseOrigin = typeof window !== "undefined" ? window.location.origin : "https://localhost";
+  const url = new URL(href, baseOrigin);
   const params: URLSearchParams[] = [url.searchParams];
   const rawHash = url.hash.replace(/^#/, "");
   let hashPath = "";
@@ -24,7 +25,7 @@ export const getPasswordRecoveryParams = (href = window.location.href): Password
   addParams(params, rawHash);
 
   if (rawHash.startsWith("/")) {
-    const hashUrl = new URL(rawHash, window.location.origin);
+    const hashUrl = new URL(rawHash, baseOrigin);
     hashPath = hashUrl.pathname;
     params.push(hashUrl.searchParams);
     addParams(params, hashUrl.hash);
