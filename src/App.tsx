@@ -8,7 +8,7 @@ import { IntegrationsProvider } from "@/contexts/IntegrationsContext";
 import { AgentProvider } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
-import { getPasswordRecoveryParams, normalizePasswordRecoveryUrl } from "@/lib/passwordRecovery";
+import { getPasswordRecoveryParams, hasStoredPasswordRecovery, normalizePasswordRecoveryUrl } from "@/lib/passwordRecovery";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
