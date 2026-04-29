@@ -3,6 +3,7 @@ import { Mail, Calendar, FileText, Contact, ListTodo, Shield, Users, Megaphone, 
 
 import normyLogo from "@/assets/normy-logo.png";
 import { useAgent } from "@/contexts/AgentContext";
+import TasksWidget from "@/components/dashboard/TasksWidget";
 
 const departments = [
   {
