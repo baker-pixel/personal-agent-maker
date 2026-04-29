@@ -3,6 +3,7 @@ import { Mail, Calendar, FileText, Contact, ListTodo, Shield, Users, Megaphone, 
 
 import normyLogo from "@/assets/normy-logo.png";
 import { useAgent } from "@/contexts/AgentContext";
+import TasksWidget from "@/components/dashboard/TasksWidget";
 
 const departments = [
   {
@@ -15,7 +16,7 @@ const departments = [
       { name: "Calendar", icon: Calendar, active: true, path: "/calendar" },
       { name: "Files", icon: FileText, active: true, path: "/files" },
       { name: "Contacts", icon: Contact, active: true, path: "/contacts" },
-      { name: "Tasks", icon: ListTodo, active: false, path: "" },
+      { name: "Tasks", icon: ListTodo, active: true, path: "/tasks" },
     ],
   },
   {
@@ -66,6 +67,10 @@ export default function Dashboard() {
         <div className="mb-8">
           <h1 className="font-display text-3xl font-bold mb-1">Your Departments</h1>
           <p className="text-muted-foreground">{agentName} is ready to help manage your business.</p>
+        </div>
+
+        <div className="mb-6">
+          <TasksWidget />
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

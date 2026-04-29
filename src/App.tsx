@@ -29,6 +29,7 @@ import StenoHistory from "./pages/StenoHistory";
 import Contacts from "./pages/Contacts";
 import Files from "./pages/Files";
 import Leads from "./pages/Leads";
+import Tasks from "./pages/Tasks";
 import AppHeader from "./components/AppHeader";
 import InstallBanner from "./components/InstallBanner";
 import NotFound from "./pages/NotFound";
@@ -115,6 +116,7 @@ const App = () => {
               <Route path="/contacts" element={<ProtectedRoute session={session}><Contacts /></ProtectedRoute>} />
               <Route path="/files" element={<ProtectedRoute session={session}><Files /></ProtectedRoute>} />
               <Route path="/leads" element={<ProtectedRoute session={session}><Leads /></ProtectedRoute>} />
+              <Route path="/tasks" element={<ProtectedRoute session={session}><Tasks /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             {session && <InstallBanner />}
