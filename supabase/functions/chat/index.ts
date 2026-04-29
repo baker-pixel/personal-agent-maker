@@ -652,6 +652,11 @@ Location: ${e.location || "None"}\n`;
         realDataContext += "The user has a Files page at /files where they can search across Google Drive and Gmail attachments using natural language (read-only — you cannot delete or modify files). When the user asks to find a file, document, attachment, contract, PDF, deck, spreadsheet, etc., suggest the Files page as a Next Step. Example asks: 'find the contract Sarah sent', 'where's the Q3 deck', 'pull up that invoice from Acme'.\n";
         realDataContext += "--- END FILE SEARCH ---\n";
 
+        // Tasks capability hint
+        realDataContext += "\n\n--- TASKS CAPABILITY ---\n";
+        realDataContext += "The user has a Tasks page at /tasks for managing action items (open + completed, with priorities, due dates, assignees). The OPEN ACTION ITEMS section above is the live list. When the user asks 'what's on my list', 'what do I need to do', 'what's overdue', reference that data directly. When they say 'add a task to <X>' or 'remind me to <X>', tell them you've noted it and direct them to the Tasks page to confirm — do NOT silently insert. When asked to 'find tasks I owe people' or 'what did I commit to', scan recent emails in REAL INBOX DATA for implicit commitments and suggest they hit 'Scan inbox for tasks' on the /tasks page for an AI sweep.\n";
+        realDataContext += "--- END TASKS ---\n";
+
         if (gmailAccounts.length === 0 && !calToken) {
           realDataContext += "\n\n[No Google accounts connected. If the user asks about emails or calendar, let them know they can connect via Integrations (plug icon in the top right).]\n";
         }

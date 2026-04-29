@@ -15,7 +15,7 @@ const departments = [
       { name: "Calendar", icon: Calendar, active: true, path: "/calendar" },
       { name: "Files", icon: FileText, active: true, path: "/files" },
       { name: "Contacts", icon: Contact, active: true, path: "/contacts" },
-      { name: "Tasks", icon: ListTodo, active: false, path: "" },
+      { name: "Tasks", icon: ListTodo, active: true, path: "/tasks" },
     ],
   },
   {
