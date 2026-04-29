@@ -45,7 +45,7 @@ export default function ResetPassword() {
         const { code, accessToken, refreshToken, tokenHash, errorDesc, errorCode, hasRecoveryIntent } = getPasswordRecoveryParams();
 
         if (errorDesc || errorCode) {
-          setLinkError(decodeURIComponent(errorDesc).replace(/\+/g, " "));
+          setLinkError(errorDesc ? decodeURIComponent(errorDesc).replace(/\+/g, " ") : "That reset link is no longer valid. Send a new one below.");
           setRecoveryStatus("needs-link");
           return;
         }
