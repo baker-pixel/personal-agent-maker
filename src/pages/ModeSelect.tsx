@@ -65,7 +65,7 @@ export default function ModeSelect() {
           </motion.div>
           <p className="text-center text-xs font-semibold uppercase tracking-widest text-accent mt-3">★ Recommended</p>
 
-          <div className="pt-24 md:pt-32 space-y-4">
+          <div className="pt-10 md:pt-16 space-y-4">
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
