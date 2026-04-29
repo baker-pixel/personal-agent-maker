@@ -17,8 +17,6 @@ export default function ResetPassword() {
   useEffect(() => {
     let cancelled = false;
 
-    // Subscribe FIRST so we don't miss PASSWORD_RECOVERY / SIGNED_IN events
-    // that fire while Supabase processes the recovery hash from the URL.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
       if (event === "PASSWORD_RECOVERY" || (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED"))) {
@@ -26,13 +24,43 @@ export default function ResetPassword() {
       }
     });
 
-    // Then check for an already-established session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelled) return;
-      if (session) setSessionReady(true);
-    });
+    const init = async () => {
+      try {
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get("code");
+        const errorDesc =
+          url.searchParams.get("error_description") ||
+          (url.hash.match(/error_description=([^&]+)/)?.[1] ?? null);
 
-    // Fallback timeout — only redirects if no session ever materializes
+        if (errorDesc) {
+          toast({ title: "Reset link invalid", description: decodeURIComponent(errorDesc).replace(/\+/g, " "), variant: "destructive" });
+          navigate("/auth");
+          return;
+        }
+
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (cancelled) return;
+          if (error) {
+            toast({ title: "Reset link expired", description: "Please request a new password reset link.", variant: "destructive" });
+            navigate("/auth");
+            return;
+          }
+          window.history.replaceState({}, "", url.pathname);
+          setSessionReady(true);
+          return;
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (session) setSessionReady(true);
+      } catch (err) {
+        console.error("[ResetPassword] init error", err);
+      }
+    };
+
+    init();
+
     const timer = setTimeout(() => {
       if (cancelled) return;
       setSessionReady((ready) => {
@@ -42,7 +70,7 @@ export default function ResetPassword() {
         }
         return ready;
       });
-    }, 15000);
+    }, 20000);
 
     return () => {
       cancelled = true;
