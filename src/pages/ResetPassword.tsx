@@ -42,7 +42,7 @@ export default function ResetPassword() {
 
     const init = async () => {
       try {
-        const { code, accessToken, refreshToken, tokenHash, errorDesc, errorCode, hasRecoveryIntent } = getPasswordRecoveryParams();
+        const { code, accessToken, refreshToken, tokenHash, errorDesc, errorCode } = getPasswordRecoveryParams();
 
         if (errorDesc || errorCode) {
           setLinkError(errorDesc ? decodeURIComponent(errorDesc).replace(/\+/g, " ") : "That reset link is no longer valid. Send a new one below.");
@@ -99,7 +99,7 @@ export default function ResetPassword() {
           return;
         }
 
-        if (!hasRecoveryIntent) needNewLink();
+        needNewLink();
       } catch (err) {
         console.error("[ResetPassword] init error", err);
         if (!cancelled) needNewLink("Something went wrong verifying that link. Send a new one below.");
