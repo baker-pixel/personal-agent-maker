@@ -8,6 +8,7 @@ import { IntegrationsProvider } from "@/contexts/IntegrationsContext";
 import { AgentProvider } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
+import { getPasswordRecoveryParams, normalizePasswordRecoveryUrl } from "@/lib/passwordRecovery";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
@@ -39,28 +40,11 @@ import TermsOfService from "./pages/TermsOfService";
 
 const queryClient = new QueryClient();
 
-const isPasswordRecoveryUrl = () => {
-  const url = new URL(window.location.href);
-  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
-  return (
-    url.pathname === "/reset-password" ||
-    url.searchParams.get("type") === "recovery" ||
-    hashParams.get("type") === "recovery" ||
-    !!url.searchParams.get("code") ||
-    !!hashParams.get("access_token") ||
-    !!hashParams.get("token_hash") ||
-    !!url.searchParams.get("token_hash")
-  );
-};
-
 // Run synchronously at module load — before React renders — so the recovery
 // URL (with its hash containing access_token) is preserved on /reset-password.
 (() => {
   if (typeof window === "undefined") return;
-  if (isPasswordRecoveryUrl() && window.location.pathname !== "/reset-password") {
-    const { search, hash } = window.location;
-    window.history.replaceState({}, "", `/reset-password${search}${hash}`);
-  }
+  normalizePasswordRecoveryUrl();
 })();
 
 const ProtectedRoute = ({ session, children }: { session: Session | null; children: React.ReactNode }) => {
@@ -76,15 +60,12 @@ const ProtectedRoute = ({ session, children }: { session: Session | null; childr
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isRecovery, setIsRecovery] = useState(() => isPasswordRecoveryUrl());
+  const [isRecovery, setIsRecovery] = useState(() => getPasswordRecoveryParams().hasRecoveryIntent);
   const recoveryRedirected = useRef(false);
 
   useEffect(() => {
-    const recoveryUrl = isPasswordRecoveryUrl();
-    if (recoveryUrl && window.location.pathname !== "/reset-password") {
-      window.history.replaceState({}, "", `/reset-password${window.location.search}${window.location.hash}`);
-      setIsRecovery(true);
-    }
+    const recoveryUrl = normalizePasswordRecoveryUrl().hasRecoveryIntent;
+    if (recoveryUrl) setIsRecovery(true);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
