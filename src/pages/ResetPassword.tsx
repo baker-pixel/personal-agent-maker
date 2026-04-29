@@ -1,62 +1,52 @@
-import { useState, useEffect } from "react";
+import { forwardRef, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { getPasswordRecoveryParams } from "@/lib/passwordRecovery";
 import normyLogo from "@/assets/normy-logo.png";
 
-const getResetParams = () => {
-  const url = new URL(window.location.href);
-  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
-  const read = (key: string) => url.searchParams.get(key) || hashParams.get(key);
+type RecoveryStatus = "checking" | "ready" | "needs-link";
 
-  return {
-    url,
-    code: read("code"),
-    accessToken: read("access_token"),
-    refreshToken: read("refresh_token"),
-    tokenHash: read("token_hash"),
-    errorDesc: read("error_description"),
-  };
-};
-
-export default function ResetPassword() {
+const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, ref) {
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sessionReady, setSessionReady] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus>("checking");
   const [resetComplete, setResetComplete] = useState(false);
   const [linkError, setLinkError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
+    const markReady = () => {
+      window.history.replaceState({}, "", "/reset-password");
+      setLinkError("");
+      setRecoveryStatus("ready");
+    };
+
+    const needNewLink = (message = "Enter your email and we'll send a fresh reset link.") => {
+      setLinkError(message);
+      setRecoveryStatus("needs-link");
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
-      if (event === "PASSWORD_RECOVERY" || (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED"))) {
-        setSessionReady(true);
+      if (event === "PASSWORD_RECOVERY" || (session && getPasswordRecoveryParams().isResetPath)) {
+        markReady();
       }
     });
 
     const init = async () => {
       try {
-        const { url, code, accessToken, refreshToken, tokenHash, errorDesc } = getResetParams();
-        const markReady = () => {
-          window.history.replaceState({}, "", url.pathname);
-          setLinkError("");
-          setSessionReady(true);
-        };
+        const { code, accessToken, refreshToken, tokenHash, errorDesc, errorCode } = getPasswordRecoveryParams();
 
-        if (errorDesc) {
-          setLinkError(decodeURIComponent(errorDesc).replace(/\+/g, " "));
-          return;
-        }
-
-        const { data: existing } = await supabase.auth.getSession();
-        if (cancelled) return;
-        if (existing.session) {
-          markReady();
+        if (errorDesc || errorCode) {
+          setLinkError(errorDesc ? decodeURIComponent(errorDesc).replace(/\+/g, " ") : "That reset link is no longer valid. Send a new one below.");
+          setRecoveryStatus("needs-link");
           return;
         }
 
@@ -69,7 +59,7 @@ export default function ResetPassword() {
           if (error) {
             const { data: fallback } = await supabase.auth.getSession();
             if (fallback.session) markReady();
-            else setLinkError("Please request a new password reset link.");
+            else needNewLink("That reset link could not be verified. Send a new one below.");
             return;
           }
           markReady();
@@ -82,7 +72,7 @@ export default function ResetPassword() {
           if (error) {
             const { data: fallback } = await supabase.auth.getSession();
             if (fallback.session) markReady();
-            else setLinkError("Please request a new password reset link.");
+            else needNewLink("That reset link could not be verified. Send a new one below.");
             return;
           }
           markReady();
@@ -95,14 +85,24 @@ export default function ResetPassword() {
           if (error) {
             const { data: fallback } = await supabase.auth.getSession();
             if (fallback.session) markReady();
-            else setLinkError("Please request a new password reset link.");
+            else needNewLink("That reset link could not be verified. Send a new one below.");
             return;
           }
           markReady();
+          return;
         }
+
+        const { data: existing } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (existing.session) {
+          markReady();
+          return;
+        }
+
+        needNewLink();
       } catch (err) {
         console.error("[ResetPassword] init error", err);
-        if (!cancelled) setLinkError("Please request a new password reset link.");
+        if (!cancelled) needNewLink("Something went wrong verifying that link. Send a new one below.");
       }
     };
 
@@ -110,13 +110,14 @@ export default function ResetPassword() {
 
     const timer = setTimeout(() => {
       if (cancelled) return;
-      setSessionReady((ready) => {
-        if (!ready) {
-          setLinkError("Please request a new password reset link.");
+      setRecoveryStatus((status) => {
+        if (status === "checking") {
+          setLinkError("This reset link is taking too long to verify. Send a fresh one below.");
+          return "needs-link";
         }
-        return ready;
+        return status;
       });
-    }, 20000);
+    }, 30000);
 
     return () => {
       cancelled = true;
@@ -131,6 +132,12 @@ export default function ResetPassword() {
       toast({ title: "Password too short", description: "Use at least 6 characters.", variant: "destructive" });
       return;
     }
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      setRecoveryStatus("needs-link");
+      setLinkError("Your reset session expired. Send a fresh reset link below.");
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
@@ -143,8 +150,23 @@ export default function ResetPassword() {
     }
   };
 
+  const handleSendResetLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setResending(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setResending(false);
+    if (error) {
+      toast({ title: "Could not send reset link", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Reset link sent", description: "Open the newest email we just sent you." });
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-5">
+    <div ref={ref} className="min-h-screen bg-background flex items-center justify-center px-5">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
         <div className="flex items-center justify-center gap-2 mb-8">
           <img src={normyLogo} alt="Normy" className="h-10 w-auto" />
@@ -160,25 +182,33 @@ export default function ResetPassword() {
               </Button>
             </Link>
           </div>
+        ) : recoveryStatus === "needs-link" ? (
+          <form onSubmit={handleSendResetLink} className="space-y-4">
+            <h2 className="font-display text-xl font-semibold text-center mb-2">Reset password</h2>
+            {linkError && (
+              <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                {linkError}
+              </div>
+            )}
+            <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={resending}>
+              {resending ? "Sending…" : "Send New Reset Link"}
+            </Button>
+            <Link to="/auth" className="block text-sm text-accent hover:underline text-center">
+              Back to sign in
+            </Link>
+          </form>
         ) : (
           <form onSubmit={handleReset} className="space-y-4">
             <h2 className="font-display text-xl font-semibold text-center mb-2">Set new password</h2>
-            {linkError ? (
-              <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
-                <p className="font-medium">Reset link expired</p>
-                <p className="mt-1">{linkError}</p>
-                <Link to="/auth" className="mt-2 inline-block underline underline-offset-4">
-                  Send a new reset link
-                </Link>
-              </div>
-            ) : !sessionReady && (
+            {recoveryStatus === "checking" && (
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <div className="w-4 h-4 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
                 Verifying reset link…
               </div>
             )}
-            <Input type="password" placeholder="New password (min 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} disabled={!sessionReady} />
-            <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={loading || !sessionReady}>
+            <Input type="password" placeholder="New password (min 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} disabled={recoveryStatus !== "ready"} />
+            <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={loading || recoveryStatus !== "ready"}>
               {loading ? "Updating…" : "Update Password"}
             </Button>
           </form>
@@ -186,4 +216,6 @@ export default function ResetPassword() {
       </motion.div>
     </div>
   );
-}
+});
+
+export default ResetPassword;
