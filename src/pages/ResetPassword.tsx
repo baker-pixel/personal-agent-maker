@@ -123,7 +123,6 @@ export default function ResetPassword() {
       clearTimeout(timer);
       subscription.unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleReset = async (e: React.FormEvent) => {
