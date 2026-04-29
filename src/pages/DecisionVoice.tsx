@@ -99,7 +99,7 @@ export default function DecisionVoice() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-[100dvh] bg-background flex">
       <DelegateSidebar
         conversations={chat.conversations}
         activeId={chat.activeConversationId}
