@@ -85,9 +85,10 @@ export default function DecisionVoice() {
   // Auto-start the voice conversation on the first user gesture anywhere on the page.
   // Browser autoplay policies require a user gesture before audio can play, so we
   // attach a one-shot listener instead of calling startConversation() on mount.
+  // NOTE: We deliberately do NOT bail out when speechRecognitionBlockedByPwa is true.
+  // On iOS PWA the mic API is missing, but TTS still works — and startConversation()
+  // will safely skip the mic call while still unlocking & enabling speech replies.
   useEffect(() => {
-    if (!voice.isSupported) return;
-    if (voice.speechRecognitionBlockedByPwa) return;
     if (voice.conversationActive) return;
     if (greetedRef.current) return;
     const start = () => {
@@ -100,7 +101,7 @@ export default function DecisionVoice() {
       window.removeEventListener("pointerdown", start);
       window.removeEventListener("keydown", start);
     };
-  }, [voice.isSupported, voice.speechRecognitionBlockedByPwa, voice.conversationActive, voice.startConversation]);
+  }, [voice.conversationActive, voice.startConversation]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
