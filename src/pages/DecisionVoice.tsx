@@ -111,7 +111,7 @@ export default function DecisionVoice() {
         agentName={agentName}
       />
 
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col min-h-[100dvh]">
         <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
           <div className="container flex items-center h-14 px-4">
             <button
