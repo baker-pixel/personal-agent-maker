@@ -96,20 +96,37 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
 
   const isSupported = typeof window !== "undefined" && "speechSynthesis" in window;
 
-  // iOS unlock for both Web Speech AND <audio> playback
+  // iOS unlock for both Web Speech AND <audio> playback. MUST be called
+  // synchronously inside a real user gesture (touchend/click) — never after
+  // an `await`. On iOS Safari, a single silent SpeechSynthesisUtterance +
+  // a silent Audio play are required to unlock both pipelines.
   const unlockAudio = useCallback(() => {
     if (unlockedRef.current) return;
     try {
       if (isSupported) {
+        // Cancel any queued items first (Safari quirk)
+        try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
         const u = new SpeechSynthesisUtterance(" ");
         u.volume = 0;
+        u.rate = 1;
         window.speechSynthesis.speak(u);
       }
-      // Prime an Audio element with a silent buffer (helps iOS PWA)
+      // Prime an HTMLAudioElement so the FIRST real play() call doesn't
+      // get rejected by iOS as "not user-initiated". We attach iOS-friendly
+      // attributes and synchronously call play() on a tiny silent WAV.
       if (!audioRef.current) {
         audioRef.current = new Audio();
         audioRef.current.preload = "auto";
+        audioRef.current.setAttribute("playsinline", "true");
+        (audioRef.current as any).playsInline = true;
+        audioRef.current.crossOrigin = "anonymous";
       }
+      // 1-frame silent WAV (44 bytes) — synchronous play unlocks the element.
+      const SILENT_WAV =
+        "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+      audioRef.current.src = SILENT_WAV;
+      const p = audioRef.current.play();
+      if (p && typeof p.catch === "function") p.catch(() => { /* ignore */ });
       unlockedRef.current = true;
     } catch { /* ignore */ }
   }, [isSupported]);
@@ -237,7 +254,16 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
       const url = URL.createObjectURL(blob);
       if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = url;
-      if (!audioRef.current) audioRef.current = new Audio();
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+        audioRef.current.preload = "auto";
+        audioRef.current.setAttribute("playsinline", "true");
+        (audioRef.current as any).playsInline = true;
+        audioRef.current.crossOrigin = "anonymous";
+      }
+      // iOS Safari requires these every time we reuse the element
+      audioRef.current.setAttribute("playsinline", "true");
+      (audioRef.current as any).playsInline = true;
       audioRef.current.src = url;
       audioRef.current.onended = () => { setIsSpeaking(false); onComplete?.(); };
       audioRef.current.onerror = (e) => {
@@ -245,7 +271,16 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
         setIsSpeaking(false);
         onComplete?.();
       };
-      await audioRef.current.play();
+      try {
+        await audioRef.current.play();
+      } catch (playErr: any) {
+        // iOS NotAllowedError happens if the gesture context was lost
+        // (e.g. the user enabled TTS but then waited too long). Fall back
+        // to browser SpeechSynthesis which has a more lenient policy in
+        // PWAs / standalone Safari.
+        console.warn("[ElevenLabs TTS] play() rejected, falling back:", playErr?.name);
+        throw playErr;
+      }
     } catch (e) {
       console.error("[ElevenLabs TTS] failed, falling back to browser:", e);
       setIsSpeaking(false);

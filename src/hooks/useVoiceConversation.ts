@@ -52,6 +52,9 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const errorCountRef = useRef(0);
   const lastErrorAtRef = useRef(0);
   const pausedByVisibilityRef = useRef(false);
+  // Tracks the timestamp of our last `startListening()` call so the watchdog
+  // doesn't fire a second start before the previous one's `onstart` lands.
+  const lastStartAttemptRef = useRef(0);
 
   // Buffer final transcripts so a brief pause (thinking) doesn't cut the user off.
   // We accumulate fragments and only submit after PAUSE_MS of true silence.
@@ -136,8 +139,10 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
           conversationActiveRef.current &&
           !ttsSpeakingRef.current &&
           !thinkingRef.current &&
-          !pausedByVisibilityRef.current
+          !pausedByVisibilityRef.current &&
+          !pendingTranscriptRef.current
         ) {
+          lastStartAttemptRef.current = Date.now();
           try { speechRef.current?.startListening(); } catch { /* ignore */ }
         }
       }, backoff);
@@ -233,8 +238,12 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
 
   // Watchdog: if conversation is active but nothing is happening (not listening,
   // not speaking, not thinking), kick off listening again. Re-runs on an interval
-  // so a silently-failed start() will be retried until it sticks. Prevents the
-  // "stuck on Paused" state.
+  // so a silently-failed start() will be retried until it sticks.
+  // CRITICAL on mobile Safari: only fire when we've been idle for a real moment
+  // (>=2.5s since last start attempt) AND there is no buffered transcript the
+  // user is actively dictating. Otherwise the watchdog races with `onstart`
+  // and aborts the user mid-sentence ("stops before I can speak").
+  // (lastStartAttemptRef is declared near the top of the hook)
   useEffect(() => {
     if (!conversationActive) return;
     if (speech.isListening || tts.isSpeaking || thinking) return;
@@ -244,11 +253,14 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
         !ttsSpeakingRef.current &&
         !thinkingRef.current &&
         !pausedByVisibilityRef.current &&
-        !speechRef.current?.isListening
+        !speechRef.current?.isListening &&
+        !pendingTranscriptRef.current && // don't restart while user is dictating
+        Date.now() - lastStartAttemptRef.current > 2500 // back off after a recent attempt
       ) {
+        lastStartAttemptRef.current = Date.now();
         try { speechRef.current?.startListening(); } catch { /* ignore */ }
       }
-    }, 800);
+    }, 1200);
     return () => clearInterval(id);
   }, [conversationActive, speech.isListening, tts.isSpeaking, thinking]);
 
@@ -261,16 +273,25 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     errorCountRef.current = 0;
     pausedByVisibilityRef.current = false;
     voicePrefs.update({ voice_conversation_enabled: true });
-    // Unlock iOS SpeechSynthesis on the user gesture (required for PWA).
-    // This MUST happen even when SpeechRecognition is unavailable (iOS PWA),
-    // so that Normy can still speak replies aloud in TTS-only mode.
+    // Unlock iOS SpeechSynthesis + <audio> on the user gesture (required for PWA).
+    // MUST happen synchronously inside the gesture handler — never after `await`.
     tts.unlockAudio();
     // Auto-enable TTS for conversation mode
     if (!tts.enabled) tts.toggle();
     // Only attempt to start the mic if SpeechRecognition is actually supported.
-    // On iOS PWA this API is missing entirely, and calling it throws / no-ops,
-    // leaving the user stuck with nothing happening.
+    // On iOS PWA this API is missing entirely; TTS-only mode is the fallback.
     if (speech.isSupported) {
+      // Prompt for mic permission explicitly. iOS Safari sometimes won't show
+      // the SpeechRecognition prompt until getUserMedia has been called once,
+      // and Web Speech silently no-ops without it. Fire-and-forget — we don't
+      // need to keep the stream; we just need permission state to flip.
+      try {
+        navigator.mediaDevices?.getUserMedia({ audio: true }).then((stream) => {
+          // Immediately release — Web Speech opens its own stream
+          stream.getTracks().forEach((t) => t.stop());
+        }).catch(() => { /* user denied; SpeechRecognition will surface the error */ });
+      } catch { /* navigator.mediaDevices missing on very old browsers */ }
+      lastStartAttemptRef.current = Date.now();
       try { speech.startListening(); } catch { /* ignore */ }
     }
   }, [speech, tts, voicePrefs]);

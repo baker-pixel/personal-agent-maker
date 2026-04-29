@@ -82,26 +82,11 @@ export default function DecisionVoice() {
     }
   }, [voice.conversationActive, voice.prefsLoaded, greeting, chat.messages.length]);
 
-  // Auto-start the voice conversation on the first user gesture anywhere on the page.
-  // Browser autoplay policies require a user gesture before audio can play, so we
-  // attach a one-shot listener instead of calling startConversation() on mount.
-  // NOTE: We deliberately do NOT bail out when speechRecognitionBlockedByPwa is true.
-  // On iOS PWA the mic API is missing, but TTS still works — and startConversation()
-  // will safely skip the mic call while still unlocking & enabling speech replies.
-  useEffect(() => {
-    if (voice.conversationActive) return;
-    if (greetedRef.current) return;
-    const start = () => {
-      if (greetedRef.current || voice.conversationActive) return;
-      try { voice.startConversation(); } catch { /* ignore */ }
-    };
-    window.addEventListener("pointerdown", start, { once: true });
-    window.addEventListener("keydown", start, { once: true });
-    return () => {
-      window.removeEventListener("pointerdown", start);
-      window.removeEventListener("keydown", start);
-    };
-  }, [voice.conversationActive, voice.startConversation]);
+  // We deliberately do NOT auto-start on the first pointerdown anywhere on the
+  // page — on mobile that handler eats the user's tap on Back/menu/etc. and
+  // makes the page feel broken. The dedicated mic button (bottom-right) is the
+  // single, explicit entry point for starting voice. This guarantees the gesture
+  // context iOS needs to unlock SpeechSynthesis + Audio + getUserMedia.
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -114,7 +99,7 @@ export default function DecisionVoice() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-[100dvh] bg-background flex">
       <DelegateSidebar
         conversations={chat.conversations}
         activeId={chat.activeConversationId}
@@ -126,7 +111,7 @@ export default function DecisionVoice() {
         agentName={agentName}
       />
 
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col min-h-[100dvh]">
         <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
           <div className="container flex items-center h-14 px-4">
             <button
