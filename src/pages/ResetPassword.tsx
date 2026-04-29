@@ -160,6 +160,7 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
+      clearStoredPasswordRecoveryParams();
       await supabase.auth.signOut();
       setResetComplete(true);
       toast({ title: "Password updated", description: "You can now sign in with your new password." });
