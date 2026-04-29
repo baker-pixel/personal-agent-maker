@@ -128,8 +128,9 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
       // If conversation is active and we're idle, restart listening shortly.
       // Use refs (not closure) so we read the *current* thinking/speaking state.
       if (!conversationActiveRef.current) return;
-      // Backoff if we're in an error storm: 250ms base, doubling up to 4s.
-      const backoff = Math.min(250 * Math.pow(2, errorCountRef.current), 4000);
+      // Backoff if we're in an error storm: 600ms base (mobile Safari needs
+      // breathing room between recognition instances), doubling up to 4s.
+      const backoff = Math.min(600 * Math.pow(2, errorCountRef.current), 4000);
       setTimeout(() => {
         if (
           conversationActiveRef.current &&
