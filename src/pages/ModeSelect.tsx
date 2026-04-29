@@ -8,15 +8,15 @@ export default function ModeSelect() {
   const { agentName } = useAgent();
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-5">
+    <div className="min-h-screen bg-background flex items-start sm:items-center justify-center px-5 pt-[calc(env(safe-area-inset-top)+3.5rem)] sm:pt-12 pb-12">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
         className="w-full max-w-[480px] flex flex-col items-center"
       >
-        <h1 className="font-display text-3xl sm:text-4xl font-bold text-foreground text-center mb-12 leading-tight">
-          What do you want&nbsp;to&nbsp;do?
+        <h1 className="font-display text-2xl sm:text-4xl font-bold text-foreground text-center mb-10 leading-tight break-words">
+          What do you want to do?
         </h1>
 
         <div className="w-full">
