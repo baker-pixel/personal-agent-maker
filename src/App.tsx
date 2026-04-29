@@ -39,6 +39,16 @@ import TermsOfService from "./pages/TermsOfService";
 
 const queryClient = new QueryClient();
 
+const isPasswordRecoveryUrl = () => {
+  const url = new URL(window.location.href);
+  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+  return (
+    url.pathname === "/reset-password" ||
+    url.searchParams.get("type") === "recovery" ||
+    hashParams.get("type") === "recovery"
+  );
+};
+
 const ProtectedRoute = ({ session, children }: { session: Session | null; children: React.ReactNode }) => {
   if (!session) return <Navigate to="/auth" replace />;
   return (
@@ -52,10 +62,16 @@ const ProtectedRoute = ({ session, children }: { session: Session | null; childr
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isRecovery, setIsRecovery] = useState(false);
+  const [isRecovery, setIsRecovery] = useState(() => isPasswordRecoveryUrl());
   const recoveryRedirected = useRef(false);
 
   useEffect(() => {
+    const recoveryUrl = isPasswordRecoveryUrl();
+    if (recoveryUrl && window.location.pathname !== "/reset-password") {
+      window.history.replaceState({}, "", `/reset-password${window.location.search}${window.location.hash}`);
+      setIsRecovery(true);
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
@@ -69,6 +85,7 @@ const App = () => {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (recoveryUrl) setIsRecovery(true);
       setLoading(false);
     });
 
@@ -92,7 +109,7 @@ const App = () => {
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={session ? <Navigate to="/mode-select" replace /> : <Landing />} />
+              <Route path="/" element={isRecovery ? <Navigate to="/reset-password" replace /> : session ? <Navigate to="/mode-select" replace /> : <Landing />} />
               <Route path="/auth" element={!session ? <Auth /> : isRecovery ? <Navigate to="/reset-password" replace /> : <Navigate to="/mode-select" replace />} />
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
               <Route path="/reset-password" element={<ResetPassword />} />
