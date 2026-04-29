@@ -68,8 +68,82 @@ export const getPasswordRecoveryParams = (href = typeof window !== "undefined" ?
   };
 };
 
+const STORAGE_KEY = "normy.passwordRecovery";
+const STORAGE_TTL_MS = 30 * 60 * 1000; // 30 minutes — matches Supabase recovery link lifetime
+
+type StoredRecovery = {
+  savedAt: number;
+  code: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  tokenHash: string | null;
+};
+
+const safeStorage = (): Storage | null => {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : null;
+  } catch {
+    return null;
+  }
+};
+
+export const savePasswordRecoveryParams = (params: PasswordRecoveryParams) => {
+  const storage = safeStorage();
+  if (!storage) return;
+  const hasToken = params.code || params.tokenHash || (params.accessToken && params.refreshToken);
+  if (!hasToken) return;
+  const payload: StoredRecovery = {
+    savedAt: Date.now(),
+    code: params.code,
+    accessToken: params.accessToken,
+    refreshToken: params.refreshToken,
+    tokenHash: params.tokenHash,
+  };
+  try {
+    storage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    /* ignore quota errors */
+  }
+};
+
+export const loadStoredPasswordRecoveryParams = (): Partial<PasswordRecoveryParams> | null => {
+  const storage = safeStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredRecovery;
+    if (!parsed?.savedAt || Date.now() - parsed.savedAt > STORAGE_TTL_MS) {
+      storage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return {
+      code: parsed.code ?? null,
+      accessToken: parsed.accessToken ?? null,
+      refreshToken: parsed.refreshToken ?? null,
+      tokenHash: parsed.tokenHash ?? null,
+    };
+  } catch {
+    storage.removeItem(STORAGE_KEY);
+    return null;
+  }
+};
+
+export const clearStoredPasswordRecoveryParams = () => {
+  const storage = safeStorage();
+  if (!storage) return;
+  try {
+    storage.removeItem(STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+};
+
+export const hasStoredPasswordRecovery = () => loadStoredPasswordRecoveryParams() !== null;
+
 export const normalizePasswordRecoveryUrl = () => {
   const params = getPasswordRecoveryParams();
+  if (params.hasRecoveryIntent) savePasswordRecoveryParams(params);
   if (!params.hasRecoveryIntent || window.location.pathname === "/reset-password") return params;
   const { search, hash } = window.location;
   window.history.replaceState({}, "", `/reset-password${search}${hash}`);

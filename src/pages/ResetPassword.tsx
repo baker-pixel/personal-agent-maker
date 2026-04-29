@@ -5,7 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
-import { getPasswordRecoveryParams } from "@/lib/passwordRecovery";
+import {
+  clearStoredPasswordRecoveryParams,
+  getPasswordRecoveryParams,
+  loadStoredPasswordRecoveryParams,
+  savePasswordRecoveryParams,
+} from "@/lib/passwordRecovery";
 import normyLogo from "@/assets/normy-logo.png";
 
 type RecoveryStatus = "checking" | "ready" | "needs-link";
@@ -24,11 +29,13 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
 
     const markReady = () => {
       window.history.replaceState({}, "", "/reset-password");
+      clearStoredPasswordRecoveryParams();
       setLinkError("");
       setRecoveryStatus("ready");
     };
 
     const needNewLink = (message = "Enter your email and we'll send a fresh reset link.") => {
+      clearStoredPasswordRecoveryParams();
       setLinkError(message);
       setRecoveryStatus("needs-link");
     };
@@ -42,11 +49,20 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
 
     const init = async () => {
       try {
-        const { code, accessToken, refreshToken, tokenHash, errorDesc, errorCode } = getPasswordRecoveryParams();
+        const liveParams = getPasswordRecoveryParams();
+        // Persist live params immediately so a refresh mid-flow can resume.
+        savePasswordRecoveryParams(liveParams);
+        const stored = loadStoredPasswordRecoveryParams() ?? {};
+        const code = liveParams.code ?? stored.code ?? null;
+        const accessToken = liveParams.accessToken ?? stored.accessToken ?? null;
+        const refreshToken = liveParams.refreshToken ?? stored.refreshToken ?? null;
+        const tokenHash = liveParams.tokenHash ?? stored.tokenHash ?? null;
+        const { errorDesc, errorCode } = liveParams;
 
         if (errorDesc || errorCode) {
           setLinkError(errorDesc ? decodeURIComponent(errorDesc).replace(/\+/g, " ") : "That reset link is no longer valid. Send a new one below.");
           setRecoveryStatus("needs-link");
+          clearStoredPasswordRecoveryParams();
           return;
         }
 
@@ -144,6 +160,7 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
+      clearStoredPasswordRecoveryParams();
       await supabase.auth.signOut();
       setResetComplete(true);
       toast({ title: "Password updated", description: "You can now sign in with your new password." });
