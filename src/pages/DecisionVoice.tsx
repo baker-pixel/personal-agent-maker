@@ -299,11 +299,22 @@ export default function DecisionVoice() {
             />
             <VoiceWaveform isActive={voice.isListening} />
             <button
-              onClick={voice.isSupported ? voice.toggleConversation : undefined}
-              disabled={!voice.isSupported}
+              onClick={() => {
+                // In iOS PWA, the mic API is blocked but TTS works. Toggling
+                // here at least unlocks SpeechSynthesis on the user gesture
+                // and turns voice replies on/off, so tapping does *something*.
+                if (voice.speechRecognitionBlockedByPwa) {
+                  voice.toggleConversation();
+                  return;
+                }
+                if (voice.isSupported) voice.toggleConversation();
+              }}
+              disabled={!voice.isSupported && !voice.speechRecognitionBlockedByPwa}
               title={
                 voice.speechRecognitionBlockedByPwa
-                  ? "Voice input isn't available in the installed app on iOS. Open Normy in Safari to use voice."
+                  ? voice.conversationActive
+                    ? "Mute Normy's voice replies"
+                    : "Tap to enable Normy's voice replies (mic input not available in installed app on iOS)"
                   : !voice.isSupported
                     ? "Voice is not supported in this browser. Try Chrome, Edge, or Safari."
                     : voice.conversationActive
@@ -311,7 +322,7 @@ export default function DecisionVoice() {
                       : `Start hands-free conversation with ${agentName}`
               }
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 ${
-                !voice.isSupported
+                !voice.isSupported && !voice.speechRecognitionBlockedByPwa
                   ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
                   : voice.conversationActive
                     ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30"
