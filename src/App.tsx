@@ -60,11 +60,11 @@ const ProtectedRoute = ({ session, children }: { session: Session | null; childr
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isRecovery, setIsRecovery] = useState(() => getPasswordRecoveryParams().hasRecoveryIntent);
+  const [isRecovery, setIsRecovery] = useState(() => getPasswordRecoveryParams().hasRecoveryIntent || hasStoredPasswordRecovery());
   const recoveryRedirected = useRef(false);
 
   useEffect(() => {
-    const recoveryUrl = normalizePasswordRecoveryUrl().hasRecoveryIntent;
+    const recoveryUrl = normalizePasswordRecoveryUrl().hasRecoveryIntent || hasStoredPasswordRecovery();
     if (recoveryUrl) setIsRecovery(true);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
