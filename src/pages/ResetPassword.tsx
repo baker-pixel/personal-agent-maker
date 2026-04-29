@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { forwardRef, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +10,7 @@ import normyLogo from "@/assets/normy-logo.png";
 
 type RecoveryStatus = "checking" | "ready" | "needs-link";
 
-export default function ResetPassword() {
+const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, ref) {
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -166,7 +166,7 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-5">
+    <div ref={ref} className="min-h-screen bg-background flex items-center justify-center px-5">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
         <div className="flex items-center justify-center gap-2 mb-8">
           <img src={normyLogo} alt="Normy" className="h-10 w-auto" />
@@ -216,4 +216,6 @@ export default function ResetPassword() {
       </motion.div>
     </div>
   );
-}
+});
+
+export default ResetPassword;
