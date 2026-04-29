@@ -52,6 +52,9 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const errorCountRef = useRef(0);
   const lastErrorAtRef = useRef(0);
   const pausedByVisibilityRef = useRef(false);
+  // Tracks the timestamp of our last `startListening()` call so the watchdog
+  // doesn't fire a second start before the previous one's `onstart` lands.
+  const lastStartAttemptRef = useRef(0);
 
   // Buffer final transcripts so a brief pause (thinking) doesn't cut the user off.
   // We accumulate fragments and only submit after PAUSE_MS of true silence.
