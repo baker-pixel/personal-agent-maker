@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,6 @@ const getResetParams = () => {
 };
 
 export default function ResetPassword() {
-  const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
@@ -165,7 +164,15 @@ export default function ResetPassword() {
         ) : (
           <form onSubmit={handleReset} className="space-y-4">
             <h2 className="font-display text-xl font-semibold text-center mb-2">Set new password</h2>
-            {!sessionReady && (
+            {linkError ? (
+              <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                <p className="font-medium">Reset link expired</p>
+                <p className="mt-1">{linkError}</p>
+                <Link to="/auth" className="mt-2 inline-block underline underline-offset-4">
+                  Send a new reset link
+                </Link>
+              </div>
+            ) : !sessionReady && (
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <div className="w-4 h-4 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
                 Verifying reset link…
