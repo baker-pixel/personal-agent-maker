@@ -5,7 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
-import { getPasswordRecoveryParams } from "@/lib/passwordRecovery";
+import {
+  clearStoredPasswordRecoveryParams,
+  getPasswordRecoveryParams,
+  loadStoredPasswordRecoveryParams,
+  savePasswordRecoveryParams,
+} from "@/lib/passwordRecovery";
 import normyLogo from "@/assets/normy-logo.png";
 
 type RecoveryStatus = "checking" | "ready" | "needs-link";
