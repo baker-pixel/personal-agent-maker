@@ -271,7 +271,7 @@ export default function DecisionVoice() {
           {voice.speechRecognitionBlockedByPwa && (
             <div className="container max-w-lg pt-3 px-4">
               <div className="text-xs bg-muted/60 text-muted-foreground rounded-lg px-3 py-2 leading-snug">
-                Voice input isn't available in the installed Normy app on iOS. {agentName} can still <strong>speak replies</strong> here — for full hands-free voice, open Normy in Safari.
+                Mic input isn't available in the installed app on iOS — type your message and {agentName} will <strong>speak the reply aloud</strong>. For full hands-free voice, open <a href="https://normyagent.com" className="underline">normyagent.com</a> in Safari.
               </div>
             </div>
           )}
