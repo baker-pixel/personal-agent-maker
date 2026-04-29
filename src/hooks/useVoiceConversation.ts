@@ -233,8 +233,12 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
 
   // Watchdog: if conversation is active but nothing is happening (not listening,
   // not speaking, not thinking), kick off listening again. Re-runs on an interval
-  // so a silently-failed start() will be retried until it sticks. Prevents the
-  // "stuck on Paused" state.
+  // so a silently-failed start() will be retried until it sticks.
+  // CRITICAL on mobile Safari: only fire when we've been idle for a real moment
+  // (>=2.5s since last start attempt) AND there is no buffered transcript the
+  // user is actively dictating. Otherwise the watchdog races with `onstart`
+  // and aborts the user mid-sentence ("stops before I can speak").
+  const lastStartAttemptRef = useRef(0);
   useEffect(() => {
     if (!conversationActive) return;
     if (speech.isListening || tts.isSpeaking || thinking) return;
@@ -244,11 +248,14 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
         !ttsSpeakingRef.current &&
         !thinkingRef.current &&
         !pausedByVisibilityRef.current &&
-        !speechRef.current?.isListening
+        !speechRef.current?.isListening &&
+        !pendingTranscriptRef.current && // don't restart while user is dictating
+        Date.now() - lastStartAttemptRef.current > 2500 // back off after a recent attempt
       ) {
+        lastStartAttemptRef.current = Date.now();
         try { speechRef.current?.startListening(); } catch { /* ignore */ }
       }
-    }, 800);
+    }, 1200);
     return () => clearInterval(id);
   }, [conversationActive, speech.isListening, tts.isSpeaking, thinking]);
 
