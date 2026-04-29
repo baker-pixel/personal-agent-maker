@@ -283,6 +283,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     // On iOS PWA this API is missing entirely, and calling it throws / no-ops,
     // leaving the user stuck with nothing happening.
     if (speech.isSupported) {
+      lastStartAttemptRef.current = Date.now();
       try { speech.startListening(); } catch { /* ignore */ }
     }
   }, [speech, tts, voicePrefs]);
