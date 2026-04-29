@@ -45,9 +45,23 @@ const isPasswordRecoveryUrl = () => {
   return (
     url.pathname === "/reset-password" ||
     url.searchParams.get("type") === "recovery" ||
-    hashParams.get("type") === "recovery"
+    hashParams.get("type") === "recovery" ||
+    !!url.searchParams.get("code") ||
+    !!hashParams.get("access_token") ||
+    !!hashParams.get("token_hash") ||
+    !!url.searchParams.get("token_hash")
   );
 };
+
+// Run synchronously at module load — before React renders — so the recovery
+// URL (with its hash containing access_token) is preserved on /reset-password.
+(() => {
+  if (typeof window === "undefined") return;
+  if (isPasswordRecoveryUrl() && window.location.pathname !== "/reset-password") {
+    const { search, hash } = window.location;
+    window.history.replaceState({}, "", `/reset-password${search}${hash}`);
+  }
+})();
 
 const ProtectedRoute = ({ session, children }: { session: Session | null; children: React.ReactNode }) => {
   if (!session) return <Navigate to="/auth" replace />;
