@@ -9,58 +9,88 @@ const GoogleCallback = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const isPopup = window.opener && window.opener !== window;
+
+    // Always notify the parent on terminal outcomes so the Settings page
+    // never sits on a "Connecting..." spinner waiting for a message that
+    // never arrives. Both success and error paths post to the opener.
+    const notifyParent = (payload: Record<string, unknown>) => {
+      if (!isPopup) return;
+      try {
+        window.opener.postMessage(payload, window.location.origin);
+      } catch (e) {
+        console.warn("postMessage to opener failed:", e);
+      }
+    };
+
+    const fail = (msg: string) => {
+      setStatus("error");
+      setMessage(msg);
+      notifyParent({ type: "normy-google-oauth-complete", success: false, error: msg });
+      // Auto-close after a short beat so the parent's popup-closed poll
+      // also fires as a belt-and-braces fallback.
+      if (isPopup) setTimeout(() => window.close(), 2000);
+    };
+
     const handleCallback = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
-      const provider = params.get("state"); // We stored provider in state param
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get("code");
+        const provider = params.get("state"); // we stored provider in state
+        const oauthError = params.get("error");
 
-      if (!code || !provider) {
-        setStatus("error");
-        setMessage("Missing authorization code or provider.");
-        return;
-      }
+        if (oauthError) {
+          fail(`Authorization was denied (${oauthError}).`);
+          return;
+        }
+        if (!code || !provider) {
+          fail("Missing authorization code or provider.");
+          return;
+        }
 
-      // Get the current user session
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setStatus("error");
-        setMessage("You must be logged in to connect integrations.");
-        return;
-      }
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          fail("You must be signed in to connect integrations.");
+          return;
+        }
 
-      // Exchange the code via our edge function
-      const { data, error } = await supabase.functions.invoke("google-callback", {
-        body: {
-          code,
-          provider,
-          redirectUrl: window.location.origin,
-        },
-      });
+        const { data, error } = await supabase.functions.invoke("google-callback", {
+          body: { code, provider, redirectUrl: window.location.origin },
+        });
 
-      if (error || data?.error) {
-        setStatus("error");
-        setMessage(data?.error || error?.message || "Failed to connect.");
-        return;
-      }
+        if (error || data?.error) {
+          fail(data?.error || error?.message || "Failed to connect.");
+          return;
+        }
 
-      setStatus("success");
-      setMessage(`Connected ${provider === "gmail" ? "Gmail" : "Google Calendar"} as ${data.email}`);
+        setStatus("success");
+        setMessage(`Connected ${provider === "gmail" ? "Gmail" : "Google Calendar"} as ${data.email}`);
 
-      // Store connected state
-      const saved = localStorage.getItem("integrations-state");
-      const connectedIds: string[] = saved ? JSON.parse(saved) : [];
-      if (!connectedIds.includes(provider)) {
-        connectedIds.push(provider);
-        localStorage.setItem("integrations-state", JSON.stringify(connectedIds));
-      }
+        // Mark provider as connected in local cache (legacy).
+        try {
+          const saved = localStorage.getItem("integrations-state");
+          const connectedIds: string[] = saved ? JSON.parse(saved) : [];
+          if (!connectedIds.includes(provider)) {
+            connectedIds.push(provider);
+            localStorage.setItem("integrations-state", JSON.stringify(connectedIds));
+          }
+        } catch {}
 
-      // If opened as popup, close after brief success message; otherwise redirect
-      const isPopup = window.opener && window.opener !== window;
-      if (isPopup) {
-        window.opener.postMessage({ type: "normy-google-oauth-complete" }, window.location.origin);
-        setTimeout(() => window.close(), 1500);
-      } else {
-        setTimeout(() => navigate("/dashboard"), 2000);
+        notifyParent({
+          type: "normy-google-oauth-complete",
+          success: true,
+          service: provider,
+          email: data.email,
+        });
+
+        if (isPopup) {
+          setTimeout(() => window.close(), 1200);
+        } else {
+          setTimeout(() => navigate("/dashboard"), 1500);
+        }
+      } catch (err) {
+        console.error("GoogleCallback error:", err);
+        fail((err as Error)?.message || "Something went wrong completing sign-in.");
       }
     };
 
