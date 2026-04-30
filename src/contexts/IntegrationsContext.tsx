@@ -125,26 +125,27 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       .from("google_oauth_token_metadata" as any)
       .select("provider, email") as { data: { provider: string; email: string | null }[] | null };
 
-    if (tokens && tokens.length > 0) {
-      // Group emails by provider
-      const providerEmails = new Map<string, string[]>();
-      for (const t of tokens) {
-        const emails = providerEmails.get(t.provider) || [];
-        if (t.email && !emails.includes(t.email)) emails.push(t.email);
-        providerEmails.set(t.provider, emails);
-      }
-
-      setIntegrations((prev) =>
-        prev.map((i) => {
-          const emails = providerEmails.get(i.id) || [];
-          return {
-            ...i,
-            connected: emails.length > 0,
-            connectedAccounts: emails,
-          };
-        })
-      );
+    // Group emails by provider (empty map if no tokens — this is what clears stale state).
+    const providerEmails = new Map<string, string[]>();
+    for (const t of tokens ?? []) {
+      const emails = providerEmails.get(t.provider) || [];
+      if (t.email && !emails.includes(t.email)) emails.push(t.email);
+      providerEmails.set(t.provider, emails);
     }
+
+    // Always re-derive connected state for every Google provider so that
+    // a disconnect (which removes the row) reliably flips connected → false.
+    setIntegrations((prev) =>
+      prev.map((i) => {
+        if (i.id !== "gmail" && i.id !== "google-calendar") return i;
+        const emails = providerEmails.get(i.id) || [];
+        return {
+          ...i,
+          connected: emails.length > 0,
+          connectedAccounts: emails,
+        };
+      })
+    );
   }, []);
 
   useEffect(() => {
@@ -174,6 +175,16 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const removeAccount = useCallback(async (provider: string, email: string) => {
+    // 0. Optimistic UI: immediately drop the email from local state so the
+    //    card reflects the disconnect even before backend round-trips finish.
+    setIntegrations((prev) =>
+      prev.map((i) => {
+        if (i.id !== provider) return i;
+        const remaining = i.connectedAccounts.filter((e) => e !== email);
+        return { ...i, connected: remaining.length > 0, connectedAccounts: remaining };
+      })
+    );
+
     // 1. Best-effort: revoke token directly with Google before deleting our row.
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -187,7 +198,7 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
 
     // 2. Delete our stored row (RLS scopes this to the current user).
-    const { error } = await supabase
+    await supabase
       .from("google_oauth_tokens")
       .delete()
       .eq("provider", provider)
@@ -203,9 +214,8 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     } catch {}
 
-    if (!error) {
-      await fetchConnected();
-    }
+    // 4. Re-sync from the server so state is authoritative (runs even if delete failed).
+    await fetchConnected();
   }, [fetchConnected]);
 
   const isConnected = useCallback(
