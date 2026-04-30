@@ -67,7 +67,7 @@ export default function Settings() {
   }, [location.hash]);
   const [saved, setSaved] = useState(false);
   const { connecting, connect } = useGoogleOAuthPopup();
-  const { isConnected, integrations, removeAccount } = useIntegrations();
+  const { isConnected, integrations, removeAccount, refreshConnections } = useIntegrations();
   const { toast } = useToast();
   const [userEmail, setUserEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -78,15 +78,14 @@ export default function Settings() {
 
   const confirmRemoval = async () => {
     if (!pendingRemoval) return;
+    const target = pendingRemoval;
     setRemoving(true);
     try {
-      await removeAccount(pendingRemoval.provider, pendingRemoval.email);
+      await removeAccount(target.provider, target.email);
       toast({
         title: "Google account disconnected",
-        description: `${pendingRemoval.email} has been removed and access revoked.`,
+        description: `${target.email} has been removed and access revoked.`,
       });
-      setPendingRemoval(null);
-      navigate("/settings", { replace: true });
     } catch (err) {
       toast({
         title: "Failed to disconnect",
@@ -94,7 +93,15 @@ export default function Settings() {
         variant: "destructive",
       });
     } finally {
+      // Always re-sync from the server so Settings reflects the true state,
+      // and always close the dialog + clear loading regardless of outcome.
+      try {
+        await refreshConnections();
+      } catch (e) {
+        console.warn("refreshConnections after disconnect failed:", e);
+      }
       setRemoving(false);
+      setPendingRemoval(null);
     }
   };
   const [passwordChanged, setPasswordChanged] = useState(false);
