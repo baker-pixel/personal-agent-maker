@@ -23,6 +23,6 @@ if (isPreviewHost || isInIframe) {
 
 preparePasswordRecoveryUrlForManualHandling();
 
-const { default: App } = await import("./App.tsx");
-
-createRoot(document.getElementById("root")!).render(<App />);
+import("./App.tsx").then(({ default: App }) => {
+  createRoot(document.getElementById("root")!).render(<App />);
+});
