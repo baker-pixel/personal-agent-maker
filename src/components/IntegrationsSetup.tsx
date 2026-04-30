@@ -31,7 +31,7 @@ const GOOGLE_PROVIDERS = ["gmail", "google-calendar"];
 
 export const IntegrationsSetup = () => {
   const { agentName } = useAgent();
-  const { integrations, toggleConnection, removeAccount, refreshConnections } = useIntegrations();
+  const { integrations, toggleConnection, removeAccount, refreshConnections, refreshing } = useIntegrations();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [disconnectingKey, setDisconnectingKey] = useState<string | null>(null);
@@ -180,7 +180,11 @@ export const IntegrationsSetup = () => {
             GOOGLE_PROVIDERS.includes(integration.id) &&
             popupConnecting !== null &&
             popupConnecting !== integration.id;
-          const isDisabled = isConnecting || isSiblingGoogleBusy;
+          // While integration status is being re-fetched, disable both
+          // Connect and Disconnect actions so users can't double-click into
+          // a stale state mid-refresh.
+          const isRefreshingGoogle = refreshing && GOOGLE_PROVIDERS.includes(integration.id);
+          const isDisabled = isConnecting || isSiblingGoogleBusy || isRefreshingGoogle;
           const accounts = integration.connectedAccounts;
 
           return (
