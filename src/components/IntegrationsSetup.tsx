@@ -226,10 +226,11 @@ export const IntegrationsSetup = () => {
                             </div>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDisconnect(integration.id, email); }}
-                              className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0 flex items-center gap-1"
+                              disabled={disconnectingKey === `${integration.id}:${email}`}
+                              className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0 flex items-center gap-1 disabled:opacity-60"
                             >
                               <Unplug className="w-3 h-3" />
-                              Remove
+                              {disconnectingKey === `${integration.id}:${email}` ? "Removing..." : "Remove"}
                             </button>
                           </div>
                         ))}
