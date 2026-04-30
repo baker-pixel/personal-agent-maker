@@ -132,7 +132,7 @@ export const useGoogleOAuthPopup = () => {
       cleanupRef.current = null;
       throw error;
     }
-  }, [refreshConnections, integrations, toast]);
+  }, [refreshConnections, toast]);
 
   return { connecting, connect };
 };
