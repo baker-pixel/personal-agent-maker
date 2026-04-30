@@ -171,6 +171,13 @@ export const IntegrationsSetup = () => {
           const Icon = iconMap[integration.icon] || Mail;
           const isExpanded = expandedId === integration.id;
           const isConnecting = connectingId === integration.id || popupConnecting === integration.id;
+          // Block sibling Google button while any Google flow is in-flight to
+          // prevent overlapping OAuth popups / stale state races.
+          const isSiblingGoogleBusy =
+            GOOGLE_PROVIDERS.includes(integration.id) &&
+            popupConnecting !== null &&
+            popupConnecting !== integration.id;
+          const isDisabled = isConnecting || isSiblingGoogleBusy;
           const accounts = integration.connectedAccounts;
 
           return (
