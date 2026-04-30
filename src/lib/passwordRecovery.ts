@@ -9,6 +9,8 @@ export type PasswordRecoveryParams = {
   hasRecoveryIntent: boolean;
 };
 
+export const PASSWORD_RESET_REDIRECT_URL = "https://normyagent.com/reset-password";
+
 const addParams = (sets: URLSearchParams[], raw: string) => {
   const value = raw.trim().replace(/^[?#]/, "");
   if (!value) return;
@@ -77,7 +79,12 @@ type StoredRecovery = {
   accessToken: string | null;
   refreshToken: string | null;
   tokenHash: string | null;
+  errorDesc: string | null;
+  errorCode: string | null;
 };
+
+const hasRecoverableState = (params: PasswordRecoveryParams) =>
+  Boolean(params.code || params.tokenHash || (params.accessToken && params.refreshToken) || params.errorDesc || params.errorCode);
 
 const safeStorage = (): Storage | null => {
   try {
@@ -90,14 +97,15 @@ const safeStorage = (): Storage | null => {
 export const savePasswordRecoveryParams = (params: PasswordRecoveryParams) => {
   const storage = safeStorage();
   if (!storage) return;
-  const hasToken = params.code || params.tokenHash || (params.accessToken && params.refreshToken);
-  if (!hasToken) return;
+  if (!hasRecoverableState(params)) return;
   const payload: StoredRecovery = {
     savedAt: Date.now(),
     code: params.code,
     accessToken: params.accessToken,
     refreshToken: params.refreshToken,
     tokenHash: params.tokenHash,
+    errorDesc: params.errorDesc,
+    errorCode: params.errorCode,
   };
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -122,6 +130,8 @@ export const loadStoredPasswordRecoveryParams = (): Partial<PasswordRecoveryPara
       accessToken: parsed.accessToken ?? null,
       refreshToken: parsed.refreshToken ?? null,
       tokenHash: parsed.tokenHash ?? null,
+      errorDesc: parsed.errorDesc ?? null,
+      errorCode: parsed.errorCode ?? null,
     };
   } catch {
     storage.removeItem(STORAGE_KEY);
@@ -140,6 +150,15 @@ export const clearStoredPasswordRecoveryParams = () => {
 };
 
 export const hasStoredPasswordRecovery = () => loadStoredPasswordRecoveryParams() !== null;
+
+export const preparePasswordRecoveryUrlForManualHandling = () => {
+  if (typeof window === "undefined") return null;
+  const params = getPasswordRecoveryParams();
+  if (!params.hasRecoveryIntent) return params;
+  savePasswordRecoveryParams(params);
+  window.history.replaceState({}, "", "/reset-password");
+  return getPasswordRecoveryParams();
+};
 
 export const normalizePasswordRecoveryUrl = () => {
   const params = getPasswordRecoveryParams();
