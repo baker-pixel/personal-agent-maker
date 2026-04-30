@@ -240,11 +240,19 @@ export const IntegrationsSetup = () => {
                             </div>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDisconnect(integration.id, email); }}
-                              disabled={disconnectingKey === `${integration.id}:${email}`}
-                              className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0 flex items-center gap-1 disabled:opacity-60"
+                              disabled={disconnectingKey === `${integration.id}:${email}` || isRefreshingGoogle || !!disconnectingKey}
+                              className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0 flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                              <Unplug className="w-3 h-3" />
-                              {disconnectingKey === `${integration.id}:${email}` ? "Removing..." : "Remove"}
+                              {disconnectingKey === `${integration.id}:${email}` || isRefreshingGoogle ? (
+                                <span className="w-3 h-3 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                              ) : (
+                                <Unplug className="w-3 h-3" />
+                              )}
+                              {disconnectingKey === `${integration.id}:${email}`
+                                ? "Removing..."
+                                : isRefreshingGoogle
+                                ? "Syncing…"
+                                : "Remove"}
                             </button>
                           </div>
                         ))}
