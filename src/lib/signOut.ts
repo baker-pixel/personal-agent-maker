@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { clearStoredPasswordRecovery } from "@/lib/passwordRecovery";
+import { clearStoredPasswordRecoveryParams } from "@/lib/passwordRecovery";
 
 /**
  * Centralized sign-out: terminates the Supabase session, wipes any locally
@@ -14,7 +14,7 @@ export async function performSignOut(redirectTo: string = "/") {
   }
 
   try {
-    clearStoredPasswordRecovery();
+    clearStoredPasswordRecoveryParams();
   } catch {
     // ignore
   }
