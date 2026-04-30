@@ -9,7 +9,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { supabase } from "@/integrations/supabase/client";
+import { performSignOut } from "@/lib/signOut";
 
 interface SignOutDialogProps {
   children: React.ReactNode;
@@ -29,7 +29,7 @@ const SignOutDialog = ({ children }: SignOutDialogProps) => {
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => { void performSignOut("/"); }}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             Sign out

@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { Menu, Mail, Calendar, LayoutDashboard, Settings, LogOut, Home, Building2, Users, Flame, ListTodo } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { performSignOut } from "@/lib/signOut";
 import { useAgent } from "@/contexts/AgentContext";
 import {
   DropdownMenu,
@@ -27,8 +27,7 @@ export default function AppMenu() {
   ];
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate("/");
+    await performSignOut("/");
   };
 
   return (
