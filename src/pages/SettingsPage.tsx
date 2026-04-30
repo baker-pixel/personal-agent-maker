@@ -67,7 +67,7 @@ export default function Settings() {
   }, [location.hash]);
   const [saved, setSaved] = useState(false);
   const { connecting, connect } = useGoogleOAuthPopup();
-  const { isConnected, integrations, removeAccount } = useIntegrations();
+  const { isConnected, integrations, removeAccount, refreshConnections } = useIntegrations();
   const { toast } = useToast();
   const [userEmail, setUserEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
