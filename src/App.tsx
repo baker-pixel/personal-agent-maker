@@ -8,7 +8,7 @@ import { IntegrationsProvider } from "@/contexts/IntegrationsContext";
 import { AgentProvider } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
-import { getPasswordRecoveryParams, hasStoredPasswordRecovery, normalizePasswordRecoveryUrl } from "@/lib/passwordRecovery";
+import { getPasswordRecoveryParams, hasStoredPasswordRecovery } from "@/lib/passwordRecovery";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
@@ -40,13 +40,6 @@ import TermsOfService from "./pages/TermsOfService";
 
 const queryClient = new QueryClient();
 
-// Run synchronously at module load — before React renders — so the recovery
-// URL (with its hash containing access_token) is preserved on /reset-password.
-(() => {
-  if (typeof window === "undefined") return;
-  normalizePasswordRecoveryUrl();
-})();
-
 const ProtectedRoute = ({ session, children }: { session: Session | null; children: React.ReactNode }) => {
   if (!session) return <Navigate to="/auth" replace />;
   return (
@@ -64,7 +57,7 @@ const App = () => {
   const recoveryRedirected = useRef(false);
 
   useEffect(() => {
-    const recoveryUrl = normalizePasswordRecoveryUrl().hasRecoveryIntent || hasStoredPasswordRecovery();
+    const recoveryUrl = getPasswordRecoveryParams().hasRecoveryIntent || hasStoredPasswordRecovery();
     if (recoveryUrl) setIsRecovery(true);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
