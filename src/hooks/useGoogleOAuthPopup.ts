@@ -132,7 +132,17 @@ export const useGoogleOAuthPopup = () => {
 
       const onMessage = (event: MessageEvent) => {
         if (event.origin !== window.location.origin || event.data?.type !== "normy-google-oauth-complete") return;
-        void completeConnection(true);
+        // The callback page now reports success/failure explicitly. If the
+        // payload is missing (older callback), assume success for back-compat.
+        const succeeded = event.data?.success !== false;
+        if (!succeeded && event.data?.error) {
+          toast({
+            title: "Connection failed",
+            description: String(event.data.error),
+            variant: "destructive",
+          });
+        }
+        void completeConnection(succeeded);
       };
 
       // Poll for popup-closed: if the user closes the popup without

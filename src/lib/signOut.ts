@@ -2,11 +2,52 @@ import { supabase } from "@/integrations/supabase/client";
 import { clearStoredPasswordRecoveryParams } from "@/lib/passwordRecovery";
 
 /**
- * Centralized sign-out: terminates the Supabase session, wipes any locally
- * cached app state, and hard-redirects to the landing page so no protected
- * route data lingers in memory and the back button can't restore it.
+ * Best-effort: revoke + delete every Google OAuth token row tied to the
+ * current user before we drop the Supabase session. This guarantees the
+ * next sign-in starts from a clean slate (user must re-consent), matching
+ * the privacy posture promised in the integrations UI.
+ *
+ * Failures here are intentionally swallowed — sign-out must always proceed.
+ */
+async function revokeAndDeleteGoogleTokens() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: tokens } = await supabase
+      .from("google_oauth_tokens")
+      .select("access_token, refresh_token")
+      .eq("user_id", user.id);
+
+    if (tokens?.length) {
+      // Revoke in parallel; ignore individual failures.
+      await Promise.allSettled(
+        tokens.map((t) => {
+          const tok = t.refresh_token || t.access_token;
+          if (!tok) return Promise.resolve();
+          return fetch(
+            `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(tok)}`,
+            { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+          ).catch(() => undefined);
+        })
+      );
+    }
+
+    // Delete rows under the user's RLS scope.
+    await supabase.from("google_oauth_tokens").delete().eq("user_id", user.id);
+  } catch (err) {
+    console.warn("revokeAndDeleteGoogleTokens failed (continuing sign-out):", err);
+  }
+}
+
+/**
+ * Centralized sign-out: revokes Google tokens, terminates the Supabase
+ * session, wipes locally cached app state, and hard-redirects to the
+ * landing page so no protected route data lingers in memory.
  */
 export async function performSignOut(redirectTo: string = "/") {
+  await revokeAndDeleteGoogleTokens();
+
   try {
     await supabase.auth.signOut();
   } catch (err) {
