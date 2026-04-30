@@ -295,7 +295,7 @@ export const IntegrationsSetup = () => {
                     <button
                       onClick={() => handleConnect(integration.id)}
                       disabled={isDisabled}
-                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-60"
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {isConnecting ? (
                         <>
@@ -306,6 +306,11 @@ export const IntegrationsSetup = () => {
                         <>
                           <span className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
                           Waiting…
+                        </>
+                      ) : isRefreshingGoogle ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
+                          Syncing…
                         </>
                       ) : (
                         <>
