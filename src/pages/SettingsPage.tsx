@@ -73,6 +73,30 @@ export default function Settings() {
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [pendingRemoval, setPendingRemoval] = useState<{ provider: "gmail" | "google-calendar"; email: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  const confirmRemoval = async () => {
+    if (!pendingRemoval) return;
+    setRemoving(true);
+    try {
+      await removeAccount(pendingRemoval.provider, pendingRemoval.email);
+      toast({
+        title: "Google account disconnected",
+        description: `${pendingRemoval.email} has been removed and access revoked.`,
+      });
+      setPendingRemoval(null);
+      navigate("/settings", { replace: true });
+    } catch (err) {
+      toast({
+        title: "Failed to disconnect",
+        description: (err as Error)?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRemoving(false);
+    }
+  };
   const [passwordChanged, setPasswordChanged] = useState(false);
 
   const gmailConnected = isConnected("gmail");
