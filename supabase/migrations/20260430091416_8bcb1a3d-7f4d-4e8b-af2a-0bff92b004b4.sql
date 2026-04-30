@@ -1,0 +1,1 @@
+ALTER TABLE public.google_oauth_tokens DROP CONSTRAINT IF EXISTS google_oauth_tokens_user_id_provider_key;
