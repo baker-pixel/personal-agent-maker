@@ -175,6 +175,16 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const removeAccount = useCallback(async (provider: string, email: string) => {
+    // 0. Optimistic UI: immediately drop the email from local state so the
+    //    card reflects the disconnect even before backend round-trips finish.
+    setIntegrations((prev) =>
+      prev.map((i) => {
+        if (i.id !== provider) return i;
+        const remaining = i.connectedAccounts.filter((e) => e !== email);
+        return { ...i, connected: remaining.length > 0, connectedAccounts: remaining };
+      })
+    );
+
     // 1. Best-effort: revoke token directly with Google before deleting our row.
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -188,7 +198,7 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
 
     // 2. Delete our stored row (RLS scopes this to the current user).
-    const { error } = await supabase
+    await supabase
       .from("google_oauth_tokens")
       .delete()
       .eq("provider", provider)
@@ -204,9 +214,8 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     } catch {}
 
-    if (!error) {
-      await fetchConnected();
-    }
+    // 4. Re-sync from the server so state is authoritative (runs even if delete failed).
+    await fetchConnected();
   }, [fetchConnected]);
 
   const isConnected = useCallback(
