@@ -405,11 +405,7 @@ export default function Settings() {
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                    onClick={async () => {
-                      await removeAccount("google-calendar", email);
-                      toast({ title: "Google account disconnected", description: `${email} has been removed and access revoked.` });
-                      navigate("/settings", { replace: true });
-                    }}
+                    onClick={() => setPendingRemoval({ provider: "google-calendar", email })}
                   >
                     <X className="w-3.5 h-3.5" />
                   </Button>
