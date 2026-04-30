@@ -203,7 +203,7 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
     if (!email.trim()) return;
     setResending(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: "https://normyagent.com/reset-password",
     });
     setResending(false);
     if (error) {
