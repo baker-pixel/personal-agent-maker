@@ -31,7 +31,7 @@ const GOOGLE_PROVIDERS = ["gmail", "google-calendar"];
 
 export const IntegrationsSetup = () => {
   const { agentName } = useAgent();
-  const { integrations, toggleConnection, removeAccount, refreshConnections } = useIntegrations();
+  const { integrations, toggleConnection, removeAccount, refreshConnections, refreshing } = useIntegrations();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [disconnectingKey, setDisconnectingKey] = useState<string | null>(null);
@@ -180,7 +180,11 @@ export const IntegrationsSetup = () => {
             GOOGLE_PROVIDERS.includes(integration.id) &&
             popupConnecting !== null &&
             popupConnecting !== integration.id;
-          const isDisabled = isConnecting || isSiblingGoogleBusy;
+          // While integration status is being re-fetched, disable both
+          // Connect and Disconnect actions so users can't double-click into
+          // a stale state mid-refresh.
+          const isRefreshingGoogle = refreshing && GOOGLE_PROVIDERS.includes(integration.id);
+          const isDisabled = isConnecting || isSiblingGoogleBusy || isRefreshingGoogle;
           const accounts = integration.connectedAccounts;
 
           return (
@@ -236,11 +240,19 @@ export const IntegrationsSetup = () => {
                             </div>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDisconnect(integration.id, email); }}
-                              disabled={disconnectingKey === `${integration.id}:${email}`}
-                              className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0 flex items-center gap-1 disabled:opacity-60"
+                              disabled={disconnectingKey === `${integration.id}:${email}` || isRefreshingGoogle || !!disconnectingKey}
+                              className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0 flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                              <Unplug className="w-3 h-3" />
-                              {disconnectingKey === `${integration.id}:${email}` ? "Removing..." : "Remove"}
+                              {disconnectingKey === `${integration.id}:${email}` || isRefreshingGoogle ? (
+                                <span className="w-3 h-3 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                              ) : (
+                                <Unplug className="w-3 h-3" />
+                              )}
+                              {disconnectingKey === `${integration.id}:${email}`
+                                ? "Removing..."
+                                : isRefreshingGoogle
+                                ? "Syncing…"
+                                : "Remove"}
                             </button>
                           </div>
                         ))}
@@ -283,7 +295,7 @@ export const IntegrationsSetup = () => {
                     <button
                       onClick={() => handleConnect(integration.id)}
                       disabled={isDisabled}
-                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-60"
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {isConnecting ? (
                         <>
@@ -294,6 +306,11 @@ export const IntegrationsSetup = () => {
                         <>
                           <span className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
                           Waiting…
+                        </>
+                      ) : isRefreshingGoogle ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
+                          Syncing…
                         </>
                       ) : (
                         <>
