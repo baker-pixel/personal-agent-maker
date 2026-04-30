@@ -30,9 +30,10 @@ const GOOGLE_PROVIDERS = ["gmail", "google-calendar"];
 
 export const IntegrationsSetup = () => {
   const { agentName } = useAgent();
-  const { integrations, toggleConnection } = useIntegrations();
+  const { integrations, toggleConnection, removeAccount, refreshConnections } = useIntegrations();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [disconnectingKey, setDisconnectingKey] = useState<string | null>(null);
   const { connecting: popupConnecting, connect: popupConnect } = useGoogleOAuthPopup();
   const { toast } = useToast();
 
