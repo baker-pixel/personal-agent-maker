@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useToast } from "@/hooks/use-toast";
+import { reloadAfterIntegrationChange } from "@/lib/integrationReload";
 
 export const useGoogleOAuthPopup = () => {
   // `connecting` holds the service id currently in-flight (e.g. "gmail" or
@@ -122,6 +123,10 @@ export const useGoogleOAuthPopup = () => {
             title: `${label} connected ✓`,
             description: `Your ${label} account is now linked and ready to use.`,
           });
+        }
+
+        if (didSucceed) {
+          reloadAfterIntegrationChange();
         }
       };
 

@@ -24,6 +24,7 @@ import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAgent } from "@/contexts/AgentContext";
+import { reloadAfterIntegrationChange } from "@/lib/integrationReload";
 
 interface AgentSettings {
   agentName: string;
@@ -86,6 +87,7 @@ export default function Settings() {
         title: "Google account disconnected",
         description: `${target.email} has been removed and access revoked.`,
       });
+      reloadAfterIntegrationChange();
     } catch (err) {
       toast({
         title: "Failed to disconnect",

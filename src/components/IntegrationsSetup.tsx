@@ -19,6 +19,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import SignOutDialog from "@/components/SignOutDialog";
 import { SlackChannelSelector } from "@/components/SlackChannelSelector";
+import { reloadAfterIntegrationChange } from "@/lib/integrationReload";
 
 const iconMap: Record<string, React.ElementType> = {
   mail: Mail,
@@ -72,6 +73,7 @@ export const IntegrationsSetup = () => {
           title: "Account disconnected",
           description: `${email} has been removed.`,
         });
+        reloadAfterIntegrationChange();
       } catch (err: any) {
         toast({
           title: "Error",
@@ -91,6 +93,7 @@ export const IntegrationsSetup = () => {
       return;
     }
     toggleConnection(id);
+    reloadAfterIntegrationChange();
   };
 
   // Sign out is now handled by SignOutDialog
