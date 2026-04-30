@@ -171,6 +171,13 @@ export const IntegrationsSetup = () => {
           const Icon = iconMap[integration.icon] || Mail;
           const isExpanded = expandedId === integration.id;
           const isConnecting = connectingId === integration.id || popupConnecting === integration.id;
+          // Block sibling Google button while any Google flow is in-flight to
+          // prevent overlapping OAuth popups / stale state races.
+          const isSiblingGoogleBusy =
+            GOOGLE_PROVIDERS.includes(integration.id) &&
+            popupConnecting !== null &&
+            popupConnecting !== integration.id;
+          const isDisabled = isConnecting || isSiblingGoogleBusy;
           const accounts = integration.connectedAccounts;
 
           return (
@@ -272,13 +279,18 @@ export const IntegrationsSetup = () => {
                   <div className="flex gap-2 mt-5">
                     <button
                       onClick={() => handleConnect(integration.id)}
-                      disabled={isConnecting}
+                      disabled={isDisabled}
                       className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-60"
                     >
                       {isConnecting ? (
                         <>
                           <span className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
                           Connecting...
+                        </>
+                      ) : isSiblingGoogleBusy ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
+                          Waiting…
                         </>
                       ) : (
                         <>

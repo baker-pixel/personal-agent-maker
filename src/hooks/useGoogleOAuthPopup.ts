@@ -4,9 +4,16 @@ import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useToast } from "@/hooks/use-toast";
 
 export const useGoogleOAuthPopup = () => {
+  // `connecting` holds the service id currently in-flight (e.g. "gmail" or
+  // "google-calendar"), or null when idle. We expose it as the single source
+  // of truth so the UI can disable sibling buttons until the flow settles.
   const [connecting, setConnecting] = useState<string | null>(null);
   const popupRef = useRef<Window | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  // Hard guard: prevents starting a second OAuth flow while one is already
+  // running. State updates are async so we cannot rely on `connecting` alone
+  // to block back-to-back calls fired in the same tick.
+  const inFlightRef = useRef(false);
   const { refreshConnections, integrations } = useIntegrations();
   const { toast } = useToast();
 
@@ -22,18 +29,28 @@ export const useGoogleOAuthPopup = () => {
     return () => {
       cleanupRef.current?.();
       cleanupRef.current = null;
+      inFlightRef.current = false;
     };
   }, []);
 
   const connect = useCallback(async (service: string) => {
-    // If a previous OAuth attempt is still "in-flight" (e.g. user closed the
-    // popup without completing, or switched providers), tear it down so the
-    // new flow doesn't get stuck behind a stale listener / loader.
-    cleanupRef.current?.();
-    cleanupRef.current = null;
+    // If another flow is still mid-air (popup open, awaiting callback), tear
+    // it down deterministically before starting the new one. This prevents
+    // the "Gmail → Calendar" sequence from getting stuck behind a stale
+    // listener/loader and guarantees a fresh OAuth request every time.
+    if (inFlightRef.current || cleanupRef.current) {
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+      inFlightRef.current = false;
+      setConnecting(null);
+    }
 
+    inFlightRef.current = true;
     setConnecting(service);
+
     try {
+      // Always request a freshly-generated OAuth URL (new state param) — we
+      // never reuse a cached URL across attempts or services.
       const response = await supabase.functions.invoke("google-auth", {
         body: { service, origin: window.location.origin },
       });
@@ -46,8 +63,8 @@ export const useGoogleOAuthPopup = () => {
       const w = 500, h = 650;
       const left = window.screenX + (window.outerWidth - w) / 2;
       const top = window.screenY + (window.outerHeight - h) / 2;
-      // Use a unique window name per attempt so we never get a stale (already-
-      // closed) reference from a prior OAuth flow (e.g. Gmail → Calendar in sequence).
+      // Unique window name per attempt so we never get a stale (already-
+      // closed) window reference from a prior flow.
       const windowName = `google-oauth-${service}-${Date.now()}`;
       const popup = window.open(
         url,
@@ -56,9 +73,9 @@ export const useGoogleOAuthPopup = () => {
       );
       popupRef.current = popup;
 
-      // If the browser blocked the popup entirely, bail out cleanly instead of
-      // sitting in an infinite loader.
+      // If the browser blocked the popup, exit cleanly — never sit in a loader.
       if (!popup) {
+        inFlightRef.current = false;
         setConnecting(null);
         toast({
           title: "Popup blocked",
@@ -70,7 +87,6 @@ export const useGoogleOAuthPopup = () => {
 
       const label = service === "gmail" ? "Gmail" : "Google Calendar";
       let completed = false;
-      let succeeded = false;
 
       const teardown = () => {
         window.removeEventListener("message", onMessage);
@@ -83,17 +99,25 @@ export const useGoogleOAuthPopup = () => {
       const completeConnection = async (didSucceed: boolean) => {
         if (completed) return;
         completed = true;
-        succeeded = didSucceed;
         teardown();
+
+        // ALWAYS re-fetch authoritative server state after a flow ends —
+        // success OR failure. This is the "hard reset" that ensures the next
+        // sibling connect (e.g. Calendar after Gmail) sees fresh integration
+        // state instead of stale cached values.
         try {
           await refreshConnections();
         } catch (e) {
           console.warn("refreshConnections after OAuth failed:", e);
         } finally {
+          // Clear flags LAST so the UI only re-enables the sibling button
+          // after the re-fetch settles — preventing a race where Calendar
+          // is clicked before Gmail's persisted token is reflected.
+          inFlightRef.current = false;
           setConnecting(null);
         }
 
-        if (succeeded && !wasPreviouslyConnected) {
+        if (didSucceed && !wasPreviouslyConnected) {
           toast({
             title: `${label} connected ✓`,
             description: `Your ${label} account is now linked and ready to use.`,
@@ -106,15 +130,16 @@ export const useGoogleOAuthPopup = () => {
         void completeConnection(true);
       };
 
-      // Poll for popup-closed: if the user closes the popup without finishing
-      // OAuth, we need to clear the loading state so they can retry / connect
-      // the sibling provider.
+      // Poll for popup-closed: if the user closes the popup without
+      // finishing OAuth, clear loading so they can retry / connect sibling.
       const closedPoll = window.setInterval(() => {
         if (popup && popup.closed) {
           void completeConnection(false);
         }
       }, 500);
 
+      // Hard timeout fallback — if no message and popup never closes within
+      // 2 minutes, exit the loader and allow retry.
       const fallback = window.setTimeout(() => void completeConnection(false), 120000);
       window.addEventListener("message", onMessage);
 
@@ -123,11 +148,13 @@ export const useGoogleOAuthPopup = () => {
         if (!completed) {
           completed = true;
           teardown();
+          inFlightRef.current = false;
           setConnecting(null);
         }
       };
     } catch (error) {
       console.error("Google OAuth popup error:", error);
+      inFlightRef.current = false;
       setConnecting(null);
       cleanupRef.current = null;
       throw error;
