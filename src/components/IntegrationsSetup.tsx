@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
-import { supabase } from "@/integrations/supabase/client";
+
 import {
   Mail,
   Calendar,
