@@ -10,6 +10,13 @@ export const useGoogleOAuthPopup = () => {
   const { refreshConnections, integrations } = useIntegrations();
   const { toast } = useToast();
 
+  // Keep a ref of integrations so the `connect` callback identity is stable
+  // and doesn't get recreated mid-OAuth (which would orphan listeners).
+  const integrationsRef = useRef(integrations);
+  useEffect(() => {
+    integrationsRef.current = integrations;
+  }, [integrations]);
+
   // Ensure any in-flight listener/timer is torn down on unmount.
   useEffect(() => {
     return () => {
