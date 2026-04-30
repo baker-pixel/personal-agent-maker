@@ -175,11 +175,17 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const removeAccount = useCallback(async (provider: string, email: string) => {
-    // 0. Optimistic UI: immediately drop the email from local state so the
-    //    card reflects the disconnect even before backend round-trips finish.
+    // Gmail and Google Calendar share the same underlying Google account/refresh
+    // token. Revoking either one invalidates BOTH at Google, so we must delete
+    // both rows locally — otherwise the sibling row keeps the UI showing the
+    // account as still connected after refresh.
+    const googleProviders = ["gmail", "google-calendar"];
+    const providersToRemove = googleProviders.includes(provider) ? googleProviders : [provider];
+
+    // 0. Optimistic UI: drop the email from every affected provider immediately.
     setIntegrations((prev) =>
       prev.map((i) => {
-        if (i.id !== provider) return i;
+        if (!providersToRemove.includes(i.id)) return i;
         const remaining = i.connectedAccounts.filter((e) => e !== email);
         return { ...i, connected: remaining.length > 0, connectedAccounts: remaining };
       })
@@ -197,19 +203,19 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.warn("Google token revoke failed (continuing with local delete):", err);
     }
 
-    // 2. Delete our stored row (RLS scopes this to the current user).
+    // 2. Delete stored rows for every affected provider (RLS scopes to user).
     await supabase
       .from("google_oauth_tokens")
       .delete()
-      .eq("provider", provider)
+      .in("provider", providersToRemove)
       .eq("email", email);
 
-    // 3. Clear any local cache tied to this provider.
+    // 3. Clear any local cache tied to these providers.
     try {
       const saved = localStorage.getItem("integrations-state");
       if (saved) {
         const ids: string[] = JSON.parse(saved);
-        const next = ids.filter((id) => id !== provider);
+        const next = ids.filter((id) => !providersToRemove.includes(id));
         localStorage.setItem("integrations-state", JSON.stringify(next));
       }
     } catch {}
