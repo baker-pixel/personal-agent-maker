@@ -9,6 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
@@ -63,6 +73,30 @@ export default function Settings() {
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [pendingRemoval, setPendingRemoval] = useState<{ provider: "gmail" | "google-calendar"; email: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  const confirmRemoval = async () => {
+    if (!pendingRemoval) return;
+    setRemoving(true);
+    try {
+      await removeAccount(pendingRemoval.provider, pendingRemoval.email);
+      toast({
+        title: "Google account disconnected",
+        description: `${pendingRemoval.email} has been removed and access revoked.`,
+      });
+      setPendingRemoval(null);
+      navigate("/settings", { replace: true });
+    } catch (err) {
+      toast({
+        title: "Failed to disconnect",
+        description: (err as Error)?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRemoving(false);
+    }
+  };
   const [passwordChanged, setPasswordChanged] = useState(false);
 
   const gmailConnected = isConnected("gmail");
@@ -334,11 +368,7 @@ export default function Settings() {
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                    onClick={async () => {
-                      await removeAccount("gmail", email);
-                      toast({ title: "Google account disconnected", description: `${email} has been removed and access revoked.` });
-                      navigate("/settings", { replace: true });
-                    }}
+                    onClick={() => setPendingRemoval({ provider: "gmail", email })}
                   >
                     <X className="w-3.5 h-3.5" />
                   </Button>
@@ -375,11 +405,7 @@ export default function Settings() {
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                    onClick={async () => {
-                      await removeAccount("google-calendar", email);
-                      toast({ title: "Google account disconnected", description: `${email} has been removed and access revoked.` });
-                      navigate("/settings", { replace: true });
-                    }}
+                    onClick={() => setPendingRemoval({ provider: "google-calendar", email })}
                   >
                     <X className="w-3.5 h-3.5" />
                   </Button>
@@ -514,6 +540,31 @@ export default function Settings() {
           <p>Questions about this policy? Reach out through the app or email us at support@normyagent.com.</p>
         </div>
       </div>
+
+      <AlertDialog open={!!pendingRemoval} onOpenChange={(open) => { if (!open && !removing) setPendingRemoval(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect this Google account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingRemoval ? (
+                <>
+                  This will revoke access for <span className="font-medium text-foreground">{pendingRemoval.email}</span> and remove it from both Gmail and Google Calendar. You can reconnect anytime.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); void confirmRemoval(); }}
+              disabled={removing}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Disconnecting...</> : "Disconnect"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
