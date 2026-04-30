@@ -35,13 +35,12 @@ export const useGoogleOAuthPopup = () => {
 
       const label = service === "gmail" ? "Gmail" : "Google Calendar";
       let completed = false;
-      let fallback: number | undefined;
 
       const completeConnection = async () => {
         if (completed) return;
         completed = true;
         window.removeEventListener("message", onMessage);
-        if (fallback) clearTimeout(fallback);
+        clearTimeout(fallback);
         popupRef.current = null;
         await refreshConnections();
         setConnecting(null);
@@ -59,8 +58,8 @@ export const useGoogleOAuthPopup = () => {
         void completeConnection();
       };
 
+      const fallback = window.setTimeout(() => void completeConnection(), 120000);
       window.addEventListener("message", onMessage);
-      fallback = window.setTimeout(() => void completeConnection(), 120000);
     } catch (error) {
       console.error("Google OAuth popup error:", error);
       setConnecting(null);
