@@ -93,8 +93,9 @@ Deno.serve(async (req) => {
       );
 
     if (upsertError) {
+      console.error("google-callback upsert error:", upsertError);
       return new Response(
-        JSON.stringify({ error: upsertError.message }),
+        JSON.stringify({ error: `Token storage failed: ${upsertError.message}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -104,8 +105,9 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    console.error("google-callback unhandled error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: (error as Error).message ?? "Unexpected error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
