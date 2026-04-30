@@ -47,10 +47,20 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
       }
     });
 
+    const pollForSession = async (deadlineMs: number): Promise<boolean> => {
+      const deadline = Date.now() + deadlineMs;
+      while (Date.now() < deadline) {
+        if (cancelled) return false;
+        const { data } = await supabase.auth.getSession();
+        if (data.session) return true;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      return false;
+    };
+
     const init = async () => {
       try {
         const liveParams = getPasswordRecoveryParams();
-        // Persist live params immediately so a refresh mid-flow can resume.
         savePasswordRecoveryParams(liveParams);
         const stored = loadStoredPasswordRecoveryParams() ?? {};
         const code = liveParams.code ?? stored.code ?? null;
@@ -60,9 +70,44 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
         const { errorDesc, errorCode } = liveParams;
 
         if (errorDesc || errorCode) {
-          setLinkError(errorDesc ? decodeURIComponent(errorDesc).replace(/\+/g, " ") : "That reset link is no longer valid. Send a new one below.");
+          setLinkError(
+            errorDesc
+              ? decodeURIComponent(errorDesc).replace(/\+/g, " ")
+              : "That reset link is no longer valid. Send a new one below.",
+          );
           setRecoveryStatus("needs-link");
           clearStoredPasswordRecoveryParams();
+          return;
+        }
+
+        // First: check if Supabase's detectSessionInUrl already established a session.
+        const { data: initial } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (initial.session) {
+          markReady();
+          return;
+        }
+
+        // If a code is in the URL, give the SDK's autodetect a moment to consume it
+        // before we attempt a manual exchange (codes are single-use).
+        if (code) {
+          if (await pollForSession(2000)) {
+            if (!cancelled) markReady();
+            return;
+          }
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (cancelled) return;
+          if (!error) {
+            markReady();
+            return;
+          }
+          // Exchange failed — likely already consumed. Re-check session.
+          const { data: after } = await supabase.auth.getSession();
+          if (after.session) {
+            markReady();
+            return;
+          }
+          needNewLink("That reset link could not be verified. Send a new one below.");
           return;
         }
 
@@ -72,46 +117,32 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
             refresh_token: refreshToken,
           });
           if (cancelled) return;
-          if (error) {
-            const { data: fallback } = await supabase.auth.getSession();
-            if (fallback.session) markReady();
-            else needNewLink("That reset link could not be verified. Send a new one below.");
+          if (!error) {
+            markReady();
             return;
           }
-          markReady();
+          const { data: fallback } = await supabase.auth.getSession();
+          if (fallback.session) markReady();
+          else needNewLink("That reset link could not be verified. Send a new one below.");
           return;
         }
 
         if (tokenHash) {
           const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
           if (cancelled) return;
-          if (error) {
-            const { data: fallback } = await supabase.auth.getSession();
-            if (fallback.session) markReady();
-            else needNewLink("That reset link could not be verified. Send a new one below.");
+          if (!error) {
+            markReady();
             return;
           }
-          markReady();
+          const { data: fallback } = await supabase.auth.getSession();
+          if (fallback.session) markReady();
+          else needNewLink("That reset link could not be verified. Send a new one below.");
           return;
         }
 
-        if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (cancelled) return;
-          if (error) {
-            const { data: fallback } = await supabase.auth.getSession();
-            if (fallback.session) markReady();
-            else needNewLink("That reset link could not be verified. Send a new one below.");
-            return;
-          }
-          markReady();
-          return;
-        }
-
-        const { data: existing } = await supabase.auth.getSession();
-        if (cancelled) return;
-        if (existing.session) {
-          markReady();
+        // No tokens in URL — wait briefly in case PASSWORD_RECOVERY event fires.
+        if (await pollForSession(1500)) {
+          if (!cancelled) markReady();
           return;
         }
 
