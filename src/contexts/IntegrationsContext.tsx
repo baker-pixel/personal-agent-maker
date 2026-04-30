@@ -149,15 +149,43 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   useEffect(() => {
+    // Initial sync on mount / page load — guarantees the UI reflects the
+    // server's authoritative integration state without any manual refresh.
     fetchConnected();
 
+    // Re-sync on every relevant auth lifecycle event so OAuth completions
+    // and re-hydrated sessions immediately flip integration status.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
         fetchConnected();
+      } else if (event === "SIGNED_OUT") {
+        // Clear connected state immediately on sign-out so a subsequent
+        // sign-in starts from a clean, unsynced UI before re-fetching.
+        setIntegrations((prev) =>
+          prev.map((i) =>
+            i.id === "gmail" || i.id === "google-calendar"
+              ? { ...i, connected: false, connectedAccounts: [] }
+              : i
+          )
+        );
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Re-sync whenever the tab regains focus or becomes visible — covers the
+    // case where an OAuth popup completes in another window/tab, or the user
+    // returns to the app after a disconnect elsewhere.
+    const onFocus = () => { fetchConnected(); };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") fetchConnected();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [fetchConnected]);
 
   const toggleConnection = useCallback((id: string) => {
