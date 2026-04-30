@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useToast } from "@/hooks/use-toast";
@@ -6,10 +6,25 @@ import { useToast } from "@/hooks/use-toast";
 export const useGoogleOAuthPopup = () => {
   const [connecting, setConnecting] = useState<string | null>(null);
   const popupRef = useRef<Window | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
   const { refreshConnections, integrations } = useIntegrations();
   const { toast } = useToast();
 
+  // Ensure any in-flight listener/timer is torn down on unmount.
+  useEffect(() => {
+    return () => {
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+    };
+  }, []);
+
   const connect = useCallback(async (service: string) => {
+    // If a previous OAuth attempt is still "in-flight" (e.g. user closed the
+    // popup without completing, or switched providers), tear it down so the
+    // new flow doesn't get stuck behind a stale listener / loader.
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+
     setConnecting(service);
     try {
       const response = await supabase.functions.invoke("google-auth", {
@@ -19,10 +34,8 @@ export const useGoogleOAuthPopup = () => {
       const { url } = response.data;
       if (!url) throw new Error("No auth URL returned");
 
-      // Snapshot current connection state to detect new connections
       const wasPreviouslyConnected = integrations.find(i => i.id === service)?.connected;
 
-      // Open in a centered popup
       const w = 500, h = 650;
       const left = window.screenX + (window.outerWidth - w) / 2;
       const top = window.screenY + (window.outerHeight - h) / 2;
@@ -35,17 +48,30 @@ export const useGoogleOAuthPopup = () => {
 
       const label = service === "gmail" ? "Gmail" : "Google Calendar";
       let completed = false;
+      let succeeded = false;
 
-      const completeConnection = async () => {
-        if (completed) return;
-        completed = true;
+      const teardown = () => {
         window.removeEventListener("message", onMessage);
+        clearInterval(closedPoll);
         clearTimeout(fallback);
         popupRef.current = null;
-        await refreshConnections();
-        setConnecting(null);
+        cleanupRef.current = null;
+      };
 
-        if (!wasPreviouslyConnected) {
+      const completeConnection = async (didSucceed: boolean) => {
+        if (completed) return;
+        completed = true;
+        succeeded = didSucceed;
+        teardown();
+        try {
+          await refreshConnections();
+        } catch (e) {
+          console.warn("refreshConnections after OAuth failed:", e);
+        } finally {
+          setConnecting(null);
+        }
+
+        if (succeeded && !wasPreviouslyConnected) {
           toast({
             title: `${label} connected ✓`,
             description: `Your ${label} account is now linked and ready to use.`,
@@ -55,14 +81,33 @@ export const useGoogleOAuthPopup = () => {
 
       const onMessage = (event: MessageEvent) => {
         if (event.origin !== window.location.origin || event.data?.type !== "normy-google-oauth-complete") return;
-        void completeConnection();
+        void completeConnection(true);
       };
 
-      const fallback = window.setTimeout(() => void completeConnection(), 120000);
+      // Poll for popup-closed: if the user closes the popup without finishing
+      // OAuth, we need to clear the loading state so they can retry / connect
+      // the sibling provider.
+      const closedPoll = window.setInterval(() => {
+        if (popup && popup.closed) {
+          void completeConnection(false);
+        }
+      }, 500);
+
+      const fallback = window.setTimeout(() => void completeConnection(false), 120000);
       window.addEventListener("message", onMessage);
+
+      // Expose teardown so a subsequent connect() call can cancel this one.
+      cleanupRef.current = () => {
+        if (!completed) {
+          completed = true;
+          teardown();
+          setConnecting(null);
+        }
+      };
     } catch (error) {
       console.error("Google OAuth popup error:", error);
       setConnecting(null);
+      cleanupRef.current = null;
       throw error;
     }
   }, [refreshConnections, integrations, toast]);
