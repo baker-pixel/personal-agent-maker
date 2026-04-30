@@ -63,18 +63,31 @@ export const IntegrationsSetup = () => {
 
   const handleDisconnect = async (id: string, email?: string) => {
     if (GOOGLE_PROVIDERS.includes(id) && email) {
-      const { error } = await supabase
-        .from("google_oauth_tokens")
-        .delete()
-        .eq("provider", id)
-        .eq("email", email);
-
-      if (error) {
-        toast({ title: "Error", description: "Failed to disconnect account", variant: "destructive" });
-        return;
+      const key = `${id}:${email}`;
+      if (disconnectingKey) return; // prevent double-clicks / race conditions
+      setDisconnectingKey(key);
+      try {
+        await removeAccount(id, email);
+        toast({
+          title: "Account disconnected",
+          description: `${email} has been removed.`,
+        });
+      } catch (err: any) {
+        toast({
+          title: "Error",
+          description: err?.message || "Failed to disconnect account",
+          variant: "destructive",
+        });
+      } finally {
+        // Always re-sync so the UI reflects authoritative server state,
+        // even if the delete or revoke call failed.
+        try {
+          await refreshConnections();
+        } catch (e) {
+          console.warn("refreshConnections after disconnect failed:", e);
+        }
+        setDisconnectingKey(null);
       }
-      // Refresh state
-      window.location.reload();
       return;
     }
     toggleConnection(id);
