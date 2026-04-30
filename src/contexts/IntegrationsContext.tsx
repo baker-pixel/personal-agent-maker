@@ -18,6 +18,8 @@ interface IntegrationsContextType {
   isConnected: (id: string) => boolean;
   refreshConnections: () => Promise<void>;
   removeAccount: (provider: string, email: string) => Promise<void>;
+  /** True while the integration list is being re-fetched from the server. */
+  refreshing: boolean;
 }
 
 const defaultIntegrations: Integration[] = [
@@ -110,14 +112,18 @@ const IntegrationsContext = createContext<IntegrationsContextType>({
   isConnected: () => false,
   refreshConnections: async () => {},
   removeAccount: async () => {},
+  refreshing: false,
 });
 
 export const useIntegrations = () => useContext(IntegrationsContext);
 
 export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [integrations, setIntegrations] = useState<Integration[]>(defaultIntegrations);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchConnected = useCallback(async () => {
+    setRefreshing(true);
+    try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
@@ -146,6 +152,9 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         };
       })
     );
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -258,7 +267,7 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   );
 
   return (
-    <IntegrationsContext.Provider value={{ integrations, toggleConnection, isConnected, refreshConnections: fetchConnected, removeAccount }}>
+    <IntegrationsContext.Provider value={{ integrations, toggleConnection, isConnected, refreshConnections: fetchConnected, removeAccount, refreshing }}>
       {children}
     </IntegrationsContext.Provider>
   );
