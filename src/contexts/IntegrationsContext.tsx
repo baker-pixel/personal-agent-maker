@@ -174,11 +174,35 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const removeAccount = useCallback(async (provider: string, email: string) => {
+    // 1. Best-effort: revoke token directly with Google before deleting our row.
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await supabase.functions.invoke("google-revoke", {
+          body: { provider, email },
+        });
+      }
+    } catch (err) {
+      console.warn("Google token revoke failed (continuing with local delete):", err);
+    }
+
+    // 2. Delete our stored row (RLS scopes this to the current user).
     const { error } = await supabase
       .from("google_oauth_tokens")
       .delete()
       .eq("provider", provider)
       .eq("email", email);
+
+    // 3. Clear any local cache tied to this provider.
+    try {
+      const saved = localStorage.getItem("integrations-state");
+      if (saved) {
+        const ids: string[] = JSON.parse(saved);
+        const next = ids.filter((id) => id !== provider);
+        localStorage.setItem("integrations-state", JSON.stringify(next));
+      }
+    } catch {}
+
     if (!error) {
       await fetchConnected();
     }
