@@ -540,6 +540,31 @@ export default function Settings() {
           <p>Questions about this policy? Reach out through the app or email us at support@normyagent.com.</p>
         </div>
       </div>
+
+      <AlertDialog open={!!pendingRemoval} onOpenChange={(open) => { if (!open && !removing) setPendingRemoval(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect this Google account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingRemoval ? (
+                <>
+                  This will revoke access for <span className="font-medium text-foreground">{pendingRemoval.email}</span> and remove it from both Gmail and Google Calendar. You can reconnect anytime.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); void confirmRemoval(); }}
+              disabled={removing}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Disconnecting...</> : "Disconnect"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
