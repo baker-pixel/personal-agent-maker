@@ -78,9 +78,24 @@ export default function Settings() {
         setSettings((prev) => ({ ...prev, ...parsed, agentName }));
       } catch {}
     }
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.email) setUserEmail(data.user.email);
+
+    const loadEmail = async () => {
+      // Try session first (synchronous read of cached token), then getUser as fallback.
+      const { data: sessionData } = await supabase.auth.getSession();
+      const sessionEmail = sessionData.session?.user?.email;
+      if (sessionEmail) {
+        setUserEmail(sessionEmail);
+        return;
+      }
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user?.email) setUserEmail(userData.user.email);
+    };
+    loadEmail();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) setUserEmail(session.user.email);
     });
+    return () => subscription.unsubscribe();
   }, [agentName]);
 
   const handleChangePassword = async () => {
