@@ -125,26 +125,27 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       .from("google_oauth_token_metadata" as any)
       .select("provider, email") as { data: { provider: string; email: string | null }[] | null };
 
-    if (tokens && tokens.length > 0) {
-      // Group emails by provider
-      const providerEmails = new Map<string, string[]>();
-      for (const t of tokens) {
-        const emails = providerEmails.get(t.provider) || [];
-        if (t.email && !emails.includes(t.email)) emails.push(t.email);
-        providerEmails.set(t.provider, emails);
-      }
-
-      setIntegrations((prev) =>
-        prev.map((i) => {
-          const emails = providerEmails.get(i.id) || [];
-          return {
-            ...i,
-            connected: emails.length > 0,
-            connectedAccounts: emails,
-          };
-        })
-      );
+    // Group emails by provider (empty map if no tokens — this is what clears stale state).
+    const providerEmails = new Map<string, string[]>();
+    for (const t of tokens ?? []) {
+      const emails = providerEmails.get(t.provider) || [];
+      if (t.email && !emails.includes(t.email)) emails.push(t.email);
+      providerEmails.set(t.provider, emails);
     }
+
+    // Always re-derive connected state for every Google provider so that
+    // a disconnect (which removes the row) reliably flips connected → false.
+    setIntegrations((prev) =>
+      prev.map((i) => {
+        if (i.id !== "gmail" && i.id !== "google-calendar") return i;
+        const emails = providerEmails.get(i.id) || [];
+        return {
+          ...i,
+          connected: emails.length > 0,
+          connectedAccounts: emails,
+        };
+      })
+    );
   }, []);
 
   useEffect(() => {
