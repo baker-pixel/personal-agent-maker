@@ -39,12 +39,27 @@ export const useGoogleOAuthPopup = () => {
       const w = 500, h = 650;
       const left = window.screenX + (window.outerWidth - w) / 2;
       const top = window.screenY + (window.outerHeight - h) / 2;
+      // Use a unique window name per attempt so we never get a stale (already-
+      // closed) reference from a prior OAuth flow (e.g. Gmail → Calendar in sequence).
+      const windowName = `google-oauth-${service}-${Date.now()}`;
       const popup = window.open(
         url,
-        "google-oauth",
+        windowName,
         `width=${w},height=${h},left=${left},top=${top},popup=yes`
       );
       popupRef.current = popup;
+
+      // If the browser blocked the popup entirely, bail out cleanly instead of
+      // sitting in an infinite loader.
+      if (!popup) {
+        setConnecting(null);
+        toast({
+          title: "Popup blocked",
+          description: "Please allow popups for this site and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const label = service === "gmail" ? "Gmail" : "Google Calendar";
       let completed = false;
