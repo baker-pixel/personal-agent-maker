@@ -41,7 +41,7 @@ export const useGoogleOAuthPopup = () => {
       const { url } = response.data;
       if (!url) throw new Error("No auth URL returned");
 
-      const wasPreviouslyConnected = integrations.find(i => i.id === service)?.connected;
+      const wasPreviouslyConnected = integrationsRef.current.find(i => i.id === service)?.connected;
 
       const w = 500, h = 650;
       const left = window.screenX + (window.outerWidth - w) / 2;
