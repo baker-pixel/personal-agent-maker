@@ -26,17 +26,23 @@ Deno.serve(async (req) => {
     }
     const redirectUri = `${callerOrigin}/auth/google/callback`;
 
-    const scopes = [
-      "openid",
-      "email",
-      "profile",
-      "https://www.googleapis.com/auth/gmail.modify",
-      "https://www.googleapis.com/auth/calendar",
-      // READ-ONLY Drive access. Google enforces this at the token level —
-      // any write/delete/trash API call will be rejected by Google. Normy CANNOT
-      // delete, move, rename, or modify any file in the user's Drive.
-      "https://www.googleapis.com/auth/drive.readonly",
-    ].join(" ");
+    // Per-service scopes. Keep Gmail and Calendar flows SEPARATE so Google
+    // pre-checks the consent boxes (an empty/merged scope list shows them
+    // unchecked, and users who click Continue silently grant nothing).
+    const baseScopes = ["openid", "email", "profile"];
+    const serviceScopes: Record<string, string[]> = {
+      gmail: [
+        "https://www.googleapis.com/auth/gmail.modify",
+        // READ-ONLY Drive access (for attachment search). Google enforces this
+        // at the token level — any write/delete API call will be rejected.
+        "https://www.googleapis.com/auth/drive.readonly",
+      ],
+      "google-calendar": [
+        "https://www.googleapis.com/auth/calendar",
+      ],
+    };
+    const requested = serviceScopes[service ?? "gmail"] ?? serviceScopes.gmail;
+    const scopes = [...baseScopes, ...requested].join(" ");
 
     const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     authUrl.searchParams.set("client_id", clientId);
