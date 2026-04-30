@@ -60,7 +60,7 @@ const GoogleCallback = () => {
         window.opener.postMessage({ type: "normy-google-oauth-complete" }, window.location.origin);
         setTimeout(() => window.close(), 1500);
       } else {
-        setTimeout(() => navigate("/"), 2000);
+        setTimeout(() => navigate("/dashboard"), 2000);
       }
     };
 
