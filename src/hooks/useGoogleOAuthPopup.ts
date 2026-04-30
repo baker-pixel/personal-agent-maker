@@ -10,6 +10,13 @@ export const useGoogleOAuthPopup = () => {
   const { refreshConnections, integrations } = useIntegrations();
   const { toast } = useToast();
 
+  // Keep a ref of integrations so the `connect` callback identity is stable
+  // and doesn't get recreated mid-OAuth (which would orphan listeners).
+  const integrationsRef = useRef(integrations);
+  useEffect(() => {
+    integrationsRef.current = integrations;
+  }, [integrations]);
+
   // Ensure any in-flight listener/timer is torn down on unmount.
   useEffect(() => {
     return () => {
@@ -34,17 +41,32 @@ export const useGoogleOAuthPopup = () => {
       const { url } = response.data;
       if (!url) throw new Error("No auth URL returned");
 
-      const wasPreviouslyConnected = integrations.find(i => i.id === service)?.connected;
+      const wasPreviouslyConnected = integrationsRef.current.find(i => i.id === service)?.connected;
 
       const w = 500, h = 650;
       const left = window.screenX + (window.outerWidth - w) / 2;
       const top = window.screenY + (window.outerHeight - h) / 2;
+      // Use a unique window name per attempt so we never get a stale (already-
+      // closed) reference from a prior OAuth flow (e.g. Gmail → Calendar in sequence).
+      const windowName = `google-oauth-${service}-${Date.now()}`;
       const popup = window.open(
         url,
-        "google-oauth",
+        windowName,
         `width=${w},height=${h},left=${left},top=${top},popup=yes`
       );
       popupRef.current = popup;
+
+      // If the browser blocked the popup entirely, bail out cleanly instead of
+      // sitting in an infinite loader.
+      if (!popup) {
+        setConnecting(null);
+        toast({
+          title: "Popup blocked",
+          description: "Please allow popups for this site and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const label = service === "gmail" ? "Gmail" : "Google Calendar";
       let completed = false;
@@ -110,7 +132,7 @@ export const useGoogleOAuthPopup = () => {
       cleanupRef.current = null;
       throw error;
     }
-  }, [refreshConnections, integrations, toast]);
+  }, [refreshConnections, toast]);
 
   return { connecting, connect };
 };
