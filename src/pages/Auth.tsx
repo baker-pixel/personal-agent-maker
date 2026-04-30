@@ -2,6 +2,7 @@ import { forwardRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
+import { PASSWORD_RESET_REDIRECT_URL } from "@/lib/passwordRecovery";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
@@ -55,7 +56,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
     if (!email.trim()) return;
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: "https://normyagent.com/reset-password",
+      redirectTo: PASSWORD_RESET_REDIRECT_URL,
     });
     setLoading(false);
     if (error) {

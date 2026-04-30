@@ -9,6 +9,7 @@ import {
   clearStoredPasswordRecoveryParams,
   getPasswordRecoveryParams,
   loadStoredPasswordRecoveryParams,
+  PASSWORD_RESET_REDIRECT_URL,
   savePasswordRecoveryParams,
 } from "@/lib/passwordRecovery";
 import normyLogo from "@/assets/normy-logo.png";
@@ -67,7 +68,8 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
         const accessToken = liveParams.accessToken ?? stored.accessToken ?? null;
         const refreshToken = liveParams.refreshToken ?? stored.refreshToken ?? null;
         const tokenHash = liveParams.tokenHash ?? stored.tokenHash ?? null;
-        const { errorDesc, errorCode } = liveParams;
+        const errorDesc = liveParams.errorDesc ?? stored.errorDesc ?? null;
+        const errorCode = liveParams.errorCode ?? stored.errorCode ?? null;
 
         if (errorDesc || errorCode) {
           setLinkError(
@@ -203,7 +205,7 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
     if (!email.trim()) return;
     setResending(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: "https://normyagent.com/reset-password",
+      redirectTo: PASSWORD_RESET_REDIRECT_URL,
     });
     setResending(false);
     if (error) {

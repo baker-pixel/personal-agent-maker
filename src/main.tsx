@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
 import "./index.css";
+import { preparePasswordRecoveryUrlForManualHandling } from "./lib/passwordRecovery";
 
 // PWA: Prevent service worker issues in Lovable preview/iframe
 const isInIframe = (() => {
@@ -21,4 +21,8 @@ if (isPreviewHost || isInIframe) {
   });
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+preparePasswordRecoveryUrlForManualHandling();
+
+import("./App.tsx").then(({ default: App }) => {
+  createRoot(document.getElementById("root")!).render(<App />);
+});

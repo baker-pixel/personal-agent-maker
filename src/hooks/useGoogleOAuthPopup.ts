@@ -34,24 +34,32 @@ export const useGoogleOAuthPopup = () => {
       popupRef.current = popup;
 
       const label = service === "gmail" ? "Gmail" : "Google Calendar";
+      let completed = false;
 
-      // Poll for popup close
-      const poll = setInterval(async () => {
-        if (!popup || popup.closed) {
-          clearInterval(poll);
-          popupRef.current = null;
-          await refreshConnections();
-          setConnecting(null);
+      const completeConnection = async () => {
+        if (completed) return;
+        completed = true;
+        window.removeEventListener("message", onMessage);
+        clearTimeout(fallback);
+        popupRef.current = null;
+        await refreshConnections();
+        setConnecting(null);
 
-          // Show toast if newly connected
-          if (!wasPreviouslyConnected) {
-            toast({
-              title: `${label} connected ✓`,
-              description: `Your ${label} account is now linked and ready to use.`,
-            });
-          }
+        if (!wasPreviouslyConnected) {
+          toast({
+            title: `${label} connected ✓`,
+            description: `Your ${label} account is now linked and ready to use.`,
+          });
         }
-      }, 500);
+      };
+
+      const onMessage = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin || event.data?.type !== "normy-google-oauth-complete") return;
+        void completeConnection();
+      };
+
+      const fallback = window.setTimeout(() => void completeConnection(), 120000);
+      window.addEventListener("message", onMessage);
     } catch (error) {
       console.error("Google OAuth popup error:", error);
       setConnecting(null);
