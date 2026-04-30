@@ -57,6 +57,7 @@ const GoogleCallback = () => {
       // If opened as popup, close after brief success message; otherwise redirect
       const isPopup = window.opener && window.opener !== window;
       if (isPopup) {
+        window.opener.postMessage({ type: "normy-google-oauth-complete" }, window.location.origin);
         setTimeout(() => window.close(), 1500);
       } else {
         setTimeout(() => navigate("/"), 2000);
