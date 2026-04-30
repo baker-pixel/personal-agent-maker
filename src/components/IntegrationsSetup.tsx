@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
-import { supabase } from "@/integrations/supabase/client";
+
 import {
   Mail,
   Calendar,
@@ -30,9 +30,10 @@ const GOOGLE_PROVIDERS = ["gmail", "google-calendar"];
 
 export const IntegrationsSetup = () => {
   const { agentName } = useAgent();
-  const { integrations, toggleConnection } = useIntegrations();
+  const { integrations, toggleConnection, removeAccount, refreshConnections } = useIntegrations();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [disconnectingKey, setDisconnectingKey] = useState<string | null>(null);
   const { connecting: popupConnecting, connect: popupConnect } = useGoogleOAuthPopup();
   const { toast } = useToast();
 
@@ -62,18 +63,31 @@ export const IntegrationsSetup = () => {
 
   const handleDisconnect = async (id: string, email?: string) => {
     if (GOOGLE_PROVIDERS.includes(id) && email) {
-      const { error } = await supabase
-        .from("google_oauth_tokens")
-        .delete()
-        .eq("provider", id)
-        .eq("email", email);
-
-      if (error) {
-        toast({ title: "Error", description: "Failed to disconnect account", variant: "destructive" });
-        return;
+      const key = `${id}:${email}`;
+      if (disconnectingKey) return; // prevent double-clicks / race conditions
+      setDisconnectingKey(key);
+      try {
+        await removeAccount(id, email);
+        toast({
+          title: "Account disconnected",
+          description: `${email} has been removed.`,
+        });
+      } catch (err: any) {
+        toast({
+          title: "Error",
+          description: err?.message || "Failed to disconnect account",
+          variant: "destructive",
+        });
+      } finally {
+        // Always re-sync so the UI reflects authoritative server state,
+        // even if the delete or revoke call failed.
+        try {
+          await refreshConnections();
+        } catch (e) {
+          console.warn("refreshConnections after disconnect failed:", e);
+        }
+        setDisconnectingKey(null);
       }
-      // Refresh state
-      window.location.reload();
       return;
     }
     toggleConnection(id);
@@ -212,10 +226,11 @@ export const IntegrationsSetup = () => {
                             </div>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDisconnect(integration.id, email); }}
-                              className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0 flex items-center gap-1"
+                              disabled={disconnectingKey === `${integration.id}:${email}`}
+                              className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0 flex items-center gap-1 disabled:opacity-60"
                             >
                               <Unplug className="w-3 h-3" />
-                              Remove
+                              {disconnectingKey === `${integration.id}:${email}` ? "Removing..." : "Remove"}
                             </button>
                           </div>
                         ))}
