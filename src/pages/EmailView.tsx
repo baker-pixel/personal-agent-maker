@@ -360,8 +360,20 @@ export default function EmailView() {
         </div>
       </nav>
 
+      {/* Connection status banner — shown when emails fail to load OR after a successful sync */}
+      {(error || lastSyncAt) && (
+        <div className="container px-4 pt-3">
+          <GmailStatusBanner
+            status={reconnectRequired ? "reconnect_required" : "connected"}
+            lastSyncAt={lastSyncAt}
+            message={reconnectRequired ? error ?? undefined : undefined}
+          />
+        </div>
+      )}
+
       {/* Priority legend */}
       {!loading && !error && emails.length > 0 && <PriorityLegend />}
+
 
       {/* Loading */}
       {loading && emails.length === 0 && (
