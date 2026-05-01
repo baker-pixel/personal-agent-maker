@@ -6,6 +6,23 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+const PROVIDER = "google-calendar";
+
+async function deleteStoredToken(
+  adminClient: any,
+  userId: string,
+  email: string | null
+) {
+  let q = adminClient
+    .from("google_oauth_tokens")
+    .delete()
+    .eq("user_id", userId)
+    .eq("provider", PROVIDER);
+  if (email) q = q.eq("email", email);
+  const { error } = await q;
+  if (error) console.error("Failed to delete invalid Calendar token row:", error);
+}
+
 async function refreshAccessToken(
   adminClient: any,
   userId: string,
@@ -24,8 +41,18 @@ async function refreshAccessToken(
   });
 
   const data = await tokenResponse.json();
-  if (!tokenResponse.ok || data.error) {
-    console.error("Token refresh failed:", data);
+  const googleError = data?.error ? String(data.error) : null;
+  if (!tokenResponse.ok || googleError) {
+    console.error("Calendar token refresh failed:", googleError ?? tokenResponse.status, data?.error_description ?? data);
+    if (googleError === "invalid_grant") {
+      await deleteStoredToken(adminClient, userId, email);
+      throw new Error("RECONNECT_REQUIRED");
+    }
+    throw new Error("REFRESH_FAILED");
+  }
+
+  if (!data.access_token || !data.expires_in) {
+    console.error("Calendar token refresh missing access_token/expires_in:", data);
     throw new Error("REFRESH_FAILED");
   }
 
@@ -40,13 +67,12 @@ async function refreshAccessToken(
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
-    .eq("provider", "google-calendar");
-
+    .eq("provider", PROVIDER);
   if (email) updateQuery = updateQuery.eq("email", email);
 
   const { error: updateError } = await updateQuery;
   if (updateError) {
-    console.error("Failed to update refreshed token:", updateError);
+    console.error("Failed to update refreshed Calendar token:", updateError);
     throw new Error("DB_UPDATE_FAILED");
   }
 
@@ -59,37 +85,35 @@ async function getValidAccessToken(adminClient: any, userId: string) {
     .from("google_oauth_tokens")
     .select("access_token, refresh_token, token_expires_at, email")
     .eq("user_id", userId)
-    .eq("provider", "google-calendar")
+    .eq("provider", PROVIDER)
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (fetchError) {
     console.error("DB fetch error:", fetchError);
     throw new Error("DB_FETCH_FAILED");
   }
-  if (!tokenRow) {
-    console.error("No Calendar token row found for user:", userId);
-    throw new Error("NOT_CONNECTED");
-  }
+  if (!tokenRow) throw new Error("NOT_CONNECTED");
   if (!tokenRow.refresh_token) {
-    console.error("No refresh_token stored — user must reconnect");
+    await deleteStoredToken(adminClient, userId, tokenRow.email);
     throw new Error("RECONNECT_REQUIRED");
   }
 
   const expiresAt = new Date(tokenRow.token_expires_at).getTime();
-  const isExpired = Date.now() >= expiresAt - 60_000;
+  const isExpired = !Number.isFinite(expiresAt) || Date.now() >= expiresAt - 60_000;
 
   if (isExpired) {
-    console.log("Calendar access token expired — refreshing...");
     const newAccessToken = await refreshAccessToken(
       adminClient,
       userId,
       tokenRow.refresh_token,
       tokenRow.email
     );
-    return { accessToken: newAccessToken, email: tokenRow.email };
+    return { accessToken: newAccessToken, email: tokenRow.email, refreshToken: tokenRow.refresh_token };
   }
 
-  return { accessToken: tokenRow.access_token, email: tokenRow.email };
+  return { accessToken: tokenRow.access_token, email: tokenRow.email, refreshToken: tokenRow.refresh_token };
 }
 
 Deno.serve(async (req) => {
@@ -115,17 +139,15 @@ Deno.serve(async (req) => {
       authHeader.replace("Bearer ", "")
     );
     if (userError || !user) {
-      console.error("Auth error:", userError);
       return new Response(
         JSON.stringify({ error: "Unauthorized", code: "UNAUTHORIZED" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    let accessToken: string;
+    let tokenContext: { accessToken: string; email: string | null; refreshToken: string };
     try {
-      const result = await getValidAccessToken(adminClient, user.id);
-      accessToken = result.accessToken;
+      tokenContext = await getValidAccessToken(adminClient, user.id);
     } catch (tokenError: any) {
       if (tokenError.message === "NOT_CONNECTED") {
         return new Response(
@@ -144,6 +166,7 @@ Deno.serve(async (req) => {
       }
       throw tokenError;
     }
+    let accessToken = tokenContext.accessToken;
 
     const now = new Date();
     const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -156,29 +179,41 @@ Deno.serve(async (req) => {
       maxResults: "20",
     });
 
-    const calRes = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
+    const calUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`;
+
+    let calRes = await fetch(calUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
 
     if (calRes.status === 401) {
+      console.warn("Calendar fetch returned 401 — refreshing token once and retrying");
+      try {
+        accessToken = await refreshAccessToken(
+          adminClient,
+          user.id,
+          tokenContext.refreshToken,
+          tokenContext.email
+        );
+        calRes = await fetch(calUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+      } catch (refreshError: any) {
+        return new Response(
+          JSON.stringify({
+            error: "Your Google Calendar session has expired. Please reconnect your account.",
+            code: "RECONNECT_REQUIRED",
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    if (!calRes.ok) {
+      const errorText = await calRes.text();
+      console.error("Calendar fetch failed:", calRes.status, errorText);
       return new Response(
-        JSON.stringify({
-          error: "Your Google Calendar session has expired. Please reconnect your account.",
-          code: "RECONNECT_REQUIRED",
-        }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Failed to fetch Calendar events", code: "CALENDAR_API_ERROR" }),
+        { status: calRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const calData = await calRes.json();
-
-    if (calData.error) {
-      return new Response(
-        JSON.stringify({ error: calData.error.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     const events = (calData.items || []).map((event: any) => ({
       id: event.id,
