@@ -109,10 +109,6 @@ export default function EmailView() {
   const [deskAssignments, setDeskAssignments] = useState<Record<string, "agent" | "my">>({});
   const [dragOverDesk, setDragOverDesk] = useState<"agent" | "my" | null>(null);
 
-
-  const fetchEmails = useCallback(async () => {
-    setLoading(true);
-    setError(null);
   const fetchEmails = useCallback(async () => {
     setLoading(true);
     setError(null);
