@@ -269,18 +269,42 @@ Deno.serve(async (req) => {
     const maxResults = url.searchParams.get("maxResults") || "50";
     const query = url.searchParams.get("q") || "in:inbox newer_than:2d";
 
-    const listRes = await fetch(
+    let listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
 
     if (listRes.status === 401) {
+      console.warn("Gmail list fetch returned 401 — refreshing token once and retrying");
+      try {
+        accessToken = await refreshAccessToken(
+          adminClient,
+          user.id,
+          tokenContext.refreshToken,
+          tokenContext.email,
+          "gmail"
+        );
+        listRes = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+      } catch (refreshError: any) {
+        return new Response(
+          JSON.stringify({
+            error: "Your Gmail session has expired. Please reconnect your account.",
+            code: "RECONNECT_REQUIRED",
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    if (!listRes.ok) {
+      const errorText = await listRes.text();
+      console.error("Gmail list fetch failed:", listRes.status, errorText);
       return new Response(
-        JSON.stringify({
-          error: "Your Gmail session has expired. Please reconnect your account.",
-          code: "RECONNECT_REQUIRED",
-        }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Failed to fetch Gmail messages", code: "GMAIL_API_ERROR" }),
+        { status: listRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
