@@ -6,70 +6,92 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-async function getValidToken(userId: string) {
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
-
-  const { data: tokenRow, error } = await adminClient
-    .from("google_oauth_tokens")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("provider", "gmail")
-    .single();
-
-  if (error || !tokenRow) {
-    const e = new Error("Gmail not connected");
-    (e as any).code = "NOT_CONNECTED";
-    throw e;
-  }
-
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) {
-    return tokenRow.access_token;
-  }
-
-  if (!tokenRow.refresh_token) {
-    const e = new Error("Your Gmail session has expired. Please reconnect your account.");
-    (e as any).code = "RECONNECT_REQUIRED";
-    throw e;
-  }
-
-  const response = await fetch("https://oauth2.googleapis.com/token", {
+async function refreshAccessToken(
+  adminClient: any,
+  userId: string,
+  refreshToken: string,
+  email: string | null,
+  provider: string
+): Promise<string> {
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
       client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-      refresh_token: tokenRow.refresh_token,
+      refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
   });
 
-  const data = await response.json();
-  if (data.error) {
-    console.error("Token refresh failed:", data.error, data.error_description);
-    // If refresh token is revoked/invalid, user needs to reconnect
-    if (data.error === "invalid_grant" || data.error === "unauthorized_client") {
-      const e = new Error("Your Gmail session has expired. Please reconnect your account.");
-      (e as any).code = "RECONNECT_REQUIRED";
-      throw e;
-    }
-    throw new Error(data.error_description || data.error);
+  const data = await tokenResponse.json();
+  if (!tokenResponse.ok || data.error) {
+    console.error("Token refresh failed:", data);
+    throw new Error("REFRESH_FAILED");
   }
 
-  await adminClient
+  const newAccessToken = data.access_token as string;
+  const newExpiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();
+
+  let updateQuery = adminClient
     .from("google_oauth_tokens")
     .update({
-      access_token: data.access_token,
-      token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
+      access_token: newAccessToken,
+      token_expires_at: newExpiresAt,
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
-    .eq("provider", "gmail");
+    .eq("provider", provider);
 
-  return data.access_token;
+  if (email) updateQuery = updateQuery.eq("email", email);
+
+  const { error: updateError } = await updateQuery;
+  if (updateError) {
+    console.error("Failed to update refreshed token:", updateError);
+    throw new Error("DB_UPDATE_FAILED");
+  }
+
+  console.log("Access token refreshed for user:", userId, "provider:", provider);
+  return newAccessToken;
+}
+
+async function getValidAccessToken(adminClient: any, userId: string) {
+  const { data: tokenRow, error: fetchError } = await adminClient
+    .from("google_oauth_tokens")
+    .select("access_token, refresh_token, token_expires_at, email")
+    .eq("user_id", userId)
+    .eq("provider", "gmail")
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error("DB fetch error:", fetchError);
+    throw new Error("DB_FETCH_FAILED");
+  }
+  if (!tokenRow) {
+    console.error("No Gmail token row found for user:", userId);
+    throw new Error("NOT_CONNECTED");
+  }
+  if (!tokenRow.refresh_token) {
+    console.error("No refresh_token stored — user must reconnect");
+    throw new Error("RECONNECT_REQUIRED");
+  }
+
+  const expiresAt = new Date(tokenRow.token_expires_at).getTime();
+  const isExpired = Date.now() >= expiresAt - 60_000;
+
+  if (isExpired) {
+    console.log("Gmail access token expired — refreshing...");
+    const newAccessToken = await refreshAccessToken(
+      adminClient,
+      userId,
+      tokenRow.refresh_token,
+      tokenRow.email,
+      "gmail"
+    );
+    return { accessToken: newAccessToken, email: tokenRow.email };
+  }
+
+  return { accessToken: tokenRow.access_token, email: tokenRow.email };
 }
 
 Deno.serve(async (req) => {
@@ -81,26 +103,49 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
+        JSON.stringify({ error: "Unauthorized", code: "UNAUTHORIZED" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const supabase = createClient(
+    const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await adminClient.auth.getUser(
+      authHeader.replace("Bearer ", "")
+    );
     if (userError || !user) {
+      console.error("Auth error:", userError);
       return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
+        JSON.stringify({ error: "Unauthorized", code: "UNAUTHORIZED" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const accessToken = await getValidToken(user.id);
+    let accessToken: string;
+    try {
+      const result = await getValidAccessToken(adminClient, user.id);
+      accessToken = result.accessToken;
+    } catch (tokenError: any) {
+      if (tokenError.message === "NOT_CONNECTED") {
+        return new Response(
+          JSON.stringify({ error: "Gmail not connected", code: "NOT_CONNECTED" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (tokenError.message === "RECONNECT_REQUIRED" || tokenError.message === "REFRESH_FAILED") {
+        return new Response(
+          JSON.stringify({
+            error: "Your Gmail session has expired. Please reconnect your account.",
+            code: "RECONNECT_REQUIRED",
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      throw tokenError;
+    }
 
     const url = new URL(req.url);
     const messageId = url.searchParams.get("messageId");
@@ -111,19 +156,26 @@ Deno.serve(async (req) => {
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
+      if (msgRes.status === 401) {
+        return new Response(
+          JSON.stringify({
+            error: "Your Gmail session has expired. Please reconnect your account.",
+            code: "RECONNECT_REQUIRED",
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       const msgData = await msgRes.json();
 
       const headers = msgData.payload?.headers || [];
       const getHeader = (name: string) =>
         headers.find((h: { name: string }) => h.name.toLowerCase() === name.toLowerCase())?.value || "";
 
-      // Extract body from parts
       function extractBody(payload: any): string {
         if (payload.body?.data) {
           return atob(payload.body.data.replace(/-/g, "+").replace(/_/g, "/"));
         }
         if (payload.parts) {
-          // Prefer text/plain, fall back to text/html
           const textPart = payload.parts.find((p: any) => p.mimeType === "text/plain");
           if (textPart?.body?.data) {
             return atob(textPart.body.data.replace(/-/g, "+").replace(/_/g, "/"));
@@ -132,7 +184,6 @@ Deno.serve(async (req) => {
           if (htmlPart?.body?.data) {
             return atob(htmlPart.body.data.replace(/-/g, "+").replace(/_/g, "/"));
           }
-          // Recurse into nested parts
           for (const part of payload.parts) {
             const nested = extractBody(part);
             if (nested) return nested;
@@ -160,7 +211,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // List emails — pull a wider window so the agent can answer about emails from earlier today
+    // List emails
     const maxResults = url.searchParams.get("maxResults") || "50";
     const query = url.searchParams.get("q") || "in:inbox newer_than:2d";
 
@@ -168,6 +219,17 @@ Deno.serve(async (req) => {
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
+
+    if (listRes.status === 401) {
+      return new Response(
+        JSON.stringify({
+          error: "Your Gmail session has expired. Please reconnect your account.",
+          code: "RECONNECT_REQUIRED",
+        }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const listData = await listRes.json();
 
     if (!listData.messages || listData.messages.length === 0) {
@@ -208,12 +270,11 @@ Deno.serve(async (req) => {
       JSON.stringify({ emails }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
-    const status = (error as any).code === "RECONNECT_REQUIRED" ? 401 : 
-                   (error as any).code === "NOT_CONNECTED" ? 404 : 500;
+  } catch (error: any) {
+    console.error("gmail-fetch fatal error:", error?.message || error);
     return new Response(
-      JSON.stringify({ error: error.message, code: (error as any).code || "UNKNOWN" }),
-      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: error?.message || "Internal server error", code: "INTERNAL_ERROR" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
