@@ -14,19 +14,29 @@ async function getValidToken(userId: string) {
 
   const { data: tokenRow, error } = await adminClient
     .from("google_oauth_tokens")
-    .select("*")
+    .select("access_token, refresh_token, token_expires_at, email")
     .eq("user_id", userId)
     .eq("provider", "gmail")
-    .single();
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (error || !tokenRow) throw new Error("Gmail not connected");
+  if (error || !tokenRow) {
+    const e = new Error("Gmail not connected");
+    (e as any).code = "NOT_CONNECTED";
+    throw e;
+  }
 
   const expiresAt = new Date(tokenRow.token_expires_at);
   if (expiresAt > new Date(Date.now() + 60000)) {
     return tokenRow.access_token;
   }
 
-  if (!tokenRow.refresh_token) throw new Error("Re-authentication required");
+  if (!tokenRow.refresh_token) {
+    const e = new Error("Re-authentication required");
+    (e as any).code = "RECONNECT_REQUIRED";
+    throw e;
+  }
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -40,9 +50,24 @@ async function getValidToken(userId: string) {
   });
 
   const data = await response.json();
-  if (data.error) throw new Error(data.error_description || data.error);
+  if (!response.ok || data.error) {
+    if (data.error === "invalid_grant") {
+      // Refresh token revoked — drop the row so the user is forced to reconnect.
+      let dq = adminClient
+        .from("google_oauth_tokens")
+        .delete()
+        .eq("user_id", userId)
+        .eq("provider", "gmail");
+      if (tokenRow.email) dq = dq.eq("email", tokenRow.email);
+      await dq;
+      const e = new Error("Your Gmail session has expired. Please reconnect your account.");
+      (e as any).code = "RECONNECT_REQUIRED";
+      throw e;
+    }
+    throw new Error(data.error_description || data.error || "Token refresh failed");
+  }
 
-  await adminClient
+  let updateQuery = adminClient
     .from("google_oauth_tokens")
     .update({
       access_token: data.access_token,
@@ -51,6 +76,8 @@ async function getValidToken(userId: string) {
     })
     .eq("user_id", userId)
     .eq("provider", "gmail");
+  if (tokenRow.email) updateQuery = updateQuery.eq("email", tokenRow.email);
+  await updateQuery;
 
   return data.access_token;
 }

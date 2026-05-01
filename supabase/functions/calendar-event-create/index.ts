@@ -14,10 +14,12 @@ async function getValidToken(userId: string) {
 
   const { data: tokenRow, error } = await adminClient
     .from("google_oauth_tokens")
-    .select("*")
+    .select("access_token, refresh_token, token_expires_at, email")
     .eq("user_id", userId)
     .eq("provider", "google-calendar")
-    .single();
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (error || !tokenRow) {
     const e = new Error("Google Calendar not connected");
@@ -48,8 +50,16 @@ async function getValidToken(userId: string) {
   });
 
   const data = await response.json();
-  if (data.error) {
+  if (!response.ok || data.error) {
     if (data.error === "invalid_grant" || data.error === "unauthorized_client") {
+      // Drop the revoked row so the user is forced into a fresh consent flow.
+      let dq = adminClient
+        .from("google_oauth_tokens")
+        .delete()
+        .eq("user_id", userId)
+        .eq("provider", "google-calendar");
+      if (tokenRow.email) dq = dq.eq("email", tokenRow.email);
+      await dq;
       const e = new Error("Your Google Calendar session has expired. Please reconnect your account.");
       (e as any).code = "RECONNECT_REQUIRED";
       throw e;
@@ -57,7 +67,7 @@ async function getValidToken(userId: string) {
     throw new Error(data.error_description || data.error);
   }
 
-  await adminClient
+  let updateQuery = adminClient
     .from("google_oauth_tokens")
     .update({
       access_token: data.access_token,
@@ -66,6 +76,8 @@ async function getValidToken(userId: string) {
     })
     .eq("user_id", userId)
     .eq("provider", "google-calendar");
+  if (tokenRow.email) updateQuery = updateQuery.eq("email", tokenRow.email);
+  await updateQuery;
 
   return data.access_token;
 }
