@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
     authUrl.searchParams.set("scope", scopes);
     authUrl.searchParams.set("access_type", "offline");
     authUrl.searchParams.set("prompt", "consent");
+    authUrl.searchParams.set("include_granted_scopes", "true");
     authUrl.searchParams.set("state", service ?? "gmail");
 
     console.log("Generated auth URL with redirect_uri:", redirectUri);
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error("google-auth error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unexpected error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

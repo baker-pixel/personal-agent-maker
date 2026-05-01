@@ -79,6 +79,8 @@ Deno.serve(async (req) => {
 
     // Preserve existing refresh_token if Google didn't return a new one
     // (Google only returns refresh_token on first consent or with prompt=consent)
+    const googleProviders = ["gmail", "google-calendar"];
+
     const { data: existing } = await adminClient
       .from("google_oauth_tokens")
       .select("refresh_token")
@@ -87,9 +89,31 @@ Deno.serve(async (req) => {
       .eq("email", userInfo.email)
       .maybeSingle();
 
-    const refreshTokenToStore =
-      tokenData.refresh_token ?? existing?.refresh_token ?? null;
+    const { data: sibling } = await adminClient
+      .from("google_oauth_tokens")
+      .select("refresh_token")
+      .eq("user_id", user.id)
+      .eq("email", userInfo.email)
+      .in("provider", googleProviders.filter((p) => p !== provider))
+      .not("refresh_token", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
+    const refreshTokenToStore =
+      tokenData.refresh_token ?? sibling?.refresh_token ?? existing?.refresh_token ?? null;
+
+    if (!refreshTokenToStore) {
+      console.error("google-callback missing refresh_token for provider:", provider, "email:", userInfo.email);
+      return new Response(
+        JSON.stringify({ error: "Google did not return an offline token. Please retry the connection and approve access." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // A new Google consent can rotate/revoke older refresh tokens for the same
+    // Google account. Keep sibling service rows in sync so Gmail and Calendar
+    // never diverge into a stale-token state.
     const { error: upsertError } = await adminClient
       .from("google_oauth_tokens")
       .upsert(
@@ -111,6 +135,21 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: `Token storage failed: ${upsertError.message}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    const siblingProviders = googleProviders.filter((p) => p !== provider);
+    const { error: siblingUpdateError } = await adminClient
+      .from("google_oauth_tokens")
+      .update({
+        refresh_token: refreshTokenToStore,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id)
+      .eq("email", userInfo.email)
+      .in("provider", siblingProviders);
+
+    if (siblingUpdateError) {
+      console.error("google-callback sibling refresh_token sync error:", siblingUpdateError);
     }
 
     return new Response(
