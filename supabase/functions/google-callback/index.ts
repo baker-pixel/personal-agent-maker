@@ -90,6 +90,19 @@ Deno.serve(async (req) => {
     const refreshTokenToStore =
       tokenData.refresh_token ?? existing?.refresh_token ?? null;
 
+    if (!refreshTokenToStore) {
+      console.error("google-callback missing refresh_token for provider:", provider, "email:", userInfo.email);
+      return new Response(
+        JSON.stringify({ error: "Google did not return an offline token. Please retry the connection and approve access." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // A new Google consent can rotate/revoke older refresh tokens for the same
+    // Google account. Keep sibling service rows in sync so Gmail and Calendar
+    // never diverge into a stale-token state.
+    const googleProviders = ["gmail", "google-calendar"];
+
     const { error: upsertError } = await adminClient
       .from("google_oauth_tokens")
       .upsert(
@@ -111,6 +124,21 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: `Token storage failed: ${upsertError.message}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    const siblingProviders = googleProviders.filter((p) => p !== provider);
+    const { error: siblingUpdateError } = await adminClient
+      .from("google_oauth_tokens")
+      .update({
+        refresh_token: refreshTokenToStore,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id)
+      .eq("email", userInfo.email)
+      .in("provider", siblingProviders);
+
+    if (siblingUpdateError) {
+      console.error("google-callback sibling refresh_token sync error:", siblingUpdateError);
     }
 
     return new Response(
