@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
     authUrl.searchParams.set("scope", scopes);
     authUrl.searchParams.set("access_type", "offline");
     authUrl.searchParams.set("prompt", "consent");
+    authUrl.searchParams.set("include_granted_scopes", "true");
     authUrl.searchParams.set("state", service ?? "gmail");
 
     console.log("Generated auth URL with redirect_uri:", redirectUri);
