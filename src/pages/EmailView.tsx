@@ -13,6 +13,7 @@ import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { PriorityLegend } from "@/components/PriorityLegend";
+import { GmailStatusBanner } from "@/components/GmailStatusBanner";
 
 type Priority = "urgent" | "important" | "low" | "noise";
 
