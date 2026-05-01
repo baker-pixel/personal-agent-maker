@@ -13,6 +13,7 @@ import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { PriorityLegend } from "@/components/PriorityLegend";
+import { GmailStatusBanner } from "@/components/GmailStatusBanner";
 
 type Priority = "urgent" | "important" | "low" | "noise";
 
@@ -82,6 +83,8 @@ export default function EmailView() {
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reconnectRequired, setReconnectRequired] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [loadingBody, setLoadingBody] = useState(false);
   const [agentSheetOpen, setAgentSheetOpen] = useState(false);
@@ -106,16 +109,35 @@ export default function EmailView() {
   const [deskAssignments, setDeskAssignments] = useState<Record<string, "agent" | "my">>({});
   const [dragOverDesk, setDragOverDesk] = useState<"agent" | "my" | null>(null);
 
-
   const fetchEmails = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("gmail-fetch", {
-        body: null,
-      });
-      if (fnError) throw fnError;
-      if (data?.error) throw new Error(data.error);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      // Use raw fetch so we can read the JSON body on non-2xx responses
+      // (supabase.functions.invoke hides it behind FunctionsHttpError).
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-fetch`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            "Content-Type": "application/json",
+          },
+          body: "{}",
+        }
+      );
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok || data?.error) {
+        if (data?.code === "RECONNECT_REQUIRED" || data?.code === "NOT_CONNECTED") {
+          setReconnectRequired(true);
+        }
+        throw new Error(data?.error || `Request failed (${resp.status})`);
+      }
 
       const fetched: Email[] = (data?.emails || []).map((e: any) => {
         const priority = guessPriority({ isUnread: e.isUnread, subject: e.subject, from: e.from });
@@ -137,6 +159,8 @@ export default function EmailView() {
       });
 
       setEmails(fetched);
+      setReconnectRequired(false);
+      setLastSyncAt(new Date());
 
       // Initialize desk assignments: only urgent goes to user's desk
       const assignments: Record<string, "agent" | "my"> = {};
@@ -336,8 +360,20 @@ export default function EmailView() {
         </div>
       </nav>
 
+      {/* Connection status banner — shown when emails fail to load OR after a successful sync */}
+      {(error || lastSyncAt) && (
+        <div className="container px-4 pt-3">
+          <GmailStatusBanner
+            status={reconnectRequired ? "reconnect_required" : "connected"}
+            lastSyncAt={lastSyncAt}
+            message={reconnectRequired ? error ?? undefined : undefined}
+          />
+        </div>
+      )}
+
       {/* Priority legend */}
       {!loading && !error && emails.length > 0 && <PriorityLegend />}
+
 
       {/* Loading */}
       {loading && emails.length === 0 && (
