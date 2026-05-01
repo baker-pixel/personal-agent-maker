@@ -83,6 +83,8 @@ export default function EmailView() {
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reconnectRequired, setReconnectRequired] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [loadingBody, setLoadingBody] = useState(false);
   const [agentSheetOpen, setAgentSheetOpen] = useState(false);
