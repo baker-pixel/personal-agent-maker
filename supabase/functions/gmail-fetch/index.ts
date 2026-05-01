@@ -6,6 +6,24 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+async function deleteStoredToken(
+  adminClient: any,
+  userId: string,
+  email: string | null,
+  provider: string
+) {
+  let deleteQuery = adminClient
+    .from("google_oauth_tokens")
+    .delete()
+    .eq("user_id", userId)
+    .eq("provider", provider);
+
+  if (email) deleteQuery = deleteQuery.eq("email", email);
+
+  const { error } = await deleteQuery;
+  if (error) console.error("Failed to delete invalid Google token row:", error);
+}
+
 async function refreshAccessToken(
   adminClient: any,
   userId: string,
@@ -25,8 +43,18 @@ async function refreshAccessToken(
   });
 
   const data = await tokenResponse.json();
-  if (!tokenResponse.ok || data.error) {
-    console.error("Token refresh failed:", data);
+  const googleError = data?.error ? String(data.error) : null;
+  if (!tokenResponse.ok || googleError) {
+    console.error("Token refresh failed:", googleError ?? tokenResponse.status, data?.error_description ?? data);
+    if (googleError === "invalid_grant") {
+      await deleteStoredToken(adminClient, userId, email, provider);
+      throw new Error("RECONNECT_REQUIRED");
+    }
+    throw new Error("REFRESH_FAILED");
+  }
+
+  if (!data.access_token || !data.expires_in) {
+    console.error("Token refresh response missing access_token/expires_in:", data);
     throw new Error("REFRESH_FAILED");
   }
 
@@ -61,6 +89,8 @@ async function getValidAccessToken(adminClient: any, userId: string) {
     .select("access_token, refresh_token, token_expires_at, email")
     .eq("user_id", userId)
     .eq("provider", "gmail")
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (fetchError) {
@@ -73,11 +103,12 @@ async function getValidAccessToken(adminClient: any, userId: string) {
   }
   if (!tokenRow.refresh_token) {
     console.error("No refresh_token stored — user must reconnect");
+    await deleteStoredToken(adminClient, userId, tokenRow.email, "gmail");
     throw new Error("RECONNECT_REQUIRED");
   }
 
   const expiresAt = new Date(tokenRow.token_expires_at).getTime();
-  const isExpired = Date.now() >= expiresAt - 60_000;
+  const isExpired = !Number.isFinite(expiresAt) || Date.now() >= expiresAt - 60_000;
 
   if (isExpired) {
     console.log("Gmail access token expired — refreshing...");
@@ -88,10 +119,10 @@ async function getValidAccessToken(adminClient: any, userId: string) {
       tokenRow.email,
       "gmail"
     );
-    return { accessToken: newAccessToken, email: tokenRow.email };
+    return { accessToken: newAccessToken, email: tokenRow.email, refreshToken: tokenRow.refresh_token };
   }
 
-  return { accessToken: tokenRow.access_token, email: tokenRow.email };
+  return { accessToken: tokenRow.access_token, email: tokenRow.email, refreshToken: tokenRow.refresh_token };
 }
 
 Deno.serve(async (req) => {
