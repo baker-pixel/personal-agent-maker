@@ -77,6 +77,19 @@ Deno.serve(async (req) => {
 
     const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000).toISOString();
 
+    // Preserve existing refresh_token if Google didn't return a new one
+    // (Google only returns refresh_token on first consent or with prompt=consent)
+    const { data: existing } = await adminClient
+      .from("google_oauth_tokens")
+      .select("refresh_token")
+      .eq("user_id", user.id)
+      .eq("provider", provider)
+      .eq("email", userInfo.email)
+      .maybeSingle();
+
+    const refreshTokenToStore =
+      tokenData.refresh_token ?? existing?.refresh_token ?? null;
+
     const { error: upsertError } = await adminClient
       .from("google_oauth_tokens")
       .upsert(
@@ -84,7 +97,7 @@ Deno.serve(async (req) => {
           user_id: user.id,
           provider,
           access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token,
+          refresh_token: refreshTokenToStore,
           token_expires_at: expiresAt,
           email: userInfo.email,
           updated_at: new Date().toISOString(),
