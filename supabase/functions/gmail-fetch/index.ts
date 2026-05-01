@@ -155,10 +155,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    let accessToken: string;
+    let tokenContext: { accessToken: string; email: string | null; refreshToken: string };
     try {
-      const result = await getValidAccessToken(adminClient, user.id);
-      accessToken = result.accessToken;
+      tokenContext = await getValidAccessToken(adminClient, user.id);
     } catch (tokenError: any) {
       if (tokenError.message === "NOT_CONNECTED") {
         return new Response(
@@ -177,23 +176,47 @@ Deno.serve(async (req) => {
       }
       throw tokenError;
     }
+    let accessToken = tokenContext.accessToken;
 
     const url = new URL(req.url);
     const messageId = url.searchParams.get("messageId");
 
     // Single message full-body fetch
     if (messageId) {
-      const msgRes = await fetch(
+      let msgRes = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       if (msgRes.status === 401) {
+        console.warn("Gmail message fetch returned 401 — refreshing token once and retrying");
+        try {
+          accessToken = await refreshAccessToken(
+            adminClient,
+            user.id,
+            tokenContext.refreshToken,
+            tokenContext.email,
+            "gmail"
+          );
+          msgRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+        } catch (refreshError: any) {
+          return new Response(
+            JSON.stringify({
+              error: "Your Gmail session has expired. Please reconnect your account.",
+              code: "RECONNECT_REQUIRED",
+            }),
+            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+      if (!msgRes.ok) {
+        const errorText = await msgRes.text();
+        console.error("Gmail message fetch failed:", msgRes.status, errorText);
         return new Response(
-          JSON.stringify({
-            error: "Your Gmail session has expired. Please reconnect your account.",
-            code: "RECONNECT_REQUIRED",
-          }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Failed to fetch Gmail message", code: "GMAIL_API_ERROR" }),
+          { status: msgRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const msgData = await msgRes.json();
