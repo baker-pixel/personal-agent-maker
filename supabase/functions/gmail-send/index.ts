@@ -27,8 +27,9 @@ async function getValidToken(userId: string) {
     throw e;
   }
 
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) {
+  const expiresAtMs = new Date(tokenRow.token_expires_at).getTime();
+  const isExpired = !Number.isFinite(expiresAtMs) || Date.now() >= expiresAtMs - 60_000;
+  if (!isExpired) {
     return tokenRow.access_token;
   }
 
