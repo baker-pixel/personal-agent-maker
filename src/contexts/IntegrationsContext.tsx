@@ -20,6 +20,8 @@ interface IntegrationsContextType {
   removeAccount: (provider: string, email: string) => Promise<void>;
   /** True while the integration list is being re-fetched from the server. */
   refreshing: boolean;
+  /** Error from the most recent token metadata fetch, if any. */
+  tokensError: string | null;
 }
 
 const defaultIntegrations: Integration[] = [
@@ -113,6 +115,7 @@ const IntegrationsContext = createContext<IntegrationsContextType>({
   refreshConnections: async () => {},
   removeAccount: async () => {},
   refreshing: false,
+  tokensError: null,
 });
 
 export const useIntegrations = () => useContext(IntegrationsContext);
@@ -120,6 +123,7 @@ export const useIntegrations = () => useContext(IntegrationsContext);
 export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [integrations, setIntegrations] = useState<Integration[]>(defaultIntegrations);
   const [refreshing, setRefreshing] = useState(false);
+  const [tokensError, setTokensError] = useState<string | null>(null);
 
   const fetchConnected = useCallback(async () => {
     setRefreshing(true);
@@ -127,9 +131,18 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    const { data: tokens } = await supabase
+    const { data: tokens, error: tokensQueryError } = await supabase
       .from("google_oauth_token_metadata" as any)
-      .select("provider, email") as { data: { provider: string; email: string | null }[] | null };
+      .select("provider, email") as { data: { provider: string; email: string | null }[] | null; error: { message: string } | null };
+
+    if (tokensQueryError) {
+      // Surface the error instead of silently swallowing it — the UI can now
+      // show a meaningful message instead of pretending nothing is connected.
+      console.error("Failed to load integration tokens metadata:", tokensQueryError);
+      setTokensError(tokensQueryError.message ?? "Failed to load integrations");
+      return;
+    }
+    setTokensError(null);
 
     // Group emails by provider (empty map if no tokens — this is what clears stale state).
     const providerEmails = new Map<string, string[]>();
@@ -212,17 +225,15 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const removeAccount = useCallback(async (provider: string, email: string) => {
-    // Gmail and Google Calendar share the same underlying Google account/refresh
-    // token. Revoking either one invalidates BOTH at Google, so we must delete
-    // both rows locally — otherwise the sibling row keeps the UI showing the
-    // account as still connected after refresh.
-    const googleProviders = ["gmail", "google-calendar"];
-    const providersToRemove = googleProviders.includes(provider) ? googleProviders : [provider];
+    // Each service now owns its own refresh token (no cross-service sibling
+    // sync), so disconnecting Gmail must NOT cascade to Calendar and vice
+    // versa. Only target the requested provider row.
+    const providersToRemove = [provider];
 
-    // 0. Optimistic UI: drop the email from every affected provider immediately.
+    // 0. Optimistic UI: drop the email from the affected provider only.
     setIntegrations((prev) =>
       prev.map((i) => {
-        if (!providersToRemove.includes(i.id)) return i;
+        if (i.id !== provider) return i;
         const remaining = i.connectedAccounts.filter((e) => e !== email);
         return { ...i, connected: remaining.length > 0, connectedAccounts: remaining };
       })
@@ -240,14 +251,14 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.warn("Google token revoke failed (continuing with local delete):", err);
     }
 
-    // 2. Delete stored rows for every affected provider (RLS scopes to user).
+    // 2. Delete only the (provider, email) row (RLS scopes to user).
     await supabase
       .from("google_oauth_tokens")
       .delete()
-      .in("provider", providersToRemove)
+      .eq("provider", provider)
       .eq("email", email);
 
-    // 3. Clear any local cache tied to these providers.
+    // 3. Clear any local cache tied to this provider only.
     try {
       const saved = localStorage.getItem("integrations-state");
       if (saved) {
@@ -267,7 +278,7 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   );
 
   return (
-    <IntegrationsContext.Provider value={{ integrations, toggleConnection, isConnected, refreshConnections: fetchConnected, removeAccount, refreshing }}>
+    <IntegrationsContext.Provider value={{ integrations, toggleConnection, isConnected, refreshConnections: fetchConnected, removeAccount, refreshing, tokensError }}>
       {children}
     </IntegrationsContext.Provider>
   );
