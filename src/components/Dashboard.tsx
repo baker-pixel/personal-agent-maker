@@ -115,8 +115,9 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
         .then((r) => r.json())
         .then((data) => {
           if (!data.error) setEmails(data.emails || []);
+          else console.error("Dashboard gmail-fetch error:", data.code || data.error);
         })
-        .catch(() => {})
+        .catch((err) => console.error("Dashboard gmail-fetch failed:", err))
         .finally(() => setLoadingEmails(false));
 
       // Fetch calendar
@@ -124,8 +125,9 @@ export const Dashboard = ({ onNavigateToChat, onNavigateToInbox, onNavigateToTas
         .then((r) => r.json())
         .then((data) => {
           if (!data.error) setEvents((data.events || []).slice(0, 5));
+          else console.error("Dashboard calendar-fetch error:", data.code || data.error);
         })
-        .catch(() => {})
+        .catch((err) => console.error("Dashboard calendar-fetch failed:", err))
         .finally(() => setLoadingEvents(false));
 
       // Fetch recent activity (conversations)
