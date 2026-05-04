@@ -225,11 +225,6 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const removeAccount = useCallback(async (provider: string, email: string) => {
-    // Each service now owns its own refresh token (no cross-service sibling
-    // sync), so disconnecting Gmail must NOT cascade to Calendar and vice
-    // versa. Only target the requested provider row.
-    const providersToRemove = [provider];
-
     // 0. Optimistic UI: drop the email from the affected provider only.
     setIntegrations((prev) =>
       prev.map((i) => {
@@ -240,30 +235,49 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
 
     // 1. Best-effort: revoke token directly with Google before deleting our row.
+    // The revoke function also tells us if a sibling service shares the same
+    // refresh_token (legacy shared-token state). If so, revoking this token
+    // has already broken the sibling — clean it up too so the UI shows it as
+    // properly disconnected rather than stuck in a broken-connected state.
+    let sharedSiblingProviders: string[] = [];
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        await supabase.functions.invoke("google-revoke", {
+        const { data: revokeData } = await supabase.functions.invoke("google-revoke", {
           body: { provider, email },
         });
+        sharedSiblingProviders = (revokeData as any)?.sharedSiblingProviders ?? [];
       }
     } catch (err) {
       console.warn("Google token revoke failed (continuing with local delete):", err);
     }
 
-    // 2. Delete only the (provider, email) row (RLS scopes to user).
+    // If sibling services share the same (now-revoked) refresh_token, optimistic-
+    // update them to disconnected immediately so the UI is accurate.
+    if (sharedSiblingProviders.length > 0) {
+      setIntegrations((prev) =>
+        prev.map((i) => {
+          if (!sharedSiblingProviders.includes(i.id)) return i;
+          const remaining = i.connectedAccounts.filter((e) => e !== email);
+          return { ...i, connected: remaining.length > 0, connectedAccounts: remaining };
+        })
+      );
+    }
+
+    // 2. Delete the target row AND any sibling rows that shared the token.
+    const allProvidersToDelete = [provider, ...sharedSiblingProviders];
     await supabase
       .from("google_oauth_tokens")
       .delete()
-      .eq("provider", provider)
+      .in("provider", allProvidersToDelete)
       .eq("email", email);
 
-    // 3. Clear any local cache tied to this provider only.
+    // 3. Clear local cache for all affected providers.
     try {
       const saved = localStorage.getItem("integrations-state");
       if (saved) {
         const ids: string[] = JSON.parse(saved);
-        const next = ids.filter((id) => !providersToRemove.includes(id));
+        const next = ids.filter((id) => !allProvidersToDelete.includes(id));
         localStorage.setItem("integrations-state", JSON.stringify(next));
       }
     } catch {}

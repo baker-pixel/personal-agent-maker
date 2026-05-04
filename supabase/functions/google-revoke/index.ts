@@ -60,6 +60,23 @@ Deno.serve(async (req) => {
       console.error("token lookup failed", rowErr);
     }
 
+    // Check if any sibling service shares the same refresh_token.
+    // This happens when tokens were previously synced (old behaviour). Revoking
+    // the shared token at Google would silently break the sibling service too.
+    // We report affected siblings so the caller can clean them up properly.
+    const googleProviders = ["gmail", "google-calendar"];
+    const siblingProviders = googleProviders.filter((p) => p !== provider);
+    const { data: siblings } = await admin
+      .from("google_oauth_tokens")
+      .select("provider, refresh_token")
+      .eq("user_id", user.id)
+      .eq("email", email)
+      .in("provider", siblingProviders);
+
+    const sharedSiblingProviders = (siblings ?? [])
+      .filter((s) => s.refresh_token && s.refresh_token === row?.refresh_token)
+      .map((s) => s.provider);
+
     // Prefer revoking the refresh_token (revokes all derived access tokens).
     // Fall back to access_token if no refresh token is stored.
     const tokenToRevoke = row?.refresh_token || row?.access_token;
@@ -84,7 +101,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, revoked }),
+      JSON.stringify({ success: true, revoked, sharedSiblingProviders }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
