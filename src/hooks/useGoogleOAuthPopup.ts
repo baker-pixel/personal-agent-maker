@@ -11,10 +11,11 @@ export const useGoogleOAuthPopup = () => {
   const [connecting, setConnecting] = useState<string | null>(null);
   const popupRef = useRef<Window | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
-  // Hard guard: prevents starting a second OAuth flow while one is already
-  // running. State updates are async so we cannot rely on `connecting` alone
-  // to block back-to-back calls fired in the same tick.
-  const inFlightRef = useRef(false);
+  // Hard guard: holds the service id of the in-flight OAuth flow (or null when
+  // idle). Tracking the SERVICE — not just a boolean — means Gmail's teardown
+  // can never accidentally clear Calendar's loading state (or vice versa) when
+  // two flows interleave.
+  const inFlightRef = useRef<string | null>(null);
   const { refreshConnections, integrations } = useIntegrations();
   const { toast } = useToast();
 
@@ -30,7 +31,7 @@ export const useGoogleOAuthPopup = () => {
     return () => {
       cleanupRef.current?.();
       cleanupRef.current = null;
-      inFlightRef.current = false;
+      inFlightRef.current = null;
     };
   }, []);
 
@@ -42,11 +43,11 @@ export const useGoogleOAuthPopup = () => {
     if (inFlightRef.current || cleanupRef.current) {
       cleanupRef.current?.();
       cleanupRef.current = null;
-      inFlightRef.current = false;
+      inFlightRef.current = null;
       setConnecting(null);
     }
 
-    inFlightRef.current = true;
+    inFlightRef.current = service;
     setConnecting(service);
 
     try {
@@ -76,7 +77,7 @@ export const useGoogleOAuthPopup = () => {
 
       // If the browser blocked the popup, exit cleanly — never sit in a loader.
       if (!popup) {
-        inFlightRef.current = false;
+        inFlightRef.current = null;
         setConnecting(null);
         toast({
           title: "Popup blocked",
@@ -111,11 +112,13 @@ export const useGoogleOAuthPopup = () => {
         } catch (e) {
           console.warn("refreshConnections after OAuth failed:", e);
         } finally {
-          // Clear flags LAST so the UI only re-enables the sibling button
-          // after the re-fetch settles — preventing a race where Calendar
-          // is clicked before Gmail's persisted token is reflected.
-          inFlightRef.current = false;
-          setConnecting(null);
+          // Clear flags LAST — and ONLY if this flow is still the in-flight
+          // owner. Prevents Gmail's finally block from wiping Calendar's
+          // loading state when Calendar started while Gmail was finishing.
+          if (inFlightRef.current === service) {
+            inFlightRef.current = null;
+            setConnecting(null);
+          }
         }
 
         if (didSucceed && !wasPreviouslyConnected) {
@@ -163,14 +166,18 @@ export const useGoogleOAuthPopup = () => {
         if (!completed) {
           completed = true;
           teardown();
-          inFlightRef.current = false;
-          setConnecting(null);
+          if (inFlightRef.current === service) {
+            inFlightRef.current = null;
+            setConnecting(null);
+          }
         }
       };
     } catch (error) {
       console.error("Google OAuth popup error:", error);
-      inFlightRef.current = false;
-      setConnecting(null);
+      if (inFlightRef.current === service) {
+        inFlightRef.current = null;
+        setConnecting(null);
+      }
       cleanupRef.current = null;
       throw error;
     }
