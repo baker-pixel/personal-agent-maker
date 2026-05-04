@@ -113,13 +113,25 @@ export default function CalendarView() {
     setNeedsReconnect(false);
     try {
       const { data, error: fnError } = await supabase.functions.invoke("calendar-fetch");
-      if (fnError) throw fnError;
-      if (data?.code === "RECONNECT_REQUIRED") {
+
+      // Try to parse the response body even when supabase-js flags a non-2xx status
+      let payload: any = data;
+      if (fnError && (fnError as any).context instanceof Response) {
+        try {
+          payload = await (fnError as any).context.clone().json();
+        } catch {
+          payload = null;
+        }
+      }
+
+      if (payload?.code === "RECONNECT_REQUIRED" || payload?.error === "RECONNECT_REQUIRED") {
         setNeedsReconnect(true);
         return;
       }
-      if (data?.error) throw new Error(data.error);
-      setEvents(data?.events || []);
+
+      if (fnError) throw fnError;
+      if (payload?.error) throw new Error(payload.error);
+      setEvents(payload?.events || []);
     } catch (err: any) {
       console.error("Failed to fetch calendar:", err);
       setError(err.message || "Failed to load calendar");
