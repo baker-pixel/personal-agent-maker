@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, revoked }),
+      JSON.stringify({ success: true, revoked, sharedSiblingProviders }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
