@@ -51,7 +51,9 @@ Deno.serve(async (req) => {
     authUrl.searchParams.set("scope", scopes);
     authUrl.searchParams.set("access_type", "offline");
     authUrl.searchParams.set("prompt", "consent");
-    authUrl.searchParams.set("include_granted_scopes", "true");
+    // Intentionally NOT setting include_granted_scopes — each service must get
+    // a clean, independent OAuth flow so scope grants never silently merge
+    // across Gmail and Calendar.
     authUrl.searchParams.set("state", service ?? "gmail");
 
     console.log("Generated auth URL with redirect_uri:", redirectUri);

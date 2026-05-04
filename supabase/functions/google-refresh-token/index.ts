@@ -18,15 +18,16 @@ export async function refreshGoogleToken(userId: string, provider: string) {
     throw new Error("No token found for this provider");
   }
 
-  // Check if token is still valid
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) {
+  // Check if token is still valid (millisecond comparison; matches gmail-fetch)
+  const expiresAtMs = new Date(tokenRow.token_expires_at).getTime();
+  const isExpired = !Number.isFinite(expiresAtMs) || Date.now() >= expiresAtMs - 60_000;
+  if (!isExpired) {
     return tokenRow.access_token;
   }
 
   // Refresh the token
   if (!tokenRow.refresh_token) {
-    throw new Error("No refresh token available - user must re-authenticate");
+    throw new Error("RECONNECT_REQUIRED");
   }
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
@@ -42,8 +43,17 @@ export async function refreshGoogleToken(userId: string, provider: string) {
 
   const data = await response.json();
 
-  if (data.error) {
-    throw new Error(data.error_description || data.error);
+  if (!response.ok || data.error) {
+    if (data.error === "invalid_grant" || data.error === "unauthorized_client") {
+      // Refresh token revoked — drop the row so the user must reconnect.
+      await adminClient
+        .from("google_oauth_tokens")
+        .delete()
+        .eq("user_id", userId)
+        .eq("provider", provider);
+      throw new Error("RECONNECT_REQUIRED");
+    }
+    throw new Error(data.error_description || data.error || "Token refresh failed");
   }
 
   const newExpiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();

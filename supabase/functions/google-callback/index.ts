@@ -77,10 +77,9 @@ Deno.serve(async (req) => {
 
     const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000).toISOString();
 
-    // Preserve existing refresh_token if Google didn't return a new one
-    // (Google only returns refresh_token on first consent or with prompt=consent)
-    const googleProviders = ["gmail", "google-calendar"];
-
+    // Each service owns its own refresh token. Only fall back to the existing
+    // row for THIS exact (user, provider, email) if Google didn't return a new
+    // one. NEVER borrow from a sibling service — that conflates two grants.
     const { data: existing } = await adminClient
       .from("google_oauth_tokens")
       .select("refresh_token")
@@ -89,19 +88,8 @@ Deno.serve(async (req) => {
       .eq("email", userInfo.email)
       .maybeSingle();
 
-    const { data: sibling } = await adminClient
-      .from("google_oauth_tokens")
-      .select("refresh_token")
-      .eq("user_id", user.id)
-      .eq("email", userInfo.email)
-      .in("provider", googleProviders.filter((p) => p !== provider))
-      .not("refresh_token", "is", null)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
     const refreshTokenToStore =
-      tokenData.refresh_token ?? sibling?.refresh_token ?? existing?.refresh_token ?? null;
+      tokenData.refresh_token ?? existing?.refresh_token ?? null;
 
     if (!refreshTokenToStore) {
       console.error("google-callback missing refresh_token for provider:", provider, "email:", userInfo.email);
@@ -137,20 +125,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const siblingProviders = googleProviders.filter((p) => p !== provider);
-    const { error: siblingUpdateError } = await adminClient
-      .from("google_oauth_tokens")
-      .update({
-        refresh_token: refreshTokenToStore,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", user.id)
-      .eq("email", userInfo.email)
-      .in("provider", siblingProviders);
-
-    if (siblingUpdateError) {
-      console.error("google-callback sibling refresh_token sync error:", siblingUpdateError);
-    }
+    // No sibling sync — each provider row is independent.
 
     return new Response(
       JSON.stringify({ success: true, email: userInfo.email, provider }),
