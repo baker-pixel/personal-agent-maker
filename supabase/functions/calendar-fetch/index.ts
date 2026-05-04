@@ -207,6 +207,21 @@ Deno.serve(async (req) => {
     if (!calRes.ok) {
       const errorText = await calRes.text();
       console.error("Calendar fetch failed:", calRes.status, errorText);
+
+      // 403 typically means missing/denied scope — force a reconnect
+      if (calRes.status === 403) {
+        let parsed: any = null;
+        try { parsed = JSON.parse(errorText); } catch { /* ignore */ }
+        return new Response(
+          JSON.stringify({
+            error: "Calendar access was denied. Please reconnect your account and grant calendar permissions.",
+            code: "RECONNECT_REQUIRED",
+            context: parsed ?? errorText,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       return new Response(
         JSON.stringify({ error: "Failed to fetch Calendar events", code: "CALENDAR_API_ERROR" }),
         { status: calRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
