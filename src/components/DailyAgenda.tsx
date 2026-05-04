@@ -61,12 +61,19 @@ export const DailyAgenda = () => {
     setCalendarLoading(true);
     setNeedsReconnect(false);
     try {
-      const { data } = await supabase.functions.invoke("calendar-fetch");
-      if (data?.code === "RECONNECT_REQUIRED") {
+      const { data, error: fnError } = await supabase.functions.invoke("calendar-fetch");
+
+      let payload: any = data;
+      if (fnError && (fnError as any).context instanceof Response) {
+        try { payload = await (fnError as any).context.clone().json(); } catch { payload = null; }
+      }
+
+      if (payload?.code === "RECONNECT_REQUIRED" || payload?.error === "RECONNECT_REQUIRED") {
         setNeedsReconnect(true);
         return;
       }
-      if (data?.events) setCalendarEvents(data.events);
+      if (fnError) throw fnError;
+      if (payload?.events) setCalendarEvents(payload.events);
     } catch (err) {
       console.error("DailyAgenda calendar fetch error:", err);
     } finally {
