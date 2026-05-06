@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     // unchecked, and users who click Continue silently grant nothing).
     const baseScopes = ["openid", "email", "profile"];
     const serviceScopes: Record<string, string[]> = {
-      gmail: [],
+      gmail: ["https://www.googleapis.com/auth/gmail.readonly"],
       "google-calendar": [
         "https://www.googleapis.com/auth/calendar",
       ],
