@@ -31,12 +31,7 @@ Deno.serve(async (req) => {
     // unchecked, and users who click Continue silently grant nothing).
     const baseScopes = ["openid", "email", "profile"];
     const serviceScopes: Record<string, string[]> = {
-      gmail: [
-        "https://www.googleapis.com/auth/gmail.modify",
-        // READ-ONLY Drive access (for attachment search). Google enforces this
-        // at the token level — any write/delete API call will be rejected.
-        "https://www.googleapis.com/auth/drive.readonly",
-      ],
+      gmail: [],
       "google-calendar": [
         "https://www.googleapis.com/auth/calendar",
       ],
