@@ -156,6 +156,7 @@ export default function Landing() {
           <div className="flex items-center gap-4 text-xs md:text-sm">
             <a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a>
             <a href="/terms" className="hover:text-foreground transition-colors">Terms of Service</a>
+            <a href="/investors" className="hover:text-foreground transition-colors">Investors</a>
           </div>
           <p className="text-xs md:text-sm">© 2026 Normy Agent. All rights reserved.</p>
         </div>
