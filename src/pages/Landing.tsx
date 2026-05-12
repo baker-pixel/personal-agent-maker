@@ -38,6 +38,7 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-1 md:gap-3">
             <Button onClick={() => navigate("/pricing")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs md:text-sm px-2 md:px-3">Pricing</Button>
+            <Button onClick={() => navigate("/investors")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs md:text-sm px-2 md:px-3">Investors</Button>
             <Button onClick={() => navigate("/auth")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs md:text-sm px-2 md:px-3">Log In</Button>
             <Button onClick={goOnboard} variant="default" size="sm" className="text-xs md:text-sm px-2.5 md:px-3">Get Started <ArrowRight className="w-3.5 h-3.5 md:w-4 md:h-4 ml-1" /></Button>
           </div>
