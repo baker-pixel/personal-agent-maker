@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Mail, TrendingUp, Users, Brain, Building2, Sparkles, Target, Zap } from "lucide-react";
+import { ArrowRight, Mail, TrendingUp, Users, Brain, Building2, Sparkles, Target, Zap, Rocket, Check } from "lucide-react";
 import normyLogo from "@/assets/normy-logo.png";
 
 const fadeUp = {
@@ -122,6 +122,41 @@ export default function Investors() {
               <div className="text-xs text-muted-foreground mt-1">{s.sub}</div>
             </motion.div>
           ))}
+        </div>
+      </section>
+
+      {/* Out-of-the-box callout */}
+      <section className="container px-5 pb-16 md:pb-24">
+        <div className="rounded-3xl border border-accent/30 bg-gradient-to-br from-accent/10 via-accent/5 to-transparent p-6 md:p-10">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="w-12 h-12 rounded-xl bg-accent text-accent-foreground flex items-center justify-center shrink-0">
+              <Rocket className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wider text-accent mb-2">Zero setup</div>
+              <h2 className="font-display text-2xl md:text-4xl font-semibold tracking-tight mb-3">
+                Out-of-the-box. No code, no IT, no implementation team.
+              </h2>
+              <p className="text-muted-foreground text-sm md:text-base max-w-2xl">
+                SMBs sign up, connect Google in one click, and Normy starts working in under 60 seconds. No integrations to configure, no workflows to build, no consultants required — a critical unlock for a market that has historically been gated by technical complexity.
+              </p>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3 md:gap-4 mt-6">
+            {[
+              { t: "60-second onboarding", s: "Sign up → connect Google → done." },
+              { t: "No code or workflows", s: "Normy learns by watching, not by configuration." },
+              { t: "No IT or consultants", s: "A non-technical owner can deploy it solo." },
+            ].map((item) => (
+              <div key={item.t} className="rounded-2xl bg-background/60 border border-border p-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Check className="w-4 h-4 text-accent" />
+                  <div className="font-medium text-sm">{item.t}</div>
+                </div>
+                <div className="text-xs text-muted-foreground">{item.s}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
