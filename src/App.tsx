@@ -35,6 +35,7 @@ import AppHeader from "./components/AppHeader";
 import InstallBanner from "./components/InstallBanner";
 import NotFound from "./pages/NotFound";
 import Pricing from "./pages/Pricing";
+import Investors from "./pages/Investors";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 
@@ -102,6 +103,7 @@ const App = () => {
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/pricing" element={<Pricing />} />
+              <Route path="/investors" element={<Investors />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/onboarding" element={<Onboarding />} />
