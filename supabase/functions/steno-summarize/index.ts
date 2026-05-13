@@ -65,9 +65,10 @@ serve(async (req) => {
                   summary: { type: "string" },
                   attendees: { type: "array", items: { type: "string" } },
                   location: { type: "string" },
+                  key_points: { type: "array", items: { type: "string" } },
                   topics: { type: "array", items: { type: "string" } },
                 },
-                required: ["title", "summary", "attendees", "location", "topics"],
+                required: ["title", "summary", "attendees", "location", "key_points", "topics"],
                 additionalProperties: false,
               },
             },
@@ -86,6 +87,7 @@ serve(async (req) => {
           summary: text.slice(0, 240),
           attendees: [],
           location: "",
+          key_points: [],
           topics: [],
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -94,7 +96,7 @@ serve(async (req) => {
 
     const data = await response.json();
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    let result = { title: "Steno session", summary: "", attendees: [] as string[], location: "", topics: [] as string[] };
+    let result = { title: "Steno session", summary: "", attendees: [] as string[], location: "", key_points: [] as string[], topics: [] as string[] };
     if (toolCall?.function?.arguments) {
       try {
         const parsed = JSON.parse(toolCall.function.arguments);
@@ -103,6 +105,7 @@ serve(async (req) => {
           summary: parsed.summary || "",
           attendees: Array.isArray(parsed.attendees) ? parsed.attendees.slice(0, 12) : [],
           location: (parsed.location || "").slice(0, 120),
+          key_points: Array.isArray(parsed.key_points) ? parsed.key_points.slice(0, 12) : [],
           topics: Array.isArray(parsed.topics) ? parsed.topics.slice(0, 8) : [],
         };
       } catch (e) {
