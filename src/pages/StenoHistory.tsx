@@ -346,6 +346,91 @@ export default function StenoHistory() {
           </div>
         )}
       </div>
+
+      <Sheet open={!!selectedRelated} onOpenChange={(o) => !o && setSelectedRelated(null)}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          {selectedRelated && (() => {
+            const r = selectedRelated.item;
+            const Icon = r.kind === "task" ? CheckSquare : r.kind === "email_reminder" ? Bell : Cake;
+            const label =
+              r.kind === "task" ? "Task" : r.kind === "email_reminder" ? "Email reminder" : "Contact reminder";
+            const tone =
+              r.kind === "task"
+                ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20"
+                : r.kind === "email_reminder"
+                ? "bg-blue-500/10 text-blue-700 border-blue-500/20"
+                : "bg-pink-500/10 text-pink-700 border-pink-500/20";
+            const dueLabel = r.due_date
+              ? r.kind === "task"
+                ? format(parseISO(r.due_date), "EEE, MMM d, yyyy")
+                : format(parseISO(r.due_date), "EEE, MMM d, yyyy · h:mm a")
+              : null;
+            const openInPage = () => {
+              if (r.kind === "task") navigate("/tasks");
+              else if (r.kind === "email_reminder") navigate("/inbox");
+              else navigate("/contacts");
+            };
+            return (
+              <>
+                <SheetHeader className="space-y-3">
+                  <div className={`inline-flex items-center gap-1.5 self-start text-[11px] px-2 py-0.5 rounded-full border ${tone}`}>
+                    <Icon className="w-3 h-3" />
+                    <span>{label}</span>
+                  </div>
+                  <SheetTitle className="font-display text-xl leading-tight">{r.title}</SheetTitle>
+                  <SheetDescription>
+                    Linked to <span className="font-medium text-foreground">{selectedRelated.sessionTitle}</span>
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="mt-5 space-y-4">
+                  <div className="rounded-xl border bg-muted/30 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <Lightbulb className="w-3 h-3 text-amber-600" /> From key point
+                    </p>
+                    <p className="text-sm text-foreground/90">{selectedRelated.keyPoint}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <p className="font-semibold uppercase tracking-wide text-muted-foreground mb-1">Status</p>
+                      <p className="text-sm capitalize text-foreground">{r.status.replace(/_/g, " ")}</p>
+                    </div>
+                    {dueLabel && (
+                      <div>
+                        <p className="font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                          {r.kind === "task" ? "Due" : r.kind === "email_reminder" ? "Remind at" : "Date"}
+                        </p>
+                        <p className="text-sm text-foreground">{dueLabel}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {r.description && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                        Details
+                      </p>
+                      <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
+                        {r.description}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex gap-2">
+                    <Button onClick={openInPage} className="flex-1">
+                      Open in {r.kind === "task" ? "Tasks" : r.kind === "email_reminder" ? "Inbox" : "Contacts"}
+                    </Button>
+                    <Button variant="outline" onClick={() => setSelectedRelated(null)}>
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
