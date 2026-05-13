@@ -369,7 +369,7 @@ serve(async (req) => {
             .maybeSingle(),
           adminForContacts
             .from("steno_sessions")
-            .select("id, title, summary, topics, transcript, attendees, location, item_count, created_at, session_date")
+            .select("id, title, summary, topics, transcript, attendees, location, key_points, item_count, created_at, session_date")
             .eq("user_id", user.id)
             .order("created_at", { ascending: false })
             .limit(15),
