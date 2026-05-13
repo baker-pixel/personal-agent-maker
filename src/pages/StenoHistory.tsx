@@ -295,15 +295,13 @@ export default function StenoHistory() {
                                             ? "bg-blue-500/10 text-blue-700 border-blue-500/20 hover:bg-blue-500/15"
                                             : "bg-pink-500/10 text-pink-700 border-pink-500/20 hover:bg-pink-500/15";
                                         const onClick = () => {
-                                          if (r.kind === "task") navigate("/tasks");
-                                          else if (r.kind === "email_reminder") navigate("/inbox");
-                                          else navigate("/contacts");
+                                          setSelectedRelated({ item: r, sessionTitle: s.title, keyPoint: kp });
                                         };
                                         return (
                                           <button
                                             key={r.id}
                                             onClick={onClick}
-                                            title={r.description || r.title}
+                                            title="Click to view full details"
                                             className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors max-w-[240px] ${tone} ${r.status === "completed" || r.status === "done" ? "line-through opacity-70" : ""}`}
                                           >
                                             <Icon className="w-3 h-3 shrink-0" />
