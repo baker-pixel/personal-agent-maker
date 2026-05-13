@@ -507,7 +507,7 @@ Location: ${e.location || "None"}\n`;
             }
             const { data: searchRows } = await adminForContacts
               .from("steno_sessions")
-              .select("id, title, summary, topics, transcript, attendees, location, item_count, created_at")
+              .select("id, title, summary, topics, transcript, attendees, location, key_points, item_count, created_at")
               .eq("user_id", user.id)
               .or(orParts.join(","))
               .order("created_at", { ascending: false })
