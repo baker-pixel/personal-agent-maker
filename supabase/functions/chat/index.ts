@@ -508,15 +508,22 @@ Location: ${e.location || "None"}\n`;
         const stenoRecallTriggers = ["steno", "recording", "dictation", "meeting", "what did i say", "what was said", "remind me what", "from my notes", "from my recording", "what did we talk about", "in the meeting", "during the meeting", "with sarah", "with mark", "with mike", "with jay", "the call with", "the meeting with"];
         const recallTriggered = stenoRecallTriggers.some((k) => latestLower.includes(k));
         let matchedSessions: any[] = [];
+        const TOP_N_FULL_RECALL = 3; // only load full .txt for the top N most relevant
+        const fullRecallIds = new Set<string>();
         if (recallTriggered) {
-          // Pull names/keywords (capitalized words 3+ chars) from the user's message
+          // Pull names/keywords (3+ chars) from the user's message
+          const stop = new Set(["the","and","with","what","that","this","about","meeting","recording","steno","said","from","tell","told","talk","talked","remind","were","there","have","has","you","your","mine","our","they","them","when","where","who","why","how","did","does","done","ago","last","past","week","day","days","time","just","some","any","ours","into","over","after","before"]);
           const tokens = String(latestUser)
             .split(/[^a-zA-Z0-9']+/)
-            .filter((t) => t.length >= 3 && !["the","and","with","what","that","this","about","meeting","recording","steno","said","from","tell","told","talk","talked","remind"].includes(t.toLowerCase()))
-            .slice(0, 8);
+            .map((t) => t.trim())
+            .filter((t) => t.length >= 3 && !stop.has(t.toLowerCase()))
+            .slice(0, 12);
+          const tokensLower = tokens.map((t) => t.toLowerCase());
           const recentIds = new Set(stenoSessions.map((s: any) => s.id));
+
+          // 1) KEYWORD CANDIDATE POOL — wider net (up to 25 candidates) using ilike OR search
+          let candidates: any[] = [];
           if (tokens.length > 0) {
-            // OR-search title, summary, transcript, attendees, topics, location
             const orParts: string[] = [];
             for (const t of tokens) {
               const safe = t.replace(/[%,]/g, "");
@@ -528,8 +535,106 @@ Location: ${e.location || "None"}\n`;
               .eq("user_id", user.id)
               .or(orParts.join(","))
               .order("created_at", { ascending: false })
-              .limit(8);
-            matchedSessions = (searchRows || []).filter((s: any) => !recentIds.has(s.id));
+              .limit(25);
+            candidates = (searchRows || []).filter((s: any) => !recentIds.has(s.id));
+          }
+
+          if (candidates.length > 0) {
+            // 2) KEYWORD OVERLAP SCORE — count distinct tokens hit across metadata fields
+            const keywordScore = (s: any): number => {
+              const hay = [
+                s.title || "",
+                s.summary || "",
+                s.location || "",
+                (s.topics || []).join(" "),
+                (s.attendees || []).join(" "),
+                (s.key_points || []).join(" "),
+              ].join(" ").toLowerCase();
+              let hits = 0;
+              for (const t of tokensLower) if (hay.includes(t)) hits++;
+              return tokensLower.length ? hits / tokensLower.length : 0;
+            };
+
+            // 3) SEMANTIC RELEVANCE SCORE via AI gateway (single batched call, structured output)
+            const semanticScores = new Map<string, number>();
+            try {
+              const briefs = candidates.map((s: any, idx: number) => {
+                const att = (s.attendees || []).slice(0, 5).join(", ");
+                const top = (s.topics || []).slice(0, 5).join(", ");
+                const kp = (s.key_points || []).slice(0, 3).join(" | ");
+                const sum = (s.summary || "").slice(0, 300);
+                return `#${idx} id=${s.id}\nTitle: ${s.title || "(untitled)"}\nWho: ${att || "n/a"} | Where: ${s.location || "n/a"} | Topics: ${top || "n/a"}\nSummary: ${sum}\nKey points: ${kp}`;
+              }).join("\n---\n");
+              const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  model: "google/gemini-2.5-flash-lite",
+                  messages: [
+                    { role: "system", content: "You score how semantically relevant each meeting session is to the user's recall question. Return a score 0.0-1.0 per session id. Be strict — only sessions plausibly answering the question score above 0.5." },
+                    { role: "user", content: `Question: "${latestUser}"\n\nSessions:\n${briefs}` },
+                  ],
+                  tools: [{
+                    type: "function",
+                    function: {
+                      name: "score_sessions",
+                      description: "Return semantic relevance scores for each session.",
+                      parameters: {
+                        type: "object",
+                        properties: {
+                          scores: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                id: { type: "string" },
+                                score: { type: "number" },
+                              },
+                              required: ["id", "score"],
+                              additionalProperties: false,
+                            },
+                          },
+                        },
+                        required: ["scores"],
+                        additionalProperties: false,
+                      },
+                    },
+                  }],
+                  tool_choice: { type: "function", function: { name: "score_sessions" } },
+                  stream: false,
+                }),
+              });
+              if (aiResp.ok) {
+                const data = await aiResp.json();
+                const argsStr = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+                if (argsStr) {
+                  const parsed = JSON.parse(argsStr);
+                  for (const row of parsed.scores || []) {
+                    if (row?.id && typeof row.score === "number") {
+                      semanticScores.set(row.id, Math.max(0, Math.min(1, row.score)));
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              console.error("[steno recall] semantic scoring failed:", e);
+            }
+
+            // 4) COMBINE: 0.4 * keyword + 0.6 * semantic (fallback to keyword only if semantic missing)
+            const ranked = candidates
+              .map((s: any) => {
+                const kw = keywordScore(s);
+                const sem = semanticScores.get(s.id);
+                const combined = sem === undefined ? kw : 0.4 * kw + 0.6 * sem;
+                return { s, kw, sem: sem ?? null, combined };
+              })
+              .filter((r) => r.combined > 0.15)
+              .sort((a, b) => b.combined - a.combined);
+
+            console.log(`[steno recall] ${candidates.length} candidates → ${ranked.length} ranked. top:`, ranked.slice(0, 5).map((r) => ({ id: r.s.id, title: r.s.title, kw: r.kw, sem: r.sem, combined: r.combined })));
+
+            matchedSessions = ranked.slice(0, 8).map((r) => r.s);
+            ranked.slice(0, TOP_N_FULL_RECALL).forEach((r) => fullRecallIds.add(r.s.id));
           }
         }
 
