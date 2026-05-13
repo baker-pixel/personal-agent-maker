@@ -20,16 +20,56 @@ interface StenoSession {
   created_at: string;
 }
 
+interface RelatedTask {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  due_date: string | null;
+  kind: "task" | "email_reminder" | "contact_reminder";
+}
+
+const STOPWORDS = new Set([
+  "the","a","an","and","or","but","of","to","in","on","at","for","with","by","from","is","are","was","were","be","been","being","this","that","these","those","it","its","i","we","you","they","he","she","my","our","your","their","as","if","then","than","so","do","does","did","have","has","had","will","would","should","could","can","may","not","no","yes","up","down","out","over","about","into","onto","also","just","very","more","most","some","any","all","one","two","each","other","new","get","got","want","need","like","make","made","let","lets","go","going","know","think","said","says","say","ok","okay"
+]);
+
+function tokens(s: string): Set<string> {
+  return new Set(
+    (s || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !STOPWORDS.has(w))
+  );
+}
+
+function findRelated(kp: string, tasks: RelatedTask[]): RelatedTask[] {
+  const kpTokens = tokens(kp);
+  if (kpTokens.size === 0) return [];
+  const scored = tasks
+    .map((t) => {
+      const tt = tokens(`${t.title} ${t.description || ""}`);
+      let overlap = 0;
+      kpTokens.forEach((w) => { if (tt.has(w)) overlap++; });
+      return { t, overlap };
+    })
+    .filter((x) => x.overlap >= 2 || (x.overlap >= 1 && kpTokens.size <= 4))
+    .sort((a, b) => b.overlap - a.overlap)
+    .slice(0, 3);
+  return scored.map((x) => x.t);
+}
+
 export default function StenoHistory() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<StenoSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [relatedBySession, setRelatedBySession] = useState<Record<string, RelatedTask[]>>({});
 
   useEffect(() => {
     const load = async () => {
-      const { data, error } = await supabase
+      const { data: sess, error } = await supabase
         .from("steno_sessions")
         .select("id, title, transcript, summary, topics, attendees, location, key_points, item_count, session_date, created_at")
         .order("created_at", { ascending: false });
@@ -37,7 +77,29 @@ export default function StenoHistory() {
         console.error(error);
         toast.error("Couldn't load Steno folder");
       } else {
-        setSessions((data as any[]) || []);
+        setSessions((sess as any[]) || []);
+        const ids = (sess || []).map((s: any) => s.id);
+        if (ids.length > 0) {
+          const [a, e, c] = await Promise.all([
+            supabase.from("action_items").select("id, title, description, status, due_date, steno_session_id").in("steno_session_id", ids),
+            supabase.from("email_reminders").select("id, email_subject, email_snippet, status, remind_at, steno_session_id").in("steno_session_id", ids),
+            supabase.from("contact_reminders").select("id, contact_name, notes, reminder_type, reminder_date, steno_session_id").in("steno_session_id", ids),
+          ]);
+          const map: Record<string, RelatedTask[]> = {};
+          (a.data || []).forEach((row: any) => {
+            if (!row.steno_session_id) return;
+            (map[row.steno_session_id] ||= []).push({ id: row.id, title: row.title, description: row.description, status: row.status, due_date: row.due_date, kind: "task" });
+          });
+          (e.data || []).forEach((row: any) => {
+            if (!row.steno_session_id) return;
+            (map[row.steno_session_id] ||= []).push({ id: row.id, title: row.email_subject, description: row.email_snippet, status: row.status, due_date: row.remind_at, kind: "email_reminder" });
+          });
+          (c.data || []).forEach((row: any) => {
+            if (!row.steno_session_id) return;
+            (map[row.steno_session_id] ||= []).push({ id: row.id, title: `${row.reminder_type === "birthday" ? "🎂 " : ""}${row.contact_name}`, description: row.notes, status: "scheduled", due_date: row.reminder_date, kind: "contact_reminder" });
+          });
+          setRelatedBySession(map);
+        }
       }
       setLoading(false);
     };
