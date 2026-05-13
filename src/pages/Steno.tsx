@@ -364,6 +364,30 @@ export default function Steno() {
     else speech.startListening();
   };
 
+  const loadPrep = useCallback(async () => {
+    setPrepLoading(true);
+    try {
+      const attendees = prepAttendees
+        .split(/[,\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const { data, error } = await supabase.functions.invoke("steno-prep", {
+        body: { attendees, topic: prepTopic.trim() },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setPrepData(data);
+      if (data?.gmailWarning) {
+        toast.info(`Gmail context skipped: ${data.gmailWarning}`);
+      }
+    } catch (e) {
+      console.error("[Steno] prep failed", e);
+      toast.error(e instanceof Error ? e.message : "Prep failed");
+    } finally {
+      setPrepLoading(false);
+    }
+  }, [prepAttendees, prepTopic]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
