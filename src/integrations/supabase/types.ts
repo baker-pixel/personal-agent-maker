@@ -633,9 +633,11 @@ export type Database = {
       }
       steno_sessions: {
         Row: {
+          attendees: string[]
           created_at: string
           id: string
           item_count: number
+          location: string | null
           session_date: string
           summary: string | null
           title: string
@@ -645,9 +647,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attendees?: string[]
           created_at?: string
           id?: string
           item_count?: number
+          location?: string | null
           session_date?: string
           summary?: string | null
           title?: string
@@ -657,9 +661,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attendees?: string[]
           created_at?: string
           id?: string
           item_count?: number
+          location?: string | null
           session_date?: string
           summary?: string | null
           title?: string

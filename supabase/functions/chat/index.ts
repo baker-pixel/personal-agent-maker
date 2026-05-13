@@ -369,7 +369,7 @@ serve(async (req) => {
             .maybeSingle(),
           adminForContacts
             .from("steno_sessions")
-            .select("title, summary, topics, transcript, item_count, created_at, session_date")
+            .select("id, title, summary, topics, transcript, attendees, location, item_count, created_at, session_date")
             .eq("user_id", user.id)
             .order("created_at", { ascending: false })
             .limit(15),
@@ -482,21 +482,68 @@ Location: ${e.location || "None"}\n`;
           realDataContext += `\n\n--- TODAY'S DAILY BRIEFING (already generated) ---\n${todaysBriefing.summary}\n--- END BRIEFING ---\n`;
         }
 
-        if (stenoSessions.length > 0) {
-          realDataContext += "\n\n--- STENO PAD SESSIONS (user's recent dictations — long-term memory) ---\n";
-          realDataContext += "These are the user's own past brain dumps. Reference them when they ask 'what did I say about X', 'remind me what I noted', or anything where their own past thoughts/notes are relevant. Quote sparingly — don't dump full transcripts unless asked.\n";
-          stenoSessions.forEach((s: any, i: number) => {
-            const when = new Date(s.created_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+        // ---- STENO PAD: recent sessions + on-demand search across ALL sessions ----
+        // If the user's latest message hints at recalling a past meeting/note, search
+        // the FULL steno_sessions table (not just the recent 15) for matching sessions
+        // and inject their full transcripts so the agent can answer specifics.
+        const latestUser = (effectiveMessages || []).filter((m: any) => m.role === "user").slice(-1)[0]?.content || "";
+        const latestLower = String(latestUser).toLowerCase();
+        const stenoRecallTriggers = ["steno", "recording", "dictation", "meeting", "what did i say", "what was said", "remind me what", "from my notes", "from my recording", "what did we talk about", "in the meeting", "during the meeting", "with sarah", "with mark", "with mike", "with jay", "the call with", "the meeting with"];
+        const recallTriggered = stenoRecallTriggers.some((k) => latestLower.includes(k));
+        let matchedSessions: any[] = [];
+        if (recallTriggered) {
+          // Pull names/keywords (capitalized words 3+ chars) from the user's message
+          const tokens = String(latestUser)
+            .split(/[^a-zA-Z0-9']+/)
+            .filter((t) => t.length >= 3 && !["the","and","with","what","that","this","about","meeting","recording","steno","said","from","tell","told","talk","talked","remind"].includes(t.toLowerCase()))
+            .slice(0, 8);
+          const recentIds = new Set(stenoSessions.map((s: any) => s.id));
+          if (tokens.length > 0) {
+            // OR-search title, summary, transcript, attendees, topics, location
+            const orParts: string[] = [];
+            for (const t of tokens) {
+              const safe = t.replace(/[%,]/g, "");
+              orParts.push(`title.ilike.%${safe}%`, `summary.ilike.%${safe}%`, `transcript.ilike.%${safe}%`, `location.ilike.%${safe}%`);
+            }
+            const { data: searchRows } = await adminForContacts
+              .from("steno_sessions")
+              .select("id, title, summary, topics, transcript, attendees, location, item_count, created_at")
+              .eq("user_id", user.id)
+              .or(orParts.join(","))
+              .order("created_at", { ascending: false })
+              .limit(8);
+            matchedSessions = (searchRows || []).filter((s: any) => !recentIds.has(s.id));
+          }
+        }
+
+        if (stenoSessions.length > 0 || matchedSessions.length > 0) {
+          realDataContext += "\n\n--- STENO FOLDER (user's saved meeting recordings & dictations — long-term memory) ---\n";
+          realDataContext += "Each session has a Title, Date, Attendees (who was there), Location, Summary, and full Transcript. Reference these when the user asks 'what did I say about X', 'what was said in the meeting with Sarah', 'remind me what we discussed', or anything where their own past notes are relevant. Quote sparingly — don't dump full transcripts unless asked.\n";
+          realDataContext += "PROACTIVE CALENDAR RULE: If a session transcript mentions something time-sensitive that does NOT already appear on the user's calendar above (a flight, dinner, demo, deadline, recurring 1:1, etc.), proactively offer to add it: \"Hey, you mentioned X on [date] in your meeting with [who] — should I add it to your calendar? Sounded important.\" Use the user's first name if you know it. Only offer once per item per conversation.\n";
+
+          const renderSession = (s: any, idx: number, full: boolean) => {
+            const when = new Date(s.created_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+            const att = (s.attendees && s.attendees.length) ? s.attendees.join(", ") : "solo / not specified";
+            const loc = s.location || "not specified";
             const topicStr = (s.topics && s.topics.length) ? ` | topics: ${s.topics.join(", ")}` : "";
-            const sum = s.summary ? `\n   summary: ${s.summary}` : "";
-            // Give the 3 most recent sessions much more transcript so the agent can recall
-            // small details ("what did Sarah say about pricing?"). Older sessions stay short.
-            const limit = i < 3 ? 4000 : 800;
+            const sum = s.summary ? `\n   Summary: ${s.summary}` : "";
+            const limit = full ? 8000 : (idx < 3 ? 4000 : 800);
             const tx = (s.transcript || "").slice(0, limit);
             const truncated = s.transcript && s.transcript.length > limit;
-            realDataContext += `\n[Session ${i + 1}] ${when} — "${s.title}" (${s.item_count} items)${topicStr}${sum}\n   transcript${i < 3 ? "" : " excerpt"}: ${tx}${truncated ? "…" : ""}\n`;
+            return `\n[Session] "${s.title}"\n   Date: ${when}\n   Who: ${att}\n   Where: ${loc}${topicStr}${sum}\n   Transcript${full || idx < 3 ? "" : " excerpt"}: ${tx}${truncated ? "…" : ""}\n`;
+          };
+
+          stenoSessions.forEach((s: any, i: number) => {
+            realDataContext += renderSession(s, i, false);
           });
-          realDataContext += "--- END STENO SESSIONS ---\n";
+
+          if (matchedSessions.length > 0) {
+            realDataContext += `\n[The user's latest message looks like a recall question — these older sessions matched and are included in FULL so you can answer specifics:]\n`;
+            matchedSessions.forEach((s: any) => {
+              realDataContext += renderSession(s, 0, true);
+            });
+          }
+          realDataContext += "--- END STENO FOLDER ---\n";
         }
 
         if (contacts.length > 0) {
