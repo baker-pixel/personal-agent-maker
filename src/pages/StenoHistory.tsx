@@ -253,6 +253,64 @@ export default function StenoHistory() {
           </p>
         </div>
 
+
+        {/* Open action items aging */}
+        {sortedAging.length > 0 && (
+          <div className="rounded-2xl border bg-card overflow-hidden">
+            <button
+              onClick={() => setAgingOpen((v) => !v)}
+              className="w-full flex items-center justify-between gap-3 px-5 py-4 hover:bg-accent/5 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                  <Clock className="w-4 h-4 text-orange-600" />
+                </div>
+                <div className="text-left">
+                  <h2 className="font-semibold text-foreground text-sm">Open action items from your meetings</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {sortedAging.length} pending · sorted by urgency
+                  </p>
+                </div>
+              </div>
+              {agingOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            </button>
+            {agingOpen && (
+              <ul className="divide-y border-t">
+                {sortedAging.slice(0, 20).map((item) => {
+                  const bucket = ageBucket(item.created_at, item.due_date);
+                  const isOverdue = bucket.label === "Overdue";
+                  return (
+                    <li key={item.id} className="px-5 py-3 flex items-start gap-3 hover:bg-muted/20 transition-colors">
+                      <button
+                        onClick={() => completeAging(item.id)}
+                        className="mt-0.5 w-5 h-5 rounded-md border-2 border-muted-foreground/40 hover:border-accent hover:bg-accent/10 flex items-center justify-center shrink-0 transition-colors"
+                        title="Mark done"
+                      >
+                        <CheckSquare className="w-3 h-3 text-accent opacity-0 hover:opacity-100" />
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground">{item.title}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-muted-foreground">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${bucket.tone}`}>
+                            {isOverdue && <AlertTriangle className="w-2.5 h-2.5" />}
+                            {bucket.label}
+                          </span>
+                          {item.due_date && (
+                            <span>due {format(parseISO(item.due_date), "MMM d")}</span>
+                          )}
+                          {item.session_title && (
+                            <span className="truncate max-w-[200px]">from "{item.session_title}"</span>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -262,6 +320,7 @@ export default function StenoHistory() {
             className="pl-9"
           />
         </div>
+
 
         {loading ? (
           <div className="text-center text-sm text-muted-foreground py-12">Loading…</div>
