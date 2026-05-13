@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Mic, Square, Loader2, Sparkles, Trash2, CheckCircle2, ListTodo, Bell, Cake, Repeat, CalendarDays, Lightbulb } from "lucide-react";
+import { ArrowLeft, Mic, Square, Loader2, Sparkles, Trash2, CheckCircle2, ListTodo, Bell, Cake, Repeat, CalendarDays, Lightbulb, BookOpen, Mail, ClipboardList, History } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,16 @@ export default function Steno() {
   const [extracting, setExtracting] = useState(false);
   const [items, setItems] = useState<ExtractedItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const [prepOpen, setPrepOpen] = useState(false);
+  const [prepLoading, setPrepLoading] = useState(false);
+  const [prepAttendees, setPrepAttendees] = useState("");
+  const [prepTopic, setPrepTopic] = useState("");
+  const [prepData, setPrepData] = useState<{
+    lastMeeting: any;
+    openActions: any[];
+    recentEmails: any[];
+    gmailWarning: string | null;
+  } | null>(null);
   const transcriptRef = useRef("");
 
   const speech = useSpeechRecognition({
@@ -353,6 +364,30 @@ export default function Steno() {
     else speech.startListening();
   };
 
+  const loadPrep = useCallback(async () => {
+    setPrepLoading(true);
+    try {
+      const attendees = prepAttendees
+        .split(/[,\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const { data, error } = await supabase.functions.invoke("steno-prep", {
+        body: { attendees, topic: prepTopic.trim() },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setPrepData(data);
+      if (data?.gmailWarning) {
+        toast.info(`Gmail context skipped: ${data.gmailWarning}`);
+      }
+    } catch (e) {
+      console.error("[Steno] prep failed", e);
+      toast.error(e instanceof Error ? e.message : "Prep failed");
+    } finally {
+      setPrepLoading(false);
+    }
+  }, [prepAttendees, prepTopic]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
@@ -388,6 +423,124 @@ export default function Steno() {
             Dictate tasks, reminders, birthdays, follow-ups — anything. Review and save when you're done.
           </p>
         </div>
+
+        {/* Prep mode trigger */}
+        <Sheet open={prepOpen} onOpenChange={setPrepOpen}>
+          <SheetTrigger asChild>
+            <button className="w-full rounded-xl border border-dashed bg-card/50 hover:bg-card transition-colors p-3 flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+              <BookOpen className="w-4 h-4" />
+              Prep before recording
+            </button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4" /> Meeting prep
+              </SheetTitle>
+            </SheetHeader>
+
+            <div className="mt-5 space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Attendees (names or emails, comma-separated)</label>
+                <Input
+                  value={prepAttendees}
+                  onChange={(e) => setPrepAttendees(e.target.value)}
+                  placeholder="e.g. Sarah Chen, mike@acme.com"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Topic (optional)</label>
+                <Input
+                  value={prepTopic}
+                  onChange={(e) => setPrepTopic(e.target.value)}
+                  placeholder="e.g. Q3 roadmap review"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <button
+                onClick={loadPrep}
+                disabled={prepLoading}
+                className="w-full h-10 rounded-xl bg-accent text-accent-foreground font-medium text-sm flex items-center justify-center gap-2 hover:bg-accent/90 disabled:opacity-40"
+              >
+                {prepLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Pulling context…</> : <><Sparkles className="w-4 h-4" /> Pull prep</>}
+              </button>
+
+              {prepData && (
+                <div className="space-y-5 pt-3 border-t">
+                  <section className="space-y-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                      <History className="w-3.5 h-3.5" /> Last meeting
+                    </h3>
+                    {prepData.lastMeeting ? (
+                      <div className="rounded-lg border bg-card p-3 space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium text-sm">{prepData.lastMeeting.title}</p>
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap">{prepData.lastMeeting.session_date}</span>
+                        </div>
+                        {prepData.lastMeeting.summary && (
+                          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4">{prepData.lastMeeting.summary}</p>
+                        )}
+                        {prepData.lastMeeting.key_points?.length > 0 && (
+                          <ul className="text-xs space-y-0.5 mt-2">
+                            {prepData.lastMeeting.key_points.slice(0, 4).map((k: string, i: number) => (
+                              <li key={i} className="flex gap-1.5"><span className="text-accent">•</span><span className="flex-1">{k}</span></li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">No prior sessions found.</p>
+                    )}
+                  </section>
+
+                  <section className="space-y-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                      <ClipboardList className="w-3.5 h-3.5" /> Open action items
+                      <span className="text-[10px] font-normal text-muted-foreground/70">({prepData.openActions.length})</span>
+                    </h3>
+                    {prepData.openActions.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {prepData.openActions.map((a: any) => (
+                          <div key={a.id} className="rounded-lg border bg-card p-2.5 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="font-medium">{a.title}</span>
+                              {a.due_date && <span className="text-[10px] text-muted-foreground whitespace-nowrap">due {a.due_date}</span>}
+                            </div>
+                            {a.assignee && <p className="text-[10px] text-muted-foreground mt-0.5">→ {a.assignee}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">Nothing open.</p>
+                    )}
+                  </section>
+
+                  <section className="space-y-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5" /> Recent emails (7d)
+                    </h3>
+                    {prepData.recentEmails.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {prepData.recentEmails.map((e: any, i: number) => (
+                          <div key={i} className="rounded-lg border bg-card p-2.5 text-xs space-y-0.5">
+                            <p className="font-medium line-clamp-1">{e.subject || "(no subject)"}</p>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1">{e.from}</p>
+                            {e.snippet && <p className="text-[11px] text-muted-foreground line-clamp-2 italic">{e.snippet}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">
+                        {prepData.gmailWarning ? "Gmail not connected." : "No recent threads found."}
+                      </p>
+                    )}
+                  </section>
+                </div>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
 
         {/* Mic + transcript */}
         <div className="rounded-2xl border bg-card p-5 space-y-4">
