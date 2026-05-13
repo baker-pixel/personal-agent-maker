@@ -369,11 +369,28 @@ serve(async (req) => {
             .maybeSingle(),
           adminForContacts
             .from("steno_sessions")
-            .select("id, title, summary, topics, transcript, attendees, location, key_points, item_count, created_at, session_date")
+            .select("id, title, summary, topics, transcript, transcript_file_path, attendees, location, key_points, item_count, created_at, session_date")
             .eq("user_id", user.id)
             .order("created_at", { ascending: false })
             .limit(15),
         ]);
+
+        // Helper: load the archived transcript .txt from storage (preferred over DB transcript)
+        const loadArchivedTranscript = async (s: any): Promise<string> => {
+          if (s?.transcript_file_path) {
+            try {
+              const { data, error } = await adminForContacts
+                .storage
+                .from("steno-transcripts")
+                .download(s.transcript_file_path);
+              if (!error && data) {
+                const text = await data.text();
+                if (text && text.trim().length > 0) return text;
+              }
+            } catch (_) { /* fall through to DB transcript */ }
+          }
+          return s?.transcript || "";
+        };
 
         // Aggregate emails across all Gmail accounts; track per-account fetch errors
         const allEmails: any[] = [];
@@ -507,7 +524,7 @@ Location: ${e.location || "None"}\n`;
             }
             const { data: searchRows } = await adminForContacts
               .from("steno_sessions")
-              .select("id, title, summary, topics, transcript, attendees, location, key_points, item_count, created_at")
+              .select("id, title, summary, topics, transcript, transcript_file_path, attendees, location, key_points, item_count, created_at")
               .eq("user_id", user.id)
               .or(orParts.join(","))
               .order("created_at", { ascending: false })
@@ -518,8 +535,20 @@ Location: ${e.location || "None"}\n`;
 
         if (stenoSessions.length > 0 || matchedSessions.length > 0) {
           realDataContext += "\n\n--- STENO FOLDER (user's saved meeting recordings & dictations — long-term memory) ---\n";
-          realDataContext += "Each session has a Title, Date, Attendees (who was there), Location, Summary, and full Transcript. Reference these when the user asks 'what did I say about X', 'what was said in the meeting with Sarah', 'remind me what we discussed', or anything where their own past notes are relevant. Quote sparingly — don't dump full transcripts unless asked.\n";
+          realDataContext += "Each session has a Title, Date, Attendees (who was there), Location, Summary, and full Transcript loaded from the archived .txt file in the user's steno folder. Reference these when the user asks 'what did I say about X', 'what was said in the meeting with Sarah', 'remind me what we discussed', or anything where their own past notes are relevant. Quote sparingly — don't dump full transcripts unless asked.\n";
           realDataContext += "PROACTIVE CALENDAR RULE: If a session transcript mentions something time-sensitive that does NOT already appear on the user's calendar above (a flight, dinner, demo, deadline, recurring 1:1, etc.), proactively offer to add it: \"Hey, you mentioned X on [date] in your meeting with [who] — should I add it to your calendar? Sounded important.\" Use the user's first name if you know it. Only offer once per item per conversation.\n";
+
+          // Pre-load archived transcript files in parallel for the sessions we'll render with full/large content.
+          // Recent: top 3 get full; matched (recall): all get full.
+          const fullRecent = stenoSessions.slice(0, 3);
+          const fullTranscriptMap = new Map<string, string>();
+          const toLoad = [...fullRecent, ...matchedSessions];
+          await Promise.all(
+            toLoad.map(async (s: any) => {
+              const txt = await loadArchivedTranscript(s);
+              fullTranscriptMap.set(s.id, txt);
+            })
+          );
 
           const renderSession = (s: any, idx: number, full: boolean) => {
             const when = new Date(s.created_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
@@ -527,11 +556,13 @@ Location: ${e.location || "None"}\n`;
             const loc = s.location || "not specified";
             const topicStr = (s.topics && s.topics.length) ? ` | topics: ${s.topics.join(", ")}` : "";
             const sum = s.summary ? `\n   Summary: ${s.summary}` : "";
-            const limit = full ? 8000 : (idx < 3 ? 4000 : 800);
-            const tx = (s.transcript || "").slice(0, limit);
-            const truncated = s.transcript && s.transcript.length > limit;
+            const limit = full ? 12000 : (idx < 3 ? 6000 : 800);
+            const sourceText = fullTranscriptMap.get(s.id) || s.transcript || "";
+            const tx = sourceText.slice(0, limit);
+            const truncated = sourceText.length > limit;
             const kp = (s.key_points && s.key_points.length) ? `\n   Key points:\n${s.key_points.map((k: string) => `     • ${k}`).join("\n")}` : "";
-            return `\n[Session] "${s.title}"\n   Date: ${when}\n   Who: ${att}\n   Where: ${loc}${topicStr}${sum}${kp}\n   Transcript${full || idx < 3 ? "" : " excerpt"}: ${tx}${truncated ? "…" : ""}\n`;
+            const src = s.transcript_file_path ? " (archived .txt)" : " (db)";
+            return `\n[Session] "${s.title}"\n   Date: ${when}\n   Who: ${att}\n   Where: ${loc}${topicStr}${sum}${kp}\n   Transcript${full || idx < 3 ? "" : " excerpt"}${src}: ${tx}${truncated ? "…" : ""}\n`;
           };
 
           stenoSessions.forEach((s: any, i: number) => {
@@ -539,7 +570,7 @@ Location: ${e.location || "None"}\n`;
           });
 
           if (matchedSessions.length > 0) {
-            realDataContext += `\n[The user's latest message looks like a recall question — these older sessions matched and are included in FULL so you can answer specifics:]\n`;
+            realDataContext += `\n[The user's latest message looks like a recall question — these older sessions matched and their archived .txt transcripts are included in FULL so you can answer specifics:]\n`;
             matchedSessions.forEach((s: any) => {
               realDataContext += renderSession(s, 0, true);
             });
