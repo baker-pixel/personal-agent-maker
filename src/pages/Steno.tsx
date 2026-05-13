@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAgent } from "@/contexts/AgentContext";
 
-type ItemType = "task" | "reminder" | "contact_reminder" | "followup" | "calendar_event";
+type ItemType = "task" | "reminder" | "contact_reminder" | "followup" | "calendar_event" | "key_point";
 
 interface ExtractedItem {
   id: string; // local id for editing
@@ -36,6 +36,7 @@ const TYPE_META: Record<ItemType, { label: string; icon: typeof ListTodo; tint: 
   reminder: { label: "Reminder", icon: Bell, tint: "text-orange-600 bg-orange-500/10 border-orange-500/20" },
   contact_reminder: { label: "Contact", icon: Cake, tint: "text-rose-600 bg-rose-500/10 border-rose-500/20" },
   followup: { label: "Follow-up", icon: Repeat, tint: "text-blue-600 bg-blue-500/10 border-blue-500/20" },
+  key_point: { label: "Key point", icon: Lightbulb, tint: "text-amber-600 bg-amber-500/10 border-amber-500/20" },
 };
 
 export default function Steno() {
