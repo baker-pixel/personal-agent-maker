@@ -472,7 +472,18 @@ export default function StenoHistory() {
                           {s.transcript}
                         </p>
                       </div>
-                      <div className="flex justify-end gap-2 pt-1">
+                      <div className="flex flex-wrap justify-end gap-2 pt-1">
+                        {(s.attendees || []).filter(Boolean).length > 0 && (
+                          <button
+                            onClick={() => draftFollowup(s.id, s.title)}
+                            disabled={draftingFor === s.id}
+                            className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-colors px-2 py-1 rounded-lg hover:bg-accent/10 disabled:opacity-50"
+                            title="AI-draft a follow-up email per attendee"
+                          >
+                            {draftingFor === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                            {draftingFor === s.id ? "Drafting…" : "Draft follow-up email"}
+                          </button>
+                        )}
                         {s.transcript_file_path && (
                           <button
                             onClick={async () => {
