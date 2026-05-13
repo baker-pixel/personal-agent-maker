@@ -62,6 +62,17 @@ function findRelated(kp: string, tasks: RelatedTask[]): RelatedTask[] {
   return scored.map((x) => x.t);
 }
 
+interface AgingItem {
+  id: string;
+  title: string;
+  description: string | null;
+  due_date: string | null;
+  priority: string;
+  created_at: string;
+  steno_session_id: string | null;
+  session_title?: string;
+}
+
 export default function StenoHistory() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<StenoSession[]>([]);
@@ -70,6 +81,9 @@ export default function StenoHistory() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [relatedBySession, setRelatedBySession] = useState<Record<string, RelatedTask[]>>({});
   const [selectedRelated, setSelectedRelated] = useState<{ item: RelatedTask; sessionTitle: string; keyPoint: string } | null>(null);
+  const [agingOpen, setAgingOpen] = useState(true);
+  const [aging, setAging] = useState<AgingItem[]>([]);
+  const [draftingFor, setDraftingFor] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -81,13 +95,16 @@ export default function StenoHistory() {
         console.error(error);
         toast.error("Couldn't load Steno folder");
       } else {
-        setSessions((sess as any[]) || []);
-        const ids = (sess || []).map((s: any) => s.id);
+        const sessionList = (sess as any[]) || [];
+        setSessions(sessionList);
+        const titleById = new Map<string, string>(sessionList.map((s) => [s.id, s.title]));
+        const ids = sessionList.map((s: any) => s.id);
         if (ids.length > 0) {
-          const [a, e, c] = await Promise.all([
+          const [a, e, c, openTasks] = await Promise.all([
             supabase.from("action_items").select("id, title, description, status, due_date, steno_session_id").in("steno_session_id", ids),
             supabase.from("email_reminders").select("id, email_subject, email_snippet, status, remind_at, steno_session_id").in("steno_session_id", ids),
             supabase.from("contact_reminders").select("id, contact_name, notes, reminder_type, reminder_date, steno_session_id").in("steno_session_id", ids),
+            supabase.from("action_items").select("id, title, description, due_date, priority, created_at, steno_session_id").eq("source", "steno").in("status", ["open", "in_progress"]).order("created_at", { ascending: true }),
           ]);
           const map: Record<string, RelatedTask[]> = {};
           (a.data || []).forEach((row: any) => {
@@ -103,12 +120,77 @@ export default function StenoHistory() {
             (map[row.steno_session_id] ||= []).push({ id: row.id, title: `${row.reminder_type === "birthday" ? "🎂 " : ""}${row.contact_name}`, description: row.notes, status: "scheduled", due_date: row.reminder_date, kind: "contact_reminder" });
           });
           setRelatedBySession(map);
+          const agingItems: AgingItem[] = ((openTasks.data as any[]) || []).map((row) => ({
+            id: row.id,
+            title: row.title,
+            description: row.description,
+            due_date: row.due_date,
+            priority: row.priority,
+            created_at: row.created_at,
+            steno_session_id: row.steno_session_id,
+            session_title: row.steno_session_id ? titleById.get(row.steno_session_id) : undefined,
+          }));
+          setAging(agingItems);
         }
       }
       setLoading(false);
     };
     load();
   }, []);
+
+  const completeAging = async (id: string) => {
+    const { error } = await supabase.from("action_items").update({ status: "done" } as any).eq("id", id);
+    if (error) {
+      toast.error("Couldn't update");
+      return;
+    }
+    setAging((prev) => prev.filter((x) => x.id !== id));
+    toast.success("Marked done");
+  };
+
+  const draftFollowup = async (sessionId: string, sessionTitle: string) => {
+    setDraftingFor(sessionId);
+    try {
+      const { data, error } = await supabase.functions.invoke("steno-followup-draft", {
+        body: { session_id: sessionId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const created = data?.created || 0;
+      const unresolved = data?.unresolved || [];
+      if (created === 0) {
+        toast.error(unresolved.length ? `No emails matched: ${unresolved.join(", ")}` : "No drafts created");
+      } else {
+        toast.success(`${created} follow-up draft${created === 1 ? "" : "s"} ready in Approval Inbox`, {
+          description: unresolved.length ? `Skipped (no email): ${unresolved.join(", ")}` : `For "${sessionTitle}"`,
+          action: { label: "Review", onClick: () => navigate("/inbox") },
+        });
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't draft follow-up");
+    } finally {
+      setDraftingFor(null);
+    }
+  };
+
+  const ageBucket = (createdAt: string, dueDate: string | null): { label: string; tone: string; sortKey: number } => {
+    const now = Date.now();
+    if (dueDate) {
+      const due = new Date(dueDate).getTime();
+      if (due < now) return { label: "Overdue", tone: "bg-destructive/10 text-destructive border-destructive/30", sortKey: 0 };
+    }
+    const ageDays = Math.floor((now - new Date(createdAt).getTime()) / 86_400_000);
+    if (ageDays >= 14) return { label: `${ageDays}d old`, tone: "bg-orange-500/10 text-orange-700 border-orange-500/30", sortKey: 1 };
+    if (ageDays >= 7) return { label: `${ageDays}d old`, tone: "bg-amber-500/10 text-amber-700 border-amber-500/30", sortKey: 2 };
+    return { label: `${ageDays}d`, tone: "bg-muted text-muted-foreground border-border", sortKey: 3 };
+  };
+
+  const sortedAging = [...aging].sort((a, b) => {
+    const ba = ageBucket(a.created_at, a.due_date).sortKey;
+    const bb = ageBucket(b.created_at, b.due_date).sortKey;
+    if (ba !== bb) return ba - bb;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
