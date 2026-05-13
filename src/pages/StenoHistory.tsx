@@ -68,6 +68,7 @@ export default function StenoHistory() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [relatedBySession, setRelatedBySession] = useState<Record<string, RelatedTask[]>>({});
+  const [selectedRelated, setSelectedRelated] = useState<{ item: RelatedTask; sessionTitle: string; keyPoint: string } | null>(null);
 
   useEffect(() => {
     const load = async () => {
