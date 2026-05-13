@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Sparkles, Search, ChevronDown, ChevronUp, Trash2, FileText, Calendar, MapPin, Users, Folder, Lightbulb } from "lucide-react";
+import { ArrowLeft, Sparkles, Search, ChevronDown, ChevronUp, Trash2, FileText, Calendar, MapPin, Users, Folder, Lightbulb, CheckSquare, Bell, Cake } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -20,16 +20,56 @@ interface StenoSession {
   created_at: string;
 }
 
+interface RelatedTask {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  due_date: string | null;
+  kind: "task" | "email_reminder" | "contact_reminder";
+}
+
+const STOPWORDS = new Set([
+  "the","a","an","and","or","but","of","to","in","on","at","for","with","by","from","is","are","was","were","be","been","being","this","that","these","those","it","its","i","we","you","they","he","she","my","our","your","their","as","if","then","than","so","do","does","did","have","has","had","will","would","should","could","can","may","not","no","yes","up","down","out","over","about","into","onto","also","just","very","more","most","some","any","all","one","two","each","other","new","get","got","want","need","like","make","made","let","lets","go","going","know","think","said","says","say","ok","okay"
+]);
+
+function tokens(s: string): Set<string> {
+  return new Set(
+    (s || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !STOPWORDS.has(w))
+  );
+}
+
+function findRelated(kp: string, tasks: RelatedTask[]): RelatedTask[] {
+  const kpTokens = tokens(kp);
+  if (kpTokens.size === 0) return [];
+  const scored = tasks
+    .map((t) => {
+      const tt = tokens(`${t.title} ${t.description || ""}`);
+      let overlap = 0;
+      kpTokens.forEach((w) => { if (tt.has(w)) overlap++; });
+      return { t, overlap };
+    })
+    .filter((x) => x.overlap >= 2 || (x.overlap >= 1 && kpTokens.size <= 4))
+    .sort((a, b) => b.overlap - a.overlap)
+    .slice(0, 3);
+  return scored.map((x) => x.t);
+}
+
 export default function StenoHistory() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<StenoSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [relatedBySession, setRelatedBySession] = useState<Record<string, RelatedTask[]>>({});
 
   useEffect(() => {
     const load = async () => {
-      const { data, error } = await supabase
+      const { data: sess, error } = await supabase
         .from("steno_sessions")
         .select("id, title, transcript, summary, topics, attendees, location, key_points, item_count, session_date, created_at")
         .order("created_at", { ascending: false });
@@ -37,7 +77,29 @@ export default function StenoHistory() {
         console.error(error);
         toast.error("Couldn't load Steno folder");
       } else {
-        setSessions((data as any[]) || []);
+        setSessions((sess as any[]) || []);
+        const ids = (sess || []).map((s: any) => s.id);
+        if (ids.length > 0) {
+          const [a, e, c] = await Promise.all([
+            supabase.from("action_items").select("id, title, description, status, due_date, steno_session_id").in("steno_session_id", ids),
+            supabase.from("email_reminders").select("id, email_subject, email_snippet, status, remind_at, steno_session_id").in("steno_session_id", ids),
+            supabase.from("contact_reminders").select("id, contact_name, notes, reminder_type, reminder_date, steno_session_id").in("steno_session_id", ids),
+          ]);
+          const map: Record<string, RelatedTask[]> = {};
+          (a.data || []).forEach((row: any) => {
+            if (!row.steno_session_id) return;
+            (map[row.steno_session_id] ||= []).push({ id: row.id, title: row.title, description: row.description, status: row.status, due_date: row.due_date, kind: "task" });
+          });
+          (e.data || []).forEach((row: any) => {
+            if (!row.steno_session_id) return;
+            (map[row.steno_session_id] ||= []).push({ id: row.id, title: row.email_subject, description: row.email_snippet, status: row.status, due_date: row.remind_at, kind: "email_reminder" });
+          });
+          (c.data || []).forEach((row: any) => {
+            if (!row.steno_session_id) return;
+            (map[row.steno_session_id] ||= []).push({ id: row.id, title: `${row.reminder_type === "birthday" ? "🎂 " : ""}${row.contact_name}`, description: row.notes, status: "scheduled", due_date: row.reminder_date, kind: "contact_reminder" });
+          });
+          setRelatedBySession(map);
+        }
       }
       setLoading(false);
     };
@@ -209,14 +271,54 @@ export default function StenoHistory() {
                           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
                             <Lightbulb className="w-3 h-3 text-amber-600" /> Key points
                           </p>
-                          <ul className="space-y-1.5">
-                            {s.key_points.map((kp, i) => (
-                              <li key={i} className="text-sm text-foreground/90 flex gap-2">
-                                <span className="text-amber-600 shrink-0">•</span>
-                                <span>{kp}</span>
-                              </li>
-                            ))}
+                          <ul className="space-y-2.5">
+                            {s.key_points.map((kp, i) => {
+                              const sessionItems = relatedBySession[s.id] || [];
+                              const related = findRelated(kp, sessionItems);
+                              return (
+                                <li key={i} className="text-sm text-foreground/90">
+                                  <div className="flex gap-2">
+                                    <span className="text-amber-600 shrink-0">•</span>
+                                    <span className="flex-1">{kp}</span>
+                                  </div>
+                                  {related.length > 0 && (
+                                    <div className="ml-4 mt-1.5 flex flex-wrap gap-1.5">
+                                      {related.map((r) => {
+                                        const Icon = r.kind === "task" ? CheckSquare : r.kind === "email_reminder" ? Bell : Cake;
+                                        const tone =
+                                          r.kind === "task"
+                                            ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20 hover:bg-emerald-500/15"
+                                            : r.kind === "email_reminder"
+                                            ? "bg-blue-500/10 text-blue-700 border-blue-500/20 hover:bg-blue-500/15"
+                                            : "bg-pink-500/10 text-pink-700 border-pink-500/20 hover:bg-pink-500/15";
+                                        const onClick = () => {
+                                          if (r.kind === "task") navigate("/tasks");
+                                          else if (r.kind === "email_reminder") navigate("/inbox");
+                                          else navigate("/contacts");
+                                        };
+                                        return (
+                                          <button
+                                            key={r.id}
+                                            onClick={onClick}
+                                            title={r.description || r.title}
+                                            className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors max-w-[240px] ${tone} ${r.status === "completed" || r.status === "done" ? "line-through opacity-70" : ""}`}
+                                          >
+                                            <Icon className="w-3 h-3 shrink-0" />
+                                            <span className="truncate">{r.title}</span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </li>
+                              );
+                            })}
                           </ul>
+                          {(relatedBySession[s.id] || []).length === 0 && (
+                            <p className="text-[11px] text-muted-foreground/70 mt-2 ml-4 italic">
+                              No tasks or reminders linked to this session yet.
+                            </p>
+                          )}
                         </div>
                       )}
                       <div>
