@@ -369,11 +369,28 @@ serve(async (req) => {
             .maybeSingle(),
           adminForContacts
             .from("steno_sessions")
-            .select("id, title, summary, topics, transcript, attendees, location, key_points, item_count, created_at, session_date")
+            .select("id, title, summary, topics, transcript, transcript_file_path, attendees, location, key_points, item_count, created_at, session_date")
             .eq("user_id", user.id)
             .order("created_at", { ascending: false })
             .limit(15),
         ]);
+
+        // Helper: load the archived transcript .txt from storage (preferred over DB transcript)
+        const loadArchivedTranscript = async (s: any): Promise<string> => {
+          if (s?.transcript_file_path) {
+            try {
+              const { data, error } = await adminForContacts
+                .storage
+                .from("steno-transcripts")
+                .download(s.transcript_file_path);
+              if (!error && data) {
+                const text = await data.text();
+                if (text && text.trim().length > 0) return text;
+              }
+            } catch (_) { /* fall through to DB transcript */ }
+          }
+          return s?.transcript || "";
+        };
 
         // Aggregate emails across all Gmail accounts; track per-account fetch errors
         const allEmails: any[] = [];
