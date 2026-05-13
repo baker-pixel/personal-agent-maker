@@ -28,7 +28,8 @@ const steps = [
 
 export default function Landing() {
   const navigate = useNavigate();
-  const goOnboard = () => navigate("/onboarding");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const goOnboard = () => { setMenuOpen(false); navigate("/onboarding"); };
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
@@ -37,13 +38,41 @@ export default function Landing() {
           <div className="flex items-center gap-2 cursor-pointer flex-shrink-0" onClick={() => navigate("/")}>
             <img src={normyLogo} alt="Normy" className="h-7 md:h-8 w-auto" />
           </div>
-          <div className="flex items-center gap-1 md:gap-3">
-            <Button onClick={() => navigate("/pricing")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs md:text-sm px-2 md:px-3">Pricing</Button>
-            <Button onClick={() => navigate("/investors")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs md:text-sm px-2 md:px-3">Investors</Button>
-            <Button onClick={() => navigate("/auth")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs md:text-sm px-2 md:px-3">Log In</Button>
-            <Button onClick={goOnboard} variant="default" size="sm" className="text-xs md:text-sm px-2.5 md:px-3">Get Started <ArrowRight className="w-3.5 h-3.5 md:w-4 md:h-4 ml-1" /></Button>
+          {/* Desktop nav */}
+          <div className="hidden md:flex items-center gap-3">
+            <Button onClick={() => navigate("/pricing")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-sm px-3">Pricing</Button>
+            <Button onClick={() => navigate("/investors")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-sm px-3">Investors</Button>
+            <Button onClick={() => navigate("/auth")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-sm px-3">Log In</Button>
+            <Button onClick={goOnboard} variant="default" size="sm" className="text-sm px-3">Get Started <ArrowRight className="w-4 h-4 ml-1" /></Button>
+          </div>
+          {/* Mobile nav toggle */}
+          <div className="flex md:hidden items-center gap-2">
+            <Button onClick={goOnboard} size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 text-xs px-2.5 h-9">
+              Get Started
+            </Button>
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              aria-label="Toggle menu"
+            >
+              {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
+        {/* Mobile menu dropdown */}
+        {menuOpen && (
+          <div className="md:hidden border-t border-border/50 bg-background/95 backdrop-blur-md px-4 pb-4 pt-2 space-y-1">
+            <button onClick={() => { setMenuOpen(false); navigate("/pricing"); }} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+              Pricing
+            </button>
+            <button onClick={() => { setMenuOpen(false); navigate("/investors"); }} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+              Investors
+            </button>
+            <button onClick={() => { setMenuOpen(false); navigate("/auth"); }} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+              Log In
+            </button>
+          </div>
+        )}
       </nav>
 
       <section className="pt-24 pb-8 md:pt-44 md:pb-16">
