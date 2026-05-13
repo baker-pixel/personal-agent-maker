@@ -489,9 +489,12 @@ Location: ${e.location || "None"}\n`;
             const when = new Date(s.created_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
             const topicStr = (s.topics && s.topics.length) ? ` | topics: ${s.topics.join(", ")}` : "";
             const sum = s.summary ? `\n   summary: ${s.summary}` : "";
-            // Truncate transcript to keep token cost sane; full text available on the History page.
-            const tx = (s.transcript || "").slice(0, 600);
-            realDataContext += `\n[Session ${i + 1}] ${when} — "${s.title}" (${s.item_count} items)${topicStr}${sum}\n   transcript excerpt: ${tx}${s.transcript && s.transcript.length > 600 ? "…" : ""}\n`;
+            // Give the 3 most recent sessions much more transcript so the agent can recall
+            // small details ("what did Sarah say about pricing?"). Older sessions stay short.
+            const limit = i < 3 ? 4000 : 800;
+            const tx = (s.transcript || "").slice(0, limit);
+            const truncated = s.transcript && s.transcript.length > limit;
+            realDataContext += `\n[Session ${i + 1}] ${when} — "${s.title}" (${s.item_count} items)${topicStr}${sum}\n   transcript${i < 3 ? "" : " excerpt"}: ${tx}${truncated ? "…" : ""}\n`;
           });
           realDataContext += "--- END STENO SESSIONS ---\n";
         }

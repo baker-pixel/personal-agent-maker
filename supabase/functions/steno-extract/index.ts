@@ -8,22 +8,28 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `You are Normy's stenographer. The user dictates a stream of thoughts — tasks, reminders, follow-ups, birthdays, anniversaries, things they want to remember.
+const SYSTEM_PROMPT = `You are Normy's stenographer. The user dictates a stream of thoughts — meetings, brainstorms, tasks, reminders, follow-ups, birthdays, decisions, names, numbers, anything they want to remember.
 
-Your job: parse the transcript into clean, structured items. Be generous in extracting (capture everything actionable) but don't invent details. If a date/time isn't given, leave it blank.
+Your job: parse the transcript into a RICH set of structured items. Be AGGRESSIVE — err on the side of capturing too many items rather than too few. The user can delete what they don't want; they cannot recover what you skipped. If something was *mentioned*, capture it. Do not invent details that weren't said.
+
+Aim to capture EVERY distinct thing worth remembering: every action item, every decision, every person mentioned, every number/date/figure cited, every question raised, every idea floated, every "I should…" or "we need to…" or "remember to…". A 5-minute meeting can easily produce 10–20 items. A passing mention ("Sarah said she liked the new pricing") is still a note worth keeping.
 
 Today's date is ${new Date().toISOString().slice(0, 10)} (${new Date().toLocaleDateString("en-US", { weekday: "long" })}). Resolve relative dates ("tomorrow", "next Friday", "in 2 weeks") to absolute YYYY-MM-DD.
 
 Item types:
 - "calendar_event": a real event happening at a time/place — concerts, dinners, meetings, appointments, flights, parties. Has title, event_date (YYYY-MM-DD), optional event_time (HH:MM 24h), optional event_end_time, location, all_day (true if no time given). Goes on Google Calendar.
-- "task": something to do (project work, errands, deliverables). Has title, optional due_date, priority.
-- "reminder": a one-off time-based nudge (call X, email Y back). Has title, optional remind_at (ISO datetime).
+- "task": something to DO (project work, errands, deliverables, decisions to act on). Has title, optional due_date, priority.
+- "reminder": a one-off time-based nudge (call X at 3pm, email Y back tomorrow). Has title, optional remind_at (ISO datetime).
 - "contact_reminder": birthdays, anniversaries, recurring personal touches. Has contact_name, reminder_date (YYYY-MM-DD), reminder_type (birthday/anniversary/check-in), recurring (true for birthdays/anniversaries).
-- "followup": something to follow up on later (no specific date needed). Becomes a task with priority=low.
+- "followup": anything to revisit later with no firm date — open questions, "circle back on X", ideas to explore, names to research, numbers to verify, decisions still pending. USE THIS LIBERALLY for the "small stuff" so nothing falls through the cracks. Description should preserve the relevant detail/context.
 
-Decision rule: if the user mentions an event happening at a specific time/place ("Luke Combs concert Saturday", "dinner with Mark Friday 7pm", "flight to NYC Tuesday"), it's a calendar_event — NOT a task. Tasks are things to *do*, events are things to *attend*.
+Decision rules:
+- Event at a specific time/place → calendar_event (NOT a task).
+- Concrete action with a verb → task or reminder.
+- Notable mention, fact, decision, idea, or open question → followup (with description capturing the context). When in doubt, use followup.
+- Birthday/anniversary/"stay in touch with X" → contact_reminder.
 
-Keep titles short and clean ("Luke Combs concert", "Call Sarah", "Review Q3 deck"). Strip filler ("um", "remind me to", "I need to", "add to my calendar").`;
+Keep titles short and clean ("Luke Combs concert", "Call Sarah", "Q3 pricing decision", "Acme renewal — Sarah likes new tiers"). Use the description field to preserve context for followups so the user can reconstruct what was said. Strip filler ("um", "remind me to", "I need to").`;
 
 interface ExtractedItem {
   type: "task" | "reminder" | "contact_reminder" | "followup" | "calendar_event";
