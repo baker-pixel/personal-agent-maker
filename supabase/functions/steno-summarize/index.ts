@@ -10,8 +10,10 @@ const corsHeaders = {
 const SYSTEM_PROMPT = `You summarize a user's stream-of-consciousness dictation captured in "Steno Pad". The user is reviewing their own thoughts later, possibly weeks from now. Be faithful to what they said — never invent details.
 
 Produce:
-- title: 3-7 words, descriptive of the main subject (e.g. "Q3 planning brainstorm", "Calls to make Monday", "Thoughts on Acme deal").
+- title: 3-7 words, descriptive of the main subject (e.g. "Q3 planning brainstorm", "Calls to make Monday", "Acme deal review with Sarah").
 - summary: ONE paragraph (2-4 sentences) capturing the key topics, decisions, and items mentioned. Write in past tense, third-person ("Discussed...", "Captured tasks for..."). Avoid filler.
+- attendees: array of people mentioned as participating in or being talked TO during this session (meeting attendees, the people the user was with). Use proper names if given ("Sarah Chen", "Mark"). Empty array if it was just the user thinking solo. Do NOT include people merely referenced in passing (e.g. "we should email John later" — John is not an attendee).
+- location: short string for where this happened/was about, if mentioned ("Acme HQ", "Zoom", "the Cleveland office", "phone call"). Empty string if not stated.
 - topics: 3-6 short topic tags (lowercase, single or two-word). Examples: "acme deal", "hiring", "travel", "family", "follow-ups".`;
 
 serve(async (req) => {
