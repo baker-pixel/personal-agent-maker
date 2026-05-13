@@ -271,14 +271,54 @@ export default function StenoHistory() {
                           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
                             <Lightbulb className="w-3 h-3 text-amber-600" /> Key points
                           </p>
-                          <ul className="space-y-1.5">
-                            {s.key_points.map((kp, i) => (
-                              <li key={i} className="text-sm text-foreground/90 flex gap-2">
-                                <span className="text-amber-600 shrink-0">•</span>
-                                <span>{kp}</span>
-                              </li>
-                            ))}
+                          <ul className="space-y-2.5">
+                            {s.key_points.map((kp, i) => {
+                              const sessionItems = relatedBySession[s.id] || [];
+                              const related = findRelated(kp, sessionItems);
+                              return (
+                                <li key={i} className="text-sm text-foreground/90">
+                                  <div className="flex gap-2">
+                                    <span className="text-amber-600 shrink-0">•</span>
+                                    <span className="flex-1">{kp}</span>
+                                  </div>
+                                  {related.length > 0 && (
+                                    <div className="ml-4 mt-1.5 flex flex-wrap gap-1.5">
+                                      {related.map((r) => {
+                                        const Icon = r.kind === "task" ? CheckSquare : r.kind === "email_reminder" ? Bell : Cake;
+                                        const tone =
+                                          r.kind === "task"
+                                            ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20 hover:bg-emerald-500/15"
+                                            : r.kind === "email_reminder"
+                                            ? "bg-blue-500/10 text-blue-700 border-blue-500/20 hover:bg-blue-500/15"
+                                            : "bg-pink-500/10 text-pink-700 border-pink-500/20 hover:bg-pink-500/15";
+                                        const onClick = () => {
+                                          if (r.kind === "task") navigate("/tasks");
+                                          else if (r.kind === "email_reminder") navigate("/inbox");
+                                          else navigate("/contacts");
+                                        };
+                                        return (
+                                          <button
+                                            key={r.id}
+                                            onClick={onClick}
+                                            title={r.description || r.title}
+                                            className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors max-w-[240px] ${tone} ${r.status === "completed" || r.status === "done" ? "line-through opacity-70" : ""}`}
+                                          >
+                                            <Icon className="w-3 h-3 shrink-0" />
+                                            <span className="truncate">{r.title}</span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </li>
+                              );
+                            })}
                           </ul>
+                          {(relatedBySession[s.id] || []).length === 0 && (
+                            <p className="text-[11px] text-muted-foreground/70 mt-2 ml-4 italic">
+                              No tasks or reminders linked to this session yet.
+                            </p>
+                          )}
                         </div>
                       )}
                       <div>
