@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Mic, Square, Loader2, Sparkles, Trash2, CheckCircle2, ListTodo, Bell, Cake, Repeat, CalendarDays, Lightbulb } from "lucide-react";
+import { ArrowLeft, Mic, Square, Loader2, Sparkles, Trash2, CheckCircle2, ListTodo, Bell, Cake, Repeat, CalendarDays, Lightbulb, BookOpen, Mail, ClipboardList, History } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
