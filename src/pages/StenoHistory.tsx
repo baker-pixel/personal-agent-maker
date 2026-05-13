@@ -204,6 +204,21 @@ export default function StenoHistory() {
                           <p className="text-sm text-foreground leading-relaxed">{s.summary}</p>
                         </div>
                       )}
+                      {s.key_points && s.key_points.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                            <Lightbulb className="w-3 h-3 text-amber-600" /> Key points
+                          </p>
+                          <ul className="space-y-1.5">
+                            {s.key_points.map((kp, i) => (
+                              <li key={i} className="text-sm text-foreground/90 flex gap-2">
+                                <span className="text-amber-600 shrink-0">•</span>
+                                <span>{kp}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
                           Full transcript
