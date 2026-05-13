@@ -113,12 +113,19 @@ export default function Steno() {
       // 1) Persist the Steno session (transcript + AI summary) so it can be recalled later
       const transcriptText = transcriptRef.current.trim() || transcript.trim();
       let sessionId: string | null = null;
+
+      // Collect key points from extracted items so we can store them with the session
+      const extractedKeyPoints: string[] = items
+        .filter((it) => it.type === "key_point" && it.title?.trim())
+        .map((it) => it.title.trim());
+
       if (transcriptText) {
         let title = "Steno session";
         let summary = "";
         let topics: string[] = [];
         let attendees: string[] = [];
         let location = "";
+        let summaryKeyPoints: string[] = [];
         try {
           const { data: sumData } = await supabase.functions.invoke("steno-summarize", {
             body: { transcript: transcriptText },
@@ -129,10 +136,23 @@ export default function Steno() {
             topics = Array.isArray(sumData.topics) ? sumData.topics : [];
             attendees = Array.isArray(sumData.attendees) ? sumData.attendees : [];
             location = sumData.location || "";
+            summaryKeyPoints = Array.isArray(sumData.key_points) ? sumData.key_points : [];
           }
         } catch (e) {
           console.warn("[Steno] summarize failed, saving without summary", e);
         }
+
+        // Merge key points from extractor + summarizer, dedupe (case-insensitive)
+        const seen = new Set<string>();
+        const mergedKeyPoints: string[] = [];
+        for (const kp of [...extractedKeyPoints, ...summaryKeyPoints]) {
+          const norm = kp.trim().toLowerCase();
+          if (norm && !seen.has(norm)) {
+            seen.add(norm);
+            mergedKeyPoints.push(kp.trim());
+          }
+        }
+
         const { data: sessRow, error: sessErr } = await supabase
           .from("steno_sessions")
           .insert({
@@ -143,6 +163,7 @@ export default function Steno() {
             topics,
             attendees,
             location: location || null,
+            key_points: mergedKeyPoints,
             item_count: items.length,
             session_date: new Date().toISOString().slice(0, 10),
           } as any)
@@ -162,6 +183,10 @@ export default function Steno() {
 
       for (const it of items) {
         if (!it.title?.trim()) continue;
+        if (it.type === "key_point") {
+          // Already saved with the session above — skip the action/reminder pipeline.
+          continue;
+        }
         if (it.type === "calendar_event") {
           if (!it.event_date) {
             toast.error(`"${it.title}" needs a date — set one before saving.`);
