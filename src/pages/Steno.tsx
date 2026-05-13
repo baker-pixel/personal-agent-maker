@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Mic, Square, Loader2, Sparkles, Trash2, CheckCircle2, ListTodo, Bell, Cake, Repeat, CalendarDays } from "lucide-react";
+import { ArrowLeft, Mic, Square, Loader2, Sparkles, Trash2, CheckCircle2, ListTodo, Bell, Cake, Repeat, CalendarDays, Lightbulb } from "lucide-react";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAgent } from "@/contexts/AgentContext";
 
-type ItemType = "task" | "reminder" | "contact_reminder" | "followup" | "calendar_event";
+type ItemType = "task" | "reminder" | "contact_reminder" | "followup" | "calendar_event" | "key_point";
 
 interface ExtractedItem {
   id: string; // local id for editing
@@ -36,6 +36,7 @@ const TYPE_META: Record<ItemType, { label: string; icon: typeof ListTodo; tint: 
   reminder: { label: "Reminder", icon: Bell, tint: "text-orange-600 bg-orange-500/10 border-orange-500/20" },
   contact_reminder: { label: "Contact", icon: Cake, tint: "text-rose-600 bg-rose-500/10 border-rose-500/20" },
   followup: { label: "Follow-up", icon: Repeat, tint: "text-blue-600 bg-blue-500/10 border-blue-500/20" },
+  key_point: { label: "Key point", icon: Lightbulb, tint: "text-amber-600 bg-amber-500/10 border-amber-500/20" },
 };
 
 export default function Steno() {
@@ -112,12 +113,19 @@ export default function Steno() {
       // 1) Persist the Steno session (transcript + AI summary) so it can be recalled later
       const transcriptText = transcriptRef.current.trim() || transcript.trim();
       let sessionId: string | null = null;
+
+      // Collect key points from extracted items so we can store them with the session
+      const extractedKeyPoints: string[] = items
+        .filter((it) => it.type === "key_point" && it.title?.trim())
+        .map((it) => it.title.trim());
+
       if (transcriptText) {
         let title = "Steno session";
         let summary = "";
         let topics: string[] = [];
         let attendees: string[] = [];
         let location = "";
+        let summaryKeyPoints: string[] = [];
         try {
           const { data: sumData } = await supabase.functions.invoke("steno-summarize", {
             body: { transcript: transcriptText },
@@ -128,10 +136,23 @@ export default function Steno() {
             topics = Array.isArray(sumData.topics) ? sumData.topics : [];
             attendees = Array.isArray(sumData.attendees) ? sumData.attendees : [];
             location = sumData.location || "";
+            summaryKeyPoints = Array.isArray(sumData.key_points) ? sumData.key_points : [];
           }
         } catch (e) {
           console.warn("[Steno] summarize failed, saving without summary", e);
         }
+
+        // Merge key points from extractor + summarizer, dedupe (case-insensitive)
+        const seen = new Set<string>();
+        const mergedKeyPoints: string[] = [];
+        for (const kp of [...extractedKeyPoints, ...summaryKeyPoints]) {
+          const norm = kp.trim().toLowerCase();
+          if (norm && !seen.has(norm)) {
+            seen.add(norm);
+            mergedKeyPoints.push(kp.trim());
+          }
+        }
+
         const { data: sessRow, error: sessErr } = await supabase
           .from("steno_sessions")
           .insert({
@@ -142,6 +163,7 @@ export default function Steno() {
             topics,
             attendees,
             location: location || null,
+            key_points: mergedKeyPoints,
             item_count: items.length,
             session_date: new Date().toISOString().slice(0, 10),
           } as any)
@@ -161,6 +183,10 @@ export default function Steno() {
 
       for (const it of items) {
         if (!it.title?.trim()) continue;
+        if (it.type === "key_point") {
+          // Already saved with the session above — skip the action/reminder pipeline.
+          continue;
+        }
         if (it.type === "calendar_event") {
           if (!it.event_date) {
             toast.error(`"${it.title}" needs a date — set one before saving.`);

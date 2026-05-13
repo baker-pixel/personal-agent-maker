@@ -369,7 +369,7 @@ serve(async (req) => {
             .maybeSingle(),
           adminForContacts
             .from("steno_sessions")
-            .select("id, title, summary, topics, transcript, attendees, location, item_count, created_at, session_date")
+            .select("id, title, summary, topics, transcript, attendees, location, key_points, item_count, created_at, session_date")
             .eq("user_id", user.id)
             .order("created_at", { ascending: false })
             .limit(15),
@@ -507,7 +507,7 @@ Location: ${e.location || "None"}\n`;
             }
             const { data: searchRows } = await adminForContacts
               .from("steno_sessions")
-              .select("id, title, summary, topics, transcript, attendees, location, item_count, created_at")
+              .select("id, title, summary, topics, transcript, attendees, location, key_points, item_count, created_at")
               .eq("user_id", user.id)
               .or(orParts.join(","))
               .order("created_at", { ascending: false })
@@ -530,7 +530,8 @@ Location: ${e.location || "None"}\n`;
             const limit = full ? 8000 : (idx < 3 ? 4000 : 800);
             const tx = (s.transcript || "").slice(0, limit);
             const truncated = s.transcript && s.transcript.length > limit;
-            return `\n[Session] "${s.title}"\n   Date: ${when}\n   Who: ${att}\n   Where: ${loc}${topicStr}${sum}\n   Transcript${full || idx < 3 ? "" : " excerpt"}: ${tx}${truncated ? "…" : ""}\n`;
+            const kp = (s.key_points && s.key_points.length) ? `\n   Key points:\n${s.key_points.map((k: string) => `     • ${k}`).join("\n")}` : "";
+            return `\n[Session] "${s.title}"\n   Date: ${when}\n   Who: ${att}\n   Where: ${loc}${topicStr}${sum}${kp}\n   Transcript${full || idx < 3 ? "" : " excerpt"}: ${tx}${truncated ? "…" : ""}\n`;
           };
 
           stenoSessions.forEach((s: any, i: number) => {

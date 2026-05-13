@@ -637,6 +637,7 @@ export type Database = {
           created_at: string
           id: string
           item_count: number
+          key_points: string[]
           location: string | null
           session_date: string
           summary: string | null
@@ -651,6 +652,7 @@ export type Database = {
           created_at?: string
           id?: string
           item_count?: number
+          key_points?: string[]
           location?: string | null
           session_date?: string
           summary?: string | null
@@ -665,6 +667,7 @@ export type Database = {
           created_at?: string
           id?: string
           item_count?: number
+          key_points?: string[]
           location?: string | null
           session_date?: string
           summary?: string | null

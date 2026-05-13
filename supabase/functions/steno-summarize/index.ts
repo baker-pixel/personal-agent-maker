@@ -9,12 +9,21 @@ const corsHeaders = {
 
 const SYSTEM_PROMPT = `You summarize a user's stream-of-consciousness dictation captured in "Steno Pad". The user is reviewing their own thoughts later, possibly weeks from now. Be faithful to what they said — never invent details.
 
+For every transcript, answer these 6 meeting questions through the fields below:
+1. WHO was at the meeting → attendees
+2. WHEN it happened → captured automatically by the timestamp; if a future follow-up time is mentioned, fold it into the summary
+3. WHERE it was → location
+4. KEY POINTS (decisions, headline numbers, important things said, who-said-what) → key_points (3–8 short bullets for any meeting > 2 min)
+5. CALENDAR / REMINDERS to set → folded into the summary so the user knows what to schedule
+6. ACTIONS to take → folded into the summary so the user knows what to do
+
 Produce:
-- title: 3-7 words, descriptive of the main subject (e.g. "Q3 planning brainstorm", "Calls to make Monday", "Acme deal review with Sarah").
-- summary: ONE paragraph (2-4 sentences) capturing the key topics, decisions, and items mentioned. Write in past tense, third-person ("Discussed...", "Captured tasks for..."). Avoid filler.
-- attendees: array of people mentioned as participating in or being talked TO during this session (meeting attendees, the people the user was with). Use proper names if given ("Sarah Chen", "Mark"). Empty array if it was just the user thinking solo. Do NOT include people merely referenced in passing (e.g. "we should email John later" — John is not an attendee).
-- location: short string for where this happened/was about, if mentioned ("Acme HQ", "Zoom", "the Cleveland office", "phone call"). Empty string if not stated.
-- topics: 3-6 short topic tags (lowercase, single or two-word). Examples: "acme deal", "hiring", "travel", "family", "follow-ups".`;
+- title: 3-7 words, descriptive of the main subject (e.g. "Q3 planning brainstorm", "Acme deal review with Sarah").
+- summary: ONE paragraph (2-4 sentences) capturing key topics, decisions, and any time-sensitive items mentioned. Past tense, third-person ("Discussed...", "Agreed to..."). Avoid filler.
+- attendees: array of people who participated in this session/meeting (proper names if given). Empty if user was solo. Do NOT include people merely referenced in passing.
+- location: short string for where this happened ("Acme HQ", "Zoom", "phone call"). Empty if not stated.
+- key_points: 3–8 short bullet takeaways the user will want to remember weeks later — decisions made, key numbers/dates cited, notable quotes ("Sarah said pricing is the blocker"), open questions raised. Each bullet ≤ 12 words. Empty array only for very short / non-meeting dictations.
+- topics: 3-6 short topic tags (lowercase, single or two-word). Examples: "acme deal", "hiring", "travel".`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -56,9 +65,10 @@ serve(async (req) => {
                   summary: { type: "string" },
                   attendees: { type: "array", items: { type: "string" } },
                   location: { type: "string" },
+                  key_points: { type: "array", items: { type: "string" } },
                   topics: { type: "array", items: { type: "string" } },
                 },
-                required: ["title", "summary", "attendees", "location", "topics"],
+                required: ["title", "summary", "attendees", "location", "key_points", "topics"],
                 additionalProperties: false,
               },
             },
@@ -77,6 +87,7 @@ serve(async (req) => {
           summary: text.slice(0, 240),
           attendees: [],
           location: "",
+          key_points: [],
           topics: [],
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -85,7 +96,7 @@ serve(async (req) => {
 
     const data = await response.json();
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    let result = { title: "Steno session", summary: "", attendees: [] as string[], location: "", topics: [] as string[] };
+    let result = { title: "Steno session", summary: "", attendees: [] as string[], location: "", key_points: [] as string[], topics: [] as string[] };
     if (toolCall?.function?.arguments) {
       try {
         const parsed = JSON.parse(toolCall.function.arguments);
@@ -94,6 +105,7 @@ serve(async (req) => {
           summary: parsed.summary || "",
           attendees: Array.isArray(parsed.attendees) ? parsed.attendees.slice(0, 12) : [],
           location: (parsed.location || "").slice(0, 120),
+          key_points: Array.isArray(parsed.key_points) ? parsed.key_points.slice(0, 12) : [],
           topics: Array.isArray(parsed.topics) ? parsed.topics.slice(0, 8) : [],
         };
       } catch (e) {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Sparkles, Search, ChevronDown, ChevronUp, Trash2, FileText, Calendar, MapPin, Users, Folder } from "lucide-react";
+import { ArrowLeft, Sparkles, Search, ChevronDown, ChevronUp, Trash2, FileText, Calendar, MapPin, Users, Folder, Lightbulb } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ interface StenoSession {
   topics: string[];
   attendees: string[];
   location: string | null;
+  key_points: string[];
   item_count: number;
   session_date: string;
   created_at: string;
@@ -30,7 +31,7 @@ export default function StenoHistory() {
     const load = async () => {
       const { data, error } = await supabase
         .from("steno_sessions")
-        .select("id, title, transcript, summary, topics, attendees, location, item_count, session_date, created_at")
+        .select("id, title, transcript, summary, topics, attendees, location, key_points, item_count, session_date, created_at")
         .order("created_at", { ascending: false });
       if (error) {
         console.error(error);
@@ -201,6 +202,21 @@ export default function StenoHistory() {
                             Summary
                           </p>
                           <p className="text-sm text-foreground leading-relaxed">{s.summary}</p>
+                        </div>
+                      )}
+                      {s.key_points && s.key_points.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                            <Lightbulb className="w-3 h-3 text-amber-600" /> Key points
+                          </p>
+                          <ul className="space-y-1.5">
+                            {s.key_points.map((kp, i) => (
+                              <li key={i} className="text-sm text-foreground/90 flex gap-2">
+                                <span className="text-amber-600 shrink-0">•</span>
+                                <span>{kp}</span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       )}
                       <div>
