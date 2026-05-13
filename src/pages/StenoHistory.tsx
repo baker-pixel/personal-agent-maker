@@ -20,6 +20,7 @@ interface StenoSession {
   item_count: number;
   session_date: string;
   created_at: string;
+  transcript_file_path?: string | null;
 }
 
 interface RelatedTask {
