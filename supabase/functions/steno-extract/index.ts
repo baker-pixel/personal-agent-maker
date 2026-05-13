@@ -43,7 +43,7 @@ Today's date is ${new Date().toISOString().slice(0, 10)} (${new Date().toLocaleD
 Keep titles short and clean. Use description to preserve context. Strip filler ("um", "remind me to", "I need to").`;
 
 interface ExtractedItem {
-  type: "task" | "reminder" | "contact_reminder" | "followup" | "calendar_event";
+  type: "task" | "reminder" | "contact_reminder" | "followup" | "calendar_event" | "key_point";
   title?: string;
   description?: string;
   due_date?: string;
@@ -101,7 +101,7 @@ serve(async (req) => {
                     items: {
                       type: "object",
                       properties: {
-                        type: { type: "string", enum: ["task", "reminder", "contact_reminder", "followup", "calendar_event"] },
+                        type: { type: "string", enum: ["task", "reminder", "contact_reminder", "followup", "calendar_event", "key_point"] },
                         title: { type: "string", description: "Short clean title" },
                         description: { type: "string", description: "Optional extra detail" },
                         due_date: { type: "string", description: "YYYY-MM-DD for tasks" },
