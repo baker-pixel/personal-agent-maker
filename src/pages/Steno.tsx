@@ -116,6 +116,8 @@ export default function Steno() {
         let title = "Steno session";
         let summary = "";
         let topics: string[] = [];
+        let attendees: string[] = [];
+        let location = "";
         try {
           const { data: sumData } = await supabase.functions.invoke("steno-summarize", {
             body: { transcript: transcriptText },
@@ -124,6 +126,8 @@ export default function Steno() {
             title = sumData.title || title;
             summary = sumData.summary || "";
             topics = Array.isArray(sumData.topics) ? sumData.topics : [];
+            attendees = Array.isArray(sumData.attendees) ? sumData.attendees : [];
+            location = sumData.location || "";
           }
         } catch (e) {
           console.warn("[Steno] summarize failed, saving without summary", e);
@@ -136,9 +140,11 @@ export default function Steno() {
             transcript: transcriptText,
             summary: summary || null,
             topics,
+            attendees,
+            location: location || null,
             item_count: items.length,
             session_date: new Date().toISOString().slice(0, 10),
-          })
+          } as any)
           .select("id")
           .single();
         if (sessErr) {
