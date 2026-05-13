@@ -331,7 +331,25 @@ export default function StenoHistory() {
                           {s.transcript}
                         </p>
                       </div>
-                      <div className="flex justify-end pt-1">
+                      <div className="flex justify-end gap-2 pt-1">
+                        {s.transcript_file_path && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const { data, error } = await supabase.storage
+                                  .from("steno-transcripts")
+                                  .createSignedUrl(s.transcript_file_path!, 60);
+                                if (error || !data?.signedUrl) throw error || new Error("No URL");
+                                window.open(data.signedUrl, "_blank");
+                              } catch (e) {
+                                toast.error("Could not open archived file");
+                              }
+                            }}
+                            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-lg hover:bg-accent/5"
+                          >
+                            <Download className="w-3 h-3" /> Download .txt
+                          </button>
+                        )}
                         <button
                           onClick={() => remove(s.id)}
                           className="flex items-center gap-1.5 text-xs text-destructive hover:text-destructive/80 transition-colors px-2 py-1 rounded-lg hover:bg-destructive/5"
