@@ -54,9 +54,11 @@ serve(async (req) => {
                 properties: {
                   title: { type: "string" },
                   summary: { type: "string" },
+                  attendees: { type: "array", items: { type: "string" } },
+                  location: { type: "string" },
                   topics: { type: "array", items: { type: "string" } },
                 },
-                required: ["title", "summary", "topics"],
+                required: ["title", "summary", "attendees", "location", "topics"],
                 additionalProperties: false,
               },
             },
@@ -69,11 +71,12 @@ serve(async (req) => {
     if (!response.ok) {
       const errText = await response.text();
       console.error("steno-summarize gateway error", response.status, errText);
-      // Graceful fallback so saving doesn't fail
       return new Response(
         JSON.stringify({
           title: text.split(/\s+/).slice(0, 6).join(" ").slice(0, 60) || "Steno session",
           summary: text.slice(0, 240),
+          attendees: [],
+          location: "",
           topics: [],
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -82,13 +85,15 @@ serve(async (req) => {
 
     const data = await response.json();
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    let result = { title: "Steno session", summary: "", topics: [] as string[] };
+    let result = { title: "Steno session", summary: "", attendees: [] as string[], location: "", topics: [] as string[] };
     if (toolCall?.function?.arguments) {
       try {
         const parsed = JSON.parse(toolCall.function.arguments);
         result = {
           title: (parsed.title || "Steno session").slice(0, 80),
           summary: parsed.summary || "",
+          attendees: Array.isArray(parsed.attendees) ? parsed.attendees.slice(0, 12) : [],
+          location: (parsed.location || "").slice(0, 120),
           topics: Array.isArray(parsed.topics) ? parsed.topics.slice(0, 8) : [],
         };
       } catch (e) {
