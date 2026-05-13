@@ -75,7 +75,7 @@ export default function StenoHistory() {
     const load = async () => {
       const { data: sess, error } = await supabase
         .from("steno_sessions")
-        .select("id, title, transcript, summary, topics, attendees, location, key_points, item_count, session_date, created_at")
+        .select("id, title, transcript, summary, topics, attendees, location, key_points, item_count, session_date, created_at, transcript_file_path")
         .order("created_at", { ascending: false });
       if (error) {
         console.error(error);
