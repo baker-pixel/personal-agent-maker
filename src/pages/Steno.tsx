@@ -174,6 +174,55 @@ export default function Steno() {
         } else {
           sessionId = (sessRow as any)?.id || null;
         }
+
+        // Archive the meeting as a structured text file in private storage so
+        // the agent can re-read the full meeting later and the user can download it.
+        if (sessionId) {
+          try {
+            const when = new Date().toLocaleString();
+            const fileBody = [
+              `Title: ${title}`,
+              `Date: ${when}`,
+              `Attendees: ${attendees.length ? attendees.join(", ") : "solo / not specified"}`,
+              `Location: ${location || "not specified"}`,
+              topics.length ? `Topics: ${topics.join(", ")}` : "",
+              "",
+              "── Summary ──",
+              summary || "(no summary)",
+              "",
+              mergedKeyPoints.length ? "── Key Points ──" : "",
+              ...mergedKeyPoints.map((k) => `• ${k}`),
+              "",
+              "── Action Items ──",
+              ...items
+                .filter((it) => it.type !== "key_point" && it.title?.trim())
+                .map((it) => `• [${TYPE_META[it.type].label}] ${it.title}${it.due_date ? ` (due ${it.due_date})` : ""}${it.event_date ? ` (${it.event_date}${it.event_time ? ` ${it.event_time}` : ""})` : ""}${it.description ? ` — ${it.description}` : ""}`),
+              "",
+              "── Full Transcript ──",
+              transcriptText,
+            ]
+              .filter((l) => l !== "")
+              .join("\n");
+
+            const path = `${user.id}/${sessionId}.txt`;
+            const { error: upErr } = await supabase.storage
+              .from("steno-transcripts")
+              .upload(path, new Blob([fileBody], { type: "text/plain" }), {
+                contentType: "text/plain",
+                upsert: true,
+              });
+            if (upErr) {
+              console.warn("[Steno] file archive upload failed", upErr);
+            } else {
+              await supabase
+                .from("steno_sessions")
+                .update({ transcript_file_path: path, archived_at: new Date().toISOString() } as any)
+                .eq("id", sessionId);
+            }
+          } catch (e) {
+            console.warn("[Steno] archive step failed", e);
+          }
+        }
       }
 
       const actionItems: any[] = [];
