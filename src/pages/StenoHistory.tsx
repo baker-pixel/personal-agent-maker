@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Sparkles, Search, ChevronDown, ChevronUp, Trash2, FileText } from "lucide-react";
+import { ArrowLeft, Sparkles, Search, ChevronDown, ChevronUp, Trash2, FileText, Calendar, MapPin, Users, Folder } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -12,6 +12,8 @@ interface StenoSession {
   transcript: string;
   summary: string | null;
   topics: string[];
+  attendees: string[];
+  location: string | null;
   item_count: number;
   session_date: string;
   created_at: string;
@@ -28,11 +30,11 @@ export default function StenoHistory() {
     const load = async () => {
       const { data, error } = await supabase
         .from("steno_sessions")
-        .select("id, title, transcript, summary, topics, item_count, session_date, created_at")
+        .select("id, title, transcript, summary, topics, attendees, location, item_count, session_date, created_at")
         .order("created_at", { ascending: false });
       if (error) {
         console.error(error);
-        toast.error("Couldn't load Steno history");
+        toast.error("Couldn't load Steno folder");
       } else {
         setSessions((data as any[]) || []);
       }
@@ -67,14 +69,16 @@ export default function StenoHistory() {
           s.title.toLowerCase().includes(q) ||
           (s.summary || "").toLowerCase().includes(q) ||
           s.transcript.toLowerCase().includes(q) ||
-          s.topics.some((t) => t.toLowerCase().includes(q))
+          s.topics.some((t) => t.toLowerCase().includes(q)) ||
+          (s.attendees || []).some((a) => a.toLowerCase().includes(q)) ||
+          (s.location || "").toLowerCase().includes(q)
       )
     : sessions;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
-        <div className="container max-w-3xl flex items-center h-14 px-4">
+        <div className="container max-w-5xl flex items-center h-14 px-4">
           <button
             onClick={() => navigate("/steno")}
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -85,18 +89,18 @@ export default function StenoHistory() {
           <div className="flex-1" />
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center">
-              <Sparkles className="w-3.5 h-3.5 text-accent" />
+              <Folder className="w-3.5 h-3.5 text-accent" />
             </div>
-            <span className="font-display text-base font-semibold">Steno History</span>
+            <span className="font-display text-base font-semibold">Steno Folder</span>
           </div>
         </div>
       </nav>
 
-      <div className="flex-1 container max-w-3xl py-6 px-4 space-y-4">
+      <div className="flex-1 container max-w-5xl py-6 px-4 space-y-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold">Past sessions</h1>
+          <h1 className="font-display text-2xl font-semibold">Your meeting folder</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Every Steno dictation is saved here so you (or Normy) can recall it later.
+            Every Steno recording — title, date, who you were with, and where. Normy can search the full transcripts when you ask.
           </p>
         </div>
 
@@ -105,7 +109,7 @@ export default function StenoHistory() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search transcripts, summaries, topics…"
+            placeholder="Search by title, person, location, topic, or anything said…"
             className="pl-9"
           />
         </div>
@@ -120,41 +124,31 @@ export default function StenoHistory() {
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {filtered.map((s) => {
               const open = expanded.has(s.id);
+              const attendeeStr = (s.attendees || []).filter(Boolean);
               return (
-                <div key={s.id} className="rounded-2xl border bg-card overflow-hidden">
+                <div
+                  key={s.id}
+                  className={`rounded-2xl border bg-card overflow-hidden transition-all ${open ? "md:col-span-2 ring-1 ring-accent/30" : "hover:border-accent/40 hover:shadow-sm"}`}
+                >
                   <button
                     onClick={() => toggle(s.id)}
                     className="w-full text-left px-5 py-4 hover:bg-accent/5 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-foreground truncate">{s.title}</h3>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
-                          <span>{format(parseISO(s.created_at), "MMM d, yyyy · h:mm a")}</span>
-                          {s.item_count > 0 && (
-                            <span>
-                              {s.item_count} item{s.item_count === 1 ? "" : "s"} captured
-                            </span>
-                          )}
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+                          <Folder className="w-4 h-4 text-accent" />
                         </div>
-                        {s.summary && !open && (
-                          <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{s.summary}</p>
-                        )}
-                        {s.topics.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {s.topics.map((t) => (
-                              <span
-                                key={t}
-                                className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium"
-                              >
-                                {t}
-                              </span>
-                            ))}
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-foreground truncate">{s.title}</h3>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                            <Calendar className="w-3 h-3" />
+                            <span>{format(parseISO(s.created_at), "MMM d, yyyy · h:mm a")}</span>
                           </div>
-                        )}
+                        </div>
                       </div>
                       {open ? (
                         <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
@@ -162,6 +156,42 @@ export default function StenoHistory() {
                         <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
                       )}
                     </div>
+
+                    {/* Meta row */}
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                      {attendeeStr.length > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <Users className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{attendeeStr.join(", ")}</span>
+                        </div>
+                      )}
+                      {s.location && (
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{s.location}</span>
+                        </div>
+                      )}
+                      {s.item_count > 0 && (
+                        <span>{s.item_count} item{s.item_count === 1 ? "" : "s"}</span>
+                      )}
+                    </div>
+
+                    {s.summary && !open && (
+                      <p className="text-sm text-muted-foreground mt-2.5 line-clamp-2">{s.summary}</p>
+                    )}
+
+                    {s.topics.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2.5">
+                        {s.topics.map((t) => (
+                          <span
+                            key={t}
+                            className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </button>
                   {open && (
                     <div className="px-5 pb-5 space-y-3 border-t bg-muted/20">
