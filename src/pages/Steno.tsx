@@ -48,6 +48,16 @@ export default function Steno() {
   const [extracting, setExtracting] = useState(false);
   const [items, setItems] = useState<ExtractedItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const [prepOpen, setPrepOpen] = useState(false);
+  const [prepLoading, setPrepLoading] = useState(false);
+  const [prepAttendees, setPrepAttendees] = useState("");
+  const [prepTopic, setPrepTopic] = useState("");
+  const [prepData, setPrepData] = useState<{
+    lastMeeting: any;
+    openActions: any[];
+    recentEmails: any[];
+    gmailWarning: string | null;
+  } | null>(null);
   const transcriptRef = useRef("");
 
   const speech = useSpeechRecognition({
