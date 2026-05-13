@@ -530,7 +530,8 @@ Location: ${e.location || "None"}\n`;
             const limit = full ? 8000 : (idx < 3 ? 4000 : 800);
             const tx = (s.transcript || "").slice(0, limit);
             const truncated = s.transcript && s.transcript.length > limit;
-            return `\n[Session] "${s.title}"\n   Date: ${when}\n   Who: ${att}\n   Where: ${loc}${topicStr}${sum}\n   Transcript${full || idx < 3 ? "" : " excerpt"}: ${tx}${truncated ? "…" : ""}\n`;
+            const kp = (s.key_points && s.key_points.length) ? `\n   Key points:\n${s.key_points.map((k: string) => `     • ${k}`).join("\n")}` : "";
+            return `\n[Session] "${s.title}"\n   Date: ${when}\n   Who: ${att}\n   Where: ${loc}${topicStr}${sum}${kp}\n   Transcript${full || idx < 3 ? "" : " excerpt"}: ${tx}${truncated ? "…" : ""}\n`;
           };
 
           stenoSessions.forEach((s: any, i: number) => {
