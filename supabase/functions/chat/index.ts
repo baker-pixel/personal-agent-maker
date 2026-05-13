@@ -643,11 +643,12 @@ Location: ${e.location || "None"}\n`;
           realDataContext += "Each session has a Title, Date, Attendees (who was there), Location, Summary, and full Transcript loaded from the archived .txt file in the user's steno folder. Reference these when the user asks 'what did I say about X', 'what was said in the meeting with Sarah', 'remind me what we discussed', or anything where their own past notes are relevant. Quote sparingly — don't dump full transcripts unless asked.\n";
           realDataContext += "PROACTIVE CALENDAR RULE: If a session transcript mentions something time-sensitive that does NOT already appear on the user's calendar above (a flight, dinner, demo, deadline, recurring 1:1, etc.), proactively offer to add it: \"Hey, you mentioned X on [date] in your meeting with [who] — should I add it to your calendar? Sounded important.\" Use the user's first name if you know it. Only offer once per item per conversation.\n";
 
-          // Pre-load archived transcript files in parallel for the sessions we'll render with full/large content.
-          // Recent: top 3 get full; matched (recall): all get full.
+          // Pre-load archived transcript files in parallel ONLY for sessions rendered with full content.
+          // Recent: top 3 get full; matched (recall): only the top-N most relevant (by combined keyword+semantic score).
           const fullRecent = stenoSessions.slice(0, 3);
+          const fullMatched = matchedSessions.filter((s: any) => fullRecallIds.has(s.id));
           const fullTranscriptMap = new Map<string, string>();
-          const toLoad = [...fullRecent, ...matchedSessions];
+          const toLoad = [...fullRecent, ...fullMatched];
           await Promise.all(
             toLoad.map(async (s: any) => {
               const txt = await loadArchivedTranscript(s);
@@ -662,12 +663,15 @@ Location: ${e.location || "None"}\n`;
             const topicStr = (s.topics && s.topics.length) ? ` | topics: ${s.topics.join(", ")}` : "";
             const sum = s.summary ? `\n   Summary: ${s.summary}` : "";
             const limit = full ? 12000 : (idx < 3 ? 6000 : 800);
-            const sourceText = fullTranscriptMap.get(s.id) || s.transcript || "";
+            const sourceText = fullTranscriptMap.get(s.id) || (full ? (s.transcript || "") : "");
             const tx = sourceText.slice(0, limit);
             const truncated = sourceText.length > limit;
             const kp = (s.key_points && s.key_points.length) ? `\n   Key points:\n${s.key_points.map((k: string) => `     • ${k}`).join("\n")}` : "";
-            const src = s.transcript_file_path ? " (archived .txt)" : " (db)";
-            return `\n[Session] "${s.title}"\n   Date: ${when}\n   Who: ${att}\n   Where: ${loc}${topicStr}${sum}${kp}\n   Transcript${full || idx < 3 ? "" : " excerpt"}${src}: ${tx}${truncated ? "…" : ""}\n`;
+            const src = full ? (s.transcript_file_path ? " (archived .txt)" : " (db)") : " (metadata only — ask to dig deeper)";
+            const body = full || idx < 3
+              ? `\n   Transcript${full ? "" : " excerpt"}${src}: ${tx}${truncated ? "…" : ""}\n`
+              : `${src}\n`;
+            return `\n[Session] "${s.title}"\n   Date: ${when}\n   Who: ${att}\n   Where: ${loc}${topicStr}${sum}${kp}${body}`;
           };
 
           stenoSessions.forEach((s: any, i: number) => {
@@ -675,9 +679,9 @@ Location: ${e.location || "None"}\n`;
           });
 
           if (matchedSessions.length > 0) {
-            realDataContext += `\n[The user's latest message looks like a recall question — these older sessions matched and their archived .txt transcripts are included in FULL so you can answer specifics:]\n`;
+            realDataContext += `\n[Recall match — ranked by keyword + semantic relevance. Top ${Math.min(TOP_N_FULL_RECALL, matchedSessions.length)} have FULL archived .txt loaded; the rest are metadata-only — say so if the user asks for details on those:]\n`;
             matchedSessions.forEach((s: any) => {
-              realDataContext += renderSession(s, 0, true);
+              realDataContext += renderSession(s, 0, fullRecallIds.has(s.id));
             });
           }
           realDataContext += "--- END STENO FOLDER ---\n";
