@@ -411,6 +411,57 @@ export default function StenoHistory() {
                           <p className="text-sm text-foreground leading-relaxed">{s.summary}</p>
                         </div>
                       )}
+                      {(() => {
+                        const items = relatedBySession[s.id] || [];
+                        if (items.length === 0) return null;
+                        const open = items.filter((r) => r.status !== "done" && r.status !== "completed");
+                        const done = items.filter((r) => r.status === "done" || r.status === "completed");
+                        const renderItem = (r: RelatedTask) => {
+                          const Icon = r.kind === "task" ? CheckSquare : r.kind === "email_reminder" ? Bell : Cake;
+                          const tone =
+                            r.kind === "task"
+                              ? "text-emerald-700"
+                              : r.kind === "email_reminder"
+                              ? "text-blue-700"
+                              : "text-pink-700";
+                          const isDone = r.status === "done" || r.status === "completed";
+                          return (
+                            <li key={r.id}>
+                              <button
+                                onClick={() => setSelectedRelated({ item: r, sessionTitle: s.title, keyPoint: r.title })}
+                                className="w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-lg hover:bg-accent/10 transition-colors"
+                              >
+                                <Icon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${tone}`} />
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-sm text-foreground ${isDone ? "line-through opacity-60" : ""}`}>{r.title}</p>
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">
+                                    <span className="capitalize">{r.kind === "email_reminder" ? "email reminder" : r.kind === "contact_reminder" ? "contact reminder" : "task"}</span>
+                                    <span className="capitalize">{r.status.replace(/_/g, " ")}</span>
+                                    {r.due_date && <span>· due {format(parseISO(r.due_date), "MMM d")}</span>}
+                                  </div>
+                                  {r.description && (
+                                    <p className="text-[12px] text-muted-foreground mt-1 line-clamp-2">{r.description}</p>
+                                  )}
+                                </div>
+                              </button>
+                            </li>
+                          );
+                        };
+                        return (
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                              <CheckSquare className="w-3 h-3 text-emerald-600" /> Tasks & follow-ups
+                              <span className="ml-1 text-[10px] font-normal text-muted-foreground/70">
+                                {open.length} open{done.length ? ` · ${done.length} done` : ""}
+                              </span>
+                            </p>
+                            <ul className="space-y-0.5 rounded-xl border bg-background/60 py-1">
+                              {open.map(renderItem)}
+                              {done.map(renderItem)}
+                            </ul>
+                          </div>
+                        );
+                      })()}
                       {s.key_points && s.key_points.length > 0 && (
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
