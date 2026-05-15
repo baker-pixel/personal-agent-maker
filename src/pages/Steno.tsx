@@ -50,6 +50,7 @@ export default function Steno() {
   const [saving, setSaving] = useState(false);
   const [prepOpen, setPrepOpen] = useState(false);
   const [prepLoading, setPrepLoading] = useState(false);
+  const [lastMeetingExpanded, setLastMeetingExpanded] = useState(false);
   const [prepAttendees, setPrepAttendees] = useState("");
   const [prepTopic, setPrepTopic] = useState("");
   const [prepData, setPrepData] = useState<{
