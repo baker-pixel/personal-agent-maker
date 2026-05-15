@@ -474,22 +474,29 @@ export default function Steno() {
                       <History className="w-3.5 h-3.5" /> Last meeting
                     </h3>
                     {prepData.lastMeeting ? (
-                      <div className="rounded-lg border bg-card p-3 space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setLastMeetingExpanded((v) => !v)}
+                        className="w-full text-left rounded-lg border bg-card p-3 space-y-1.5 hover:bg-muted/40 transition-colors"
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-medium text-sm">{prepData.lastMeeting.title}</p>
                           <span className="text-[10px] text-muted-foreground whitespace-nowrap">{prepData.lastMeeting.session_date}</span>
                         </div>
                         {prepData.lastMeeting.summary && (
-                          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4">{prepData.lastMeeting.summary}</p>
+                          <p className={`text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap ${lastMeetingExpanded ? "" : "line-clamp-4"}`}>{prepData.lastMeeting.summary}</p>
                         )}
                         {prepData.lastMeeting.key_points?.length > 0 && (
                           <ul className="text-xs space-y-0.5 mt-2">
-                            {prepData.lastMeeting.key_points.slice(0, 4).map((k: string, i: number) => (
+                            {(lastMeetingExpanded ? prepData.lastMeeting.key_points : prepData.lastMeeting.key_points.slice(0, 4)).map((k: string, i: number) => (
                               <li key={i} className="flex gap-1.5"><span className="text-accent">•</span><span className="flex-1">{k}</span></li>
                             ))}
                           </ul>
                         )}
-                      </div>
+                        <span className="text-[10px] text-accent font-medium inline-block pt-1">
+                          {lastMeetingExpanded ? "Show less" : "Show more"}
+                        </span>
+                      </button>
                     ) : (
                       <p className="text-xs text-muted-foreground italic">No prior sessions found.</p>
                     )}
