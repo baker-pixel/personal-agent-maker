@@ -84,7 +84,7 @@ export default function Investors() {
             <Sparkles className="w-3.5 h-3.5" />
             Investor relations
           </motion.div>
-          <motion.h1 variants={fadeUp} custom={1} className="font-display text-4xl md:text-6xl font-semibold tracking-tight mb-6">
+          <motion.h1 variants={fadeUp} custom={1} className="font-body text-4xl md:text-6xl font-semibold tracking-tight mb-6">
             Building the agentic workforce for every small business.
           </motion.h1>
           <motion.p variants={fadeUp} custom={2} className="text-muted-foreground text-base md:text-lg mb-8">
@@ -117,7 +117,7 @@ export default function Investors() {
               transition={{ delay: i * 0.06, duration: 0.4 }}
               className="rounded-2xl border border-border bg-card p-5 md:p-6"
             >
-              <div className="font-display text-2xl md:text-4xl font-semibold text-foreground">{s.value}</div>
+              <div className="font-body text-2xl md:text-4xl font-semibold text-foreground">{s.value}</div>
               <div className="text-xs md:text-sm font-medium text-foreground/80 mt-2">{s.label}</div>
               <div className="text-xs text-muted-foreground mt-1">{s.sub}</div>
             </motion.div>
@@ -134,7 +134,7 @@ export default function Investors() {
             </div>
             <div>
               <div className="text-xs font-medium uppercase tracking-wider text-accent mb-2">Zero setup</div>
-              <h2 className="font-display text-2xl md:text-4xl font-semibold tracking-tight mb-3">
+              <h2 className="font-body text-2xl md:text-4xl font-semibold tracking-tight mb-3">
                 Out-of-the-box. No code, no IT, no implementation team.
               </h2>
               <p className="text-muted-foreground text-sm md:text-base max-w-2xl">
@@ -163,7 +163,7 @@ export default function Investors() {
       {/* Pillars */}
       <section className="container px-5 pb-16 md:pb-24">
         <div className="max-w-2xl mb-10">
-          <h2 className="font-display text-3xl md:text-4xl font-semibold tracking-tight mb-3">Why Normy wins</h2>
+          <h2 className="font-body text-3xl md:text-4xl font-semibold tracking-tight mb-3">Why Normy wins</h2>
           <p className="text-muted-foreground">Four structural advantages that compound over time.</p>
         </div>
         <div className="grid md:grid-cols-2 gap-4 md:gap-6">
@@ -181,7 +181,7 @@ export default function Investors() {
                 <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center mb-4">
                   <Icon className="w-5 h-5" />
                 </div>
-                <h3 className="font-display text-lg font-semibold mb-2">{p.title}</h3>
+                <h3 className="font-body text-lg font-semibold mb-2">{p.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{p.body}</p>
               </motion.div>
             );
@@ -196,7 +196,7 @@ export default function Investors() {
             <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center">
               <TrendingUp className="w-5 h-5" />
             </div>
-            <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-tight">Traction & product</h2>
+            <h2 className="font-body text-2xl md:text-3xl font-semibold tracking-tight">Traction & product</h2>
           </div>
           <ul className="space-y-3">
             {traction.map((t) => (
@@ -216,7 +216,7 @@ export default function Investors() {
             <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center mb-4">
               <Users className="w-5 h-5" />
             </div>
-            <h3 className="font-display text-xl font-semibold mb-2">The vision</h3>
+            <h3 className="font-body text-xl font-semibold mb-2">The vision</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
               Every small business will have a full back-office team of AI agents within five years. Normy is building that team — one trusted department at a time, with humans always in the loop.
             </p>
@@ -225,7 +225,7 @@ export default function Investors() {
             <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center mb-4">
               <Mail className="w-5 h-5" />
             </div>
-            <h3 className="font-display text-xl font-semibold mb-2">Get in touch</h3>
+            <h3 className="font-body text-xl font-semibold mb-2">Get in touch</h3>
             <p className="text-sm text-muted-foreground leading-relaxed mb-4">
               We're selectively raising from operators and funds who understand SMB GTM and applied AI. Reach out for the deck, financial model, or a product walkthrough.
             </p>
@@ -246,7 +246,7 @@ export default function Investors() {
             <div className="w-6 h-6 rounded bg-accent flex items-center justify-center">
               <Sparkles className="w-3 h-3 text-accent-foreground" />
             </div>
-            <span className="font-display font-semibold text-foreground">Normy Agent</span>
+            <span className="font-body font-semibold text-foreground">Normy Agent</span>
           </div>
           <div className="flex items-center gap-4 text-xs md:text-sm">
             <a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a>
