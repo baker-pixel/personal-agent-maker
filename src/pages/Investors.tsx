@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Mail, TrendingUp, Users, Brain, Building2, Sparkles, Target, Zap, Rocket, Check } from "lucide-react";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+import { ArrowRight, Mail, TrendingUp, Users, Brain, Building2, Sparkles, Target, Zap, Rocket, Check, HelpCircle } from "lucide-react";
 import normyLogo from "@/assets/normy-logo.png";
 
 const fadeUp = {
@@ -49,6 +50,34 @@ const traction = [
   "Multi-channel interface: web, mobile PWA, voice, and SMS",
   "Proactive AI — daily briefings, lead detection, follow-up tracking, EOD wrap-ups",
   "Built on a scalable serverless backend with full RLS isolation per tenant",
+];
+
+const faqs = [
+  {
+    question: "Who is Normy's target customer?",
+    answer:
+      "Small business owners and solopreneurs who want executive-level support but can't afford a full-time assistant or IT team. Our sweet spot is 1–20 person companies in professional services, consulting, trades, and creative agencies — owners who live in Gmail and Google Calendar but don't have time to learn complex software.",
+  },
+  {
+    question: "What does the product roadmap look like?",
+    answer:
+      "Admin is live today with email triage, calendar management, contact intelligence, task extraction, and daily briefings. Next on the roadmap: Sales (lead scoring, pipeline nudges, follow-up automation), Operations (vendor management, inventory alerts), Finance (invoice tracking, expense categorization), and Legal (contract reminders, compliance checks). Each new department unlocks a new revenue stream per customer at near-zero incremental CAC.",
+  },
+  {
+    question: "Why does Normy's approach beat tech-first agents?",
+    answer:
+      "Most AI tools are built by engineers for engineers — they assume you know how to prompt, configure workflows, and integrate APIs. Normy was built by founders who couldn't code. That means zero setup, trust-based delegation (draft-first, approve-second), and an interface that feels like texting a human assistant rather than programming a robot. The result: a non-technical owner can deploy Normy in 60 seconds and see value on day one.",
+  },
+  {
+    question: "How does Normy build a competitive moat?",
+    answer:
+      "Every approved action teaches the agent your voice, your VIPs, your priorities, and your preferences. The more a customer uses Normy, the better it gets — and the harder it becomes to switch. This compounding data moat, combined with department-by-department expansion, creates high switching costs and strong lifetime value.",
+  },
+  {
+    question: "What is the go-to-market strategy?",
+    answer:
+      "Direct-to-SMB via organic content, founder networks, and referral loops. Our founding pricing at $20/month per agent per department is designed to be a no-brainer for any business owner who values their time. As customers expand into additional departments, revenue per account grows organically without additional acquisition spend.",
+  },
 ];
 
 export default function Investors() {
@@ -212,6 +241,31 @@ export default function Investors() {
               </li>
             ))}
           </ul>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="container px-5 pb-16 md:pb-24">
+        <div className="max-w-2xl mb-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 text-accent text-xs font-medium mb-4">
+            <HelpCircle className="w-3.5 h-3.5" />
+            Common questions
+          </div>
+          <h2 className="font-body text-3xl md:text-4xl font-semibold tracking-tight">Investor FAQ</h2>
+        </div>
+        <div className="max-w-3xl">
+          <Accordion type="single" collapsible className="w-full">
+            {faqs.map((faq, i) => (
+              <AccordionItem key={i} value={`item-${i}`} className="border-b border-border">
+                <AccordionTrigger className="text-left text-sm md:text-base font-semibold py-5 hover:no-underline">
+                  {faq.question}
+                </AccordionTrigger>
+                <AccordionContent className="text-sm text-muted-foreground leading-relaxed pb-5">
+                  {faq.answer}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         </div>
       </section>
 
