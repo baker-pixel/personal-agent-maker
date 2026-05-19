@@ -145,7 +145,7 @@ export default function Investors() {
           </motion.p>
           <motion.div variants={fadeUp} custom={3} className="flex flex-wrap gap-3">
             <Button
-              onClick={() => (window.location.href = "mailto:invest@normyagent.com?subject=Normy%20%E2%80%94%20Investor%20inquiry")}
+              onClick={() => navigate("/investors/contact")}
               size="lg"
               className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl"
             >
