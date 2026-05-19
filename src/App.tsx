@@ -36,6 +36,7 @@ import InstallBanner from "./components/InstallBanner";
 import NotFound from "./pages/NotFound";
 import Pricing from "./pages/Pricing";
 import Investors from "./pages/Investors";
+import InvestorContact from "./pages/InvestorContact";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 
