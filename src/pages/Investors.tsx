@@ -80,8 +80,21 @@ const faqs = [
   },
   {
     question: "How does Normy keep customer data private and secure?",
-    answer:
-      "Every customer's data lives in its own locked room. We use row-level security (RLS) at the database level, which means a query can only ever return data that belongs to the logged-in user — even if a bug or attacker tries to request someone else's records, the database itself blocks it. Google Workspace permissions are read-only and scoped (we never ask for deletion rights), tokens are encrypted at rest, and all traffic is over HTTPS. We do not train AI models on customer data, and we do not share data across tenants.",
+    answer: (
+      <>
+        Every customer's data lives in its own locked room. We use row-level security (RLS) at the database level, which means a query can only ever return data that belongs to the logged-in user — even if a bug or attacker tries to request someone else's records, the database itself blocks it. Google Workspace permissions are read-only and scoped (we never ask for deletion rights), tokens are encrypted at rest, and all traffic is over HTTPS. We do not train AI models on customer data, and we do not share data across tenants.
+        <div className="mt-4">
+          <a
+            href="/normy-security-privacy.pdf"
+            download
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-accent-foreground hover:bg-accent/90 text-sm font-medium transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Download security &amp; privacy one-pager (PDF)
+          </a>
+        </div>
+      </>
+    ),
   },
 ];
 
