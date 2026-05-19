@@ -33,8 +33,8 @@ const pillars = [
   },
   {
     icon: Target,
-    title: "Built for SMBs",
-    body: "Enterprise AI assistants are priced for Fortune 500. We've built the same caliber of intelligence at a price point a 10-person business can adopt on day one.",
+    title: "Built by non-technical entrepreneurs, for non-technical entrepreneurs",
+    body: "Most AI is designed by engineers, for engineers. Normy was built by founders who couldn't code — for owners who don't have an IT department. Same caliber of intelligence, zero technical complexity.",
   },
   {
     icon: Zap,
