@@ -225,7 +225,7 @@ export default function Investors() {
             <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center mb-4">
               <Mail className="w-5 h-5" />
             </div>
-            <h3 className="font-display text-xl font-semibold mb-2">Get in touch</h3>
+            <h3 className="font-body text-xl font-semibold mb-2">Get in touch</h3>
             <p className="text-sm text-muted-foreground leading-relaxed mb-4">
               We're selectively raising from operators and funds who understand SMB GTM and applied AI. Reach out for the deck, financial model, or a product walkthrough.
             </p>
