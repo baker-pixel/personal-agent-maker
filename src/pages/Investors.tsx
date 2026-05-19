@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { ArrowRight, Mail, TrendingUp, Users, Brain, Building2, Sparkles, Target, Zap, Rocket, Check, HelpCircle } from "lucide-react";
 import normyLogo from "@/assets/normy-logo.png";
 
