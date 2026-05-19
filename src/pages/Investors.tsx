@@ -84,7 +84,7 @@ export default function Investors() {
             <Sparkles className="w-3.5 h-3.5" />
             Investor relations
           </motion.div>
-          <motion.h1 variants={fadeUp} custom={1} className="font-display text-4xl md:text-6xl font-semibold tracking-tight mb-6">
+          <motion.h1 variants={fadeUp} custom={1} className="font-body text-4xl md:text-6xl font-semibold tracking-tight mb-6">
             Building the agentic workforce for every small business.
           </motion.h1>
           <motion.p variants={fadeUp} custom={2} className="text-muted-foreground text-base md:text-lg mb-8">
