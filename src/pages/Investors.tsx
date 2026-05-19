@@ -196,7 +196,7 @@ export default function Investors() {
             <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center">
               <TrendingUp className="w-5 h-5" />
             </div>
-            <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-tight">Traction & product</h2>
+            <h2 className="font-body text-2xl md:text-3xl font-semibold tracking-tight">Traction & product</h2>
           </div>
           <ul className="space-y-3">
             {traction.map((t) => (
