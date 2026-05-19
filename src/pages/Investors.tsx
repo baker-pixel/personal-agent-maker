@@ -244,6 +244,31 @@ export default function Investors() {
         </div>
       </section>
 
+      {/* FAQ */}
+      <section className="container px-5 pb-16 md:pb-24">
+        <div className="max-w-2xl mb-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 text-accent text-xs font-medium mb-4">
+            <HelpCircle className="w-3.5 h-3.5" />
+            Common questions
+          </div>
+          <h2 className="font-body text-3xl md:text-4xl font-semibold tracking-tight">Investor FAQ</h2>
+        </div>
+        <div className="max-w-3xl">
+          <Accordion type="single" collapsible className="w-full">
+            {faqs.map((faq, i) => (
+              <AccordionItem key={i} value={`item-${i}`} className="border-b border-border">
+                <AccordionTrigger className="text-left text-sm md:text-base font-semibold py-5 hover:no-underline">
+                  {faq.question}
+                </AccordionTrigger>
+                <AccordionContent className="text-sm text-muted-foreground leading-relaxed pb-5">
+                  {faq.answer}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      </section>
+
       {/* Team / vision */}
       <section className="container px-5 pb-16 md:pb-24">
         <div className="grid md:grid-cols-2 gap-6">
