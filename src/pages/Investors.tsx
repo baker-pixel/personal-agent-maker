@@ -163,7 +163,7 @@ export default function Investors() {
       {/* Pillars */}
       <section className="container px-5 pb-16 md:pb-24">
         <div className="max-w-2xl mb-10">
-          <h2 className="font-display text-3xl md:text-4xl font-semibold tracking-tight mb-3">Why Normy wins</h2>
+          <h2 className="font-body text-3xl md:text-4xl font-semibold tracking-tight mb-3">Why Normy wins</h2>
           <p className="text-muted-foreground">Four structural advantages that compound over time.</p>
         </div>
         <div className="grid md:grid-cols-2 gap-4 md:gap-6">
