@@ -134,7 +134,7 @@ export default function Investors() {
             </div>
             <div>
               <div className="text-xs font-medium uppercase tracking-wider text-accent mb-2">Zero setup</div>
-              <h2 className="font-display text-2xl md:text-4xl font-semibold tracking-tight mb-3">
+              <h2 className="font-body text-2xl md:text-4xl font-semibold tracking-tight mb-3">
                 Out-of-the-box. No code, no IT, no implementation team.
               </h2>
               <p className="text-muted-foreground text-sm md:text-base max-w-2xl">
