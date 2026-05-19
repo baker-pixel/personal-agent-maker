@@ -104,7 +104,8 @@ const App = () => {
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/pricing" element={<Pricing />} />
-              <Route path="/investors" element={<Investors />} />
+             <Route path="/investors" element={<Investors />} />
+             <Route path="/investors/contact" element={<InvestorContact />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/onboarding" element={<Onboarding />} />
