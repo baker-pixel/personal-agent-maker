@@ -85,10 +85,16 @@ export default function Investors() {
             Investor relations
           </motion.div>
           <motion.h1 variants={fadeUp} custom={1} className="font-body text-4xl md:text-6xl font-semibold tracking-tight mb-6">
-            Building the agentic workforce for every small business.
+            AI has so much potential to help your small business.
           </motion.h1>
-          <motion.p variants={fadeUp} custom={2} className="text-muted-foreground text-base md:text-lg mb-8">
-            Normy is the first AI agent designed around the behavior of a trusted executive assistant — not a chatbot. We're starting with Admin and expanding department by department, turning every SMB into a 10x team.
+          <motion.p variants={fadeUp} custom={2} className="text-foreground text-lg md:text-xl font-medium mb-4">
+            But AI is being built by techies — for techies.
+          </motion.p>
+          <motion.p variants={fadeUp} custom={3} className="text-accent text-lg md:text-xl font-semibold mb-6">
+            Normy Agent was built for everyone else.
+          </motion.p>
+          <motion.p variants={fadeUp} custom={4} className="text-muted-foreground text-base md:text-lg mb-8">
+            Built by non-technical entrepreneurs, for non-technical entrepreneurs. We started with Admin and are expanding department by department, turning every SMB into a 10x team — no code, no IT, no implementation required.
           </motion.p>
           <motion.div variants={fadeUp} custom={3} className="flex flex-wrap gap-3">
             <Button
