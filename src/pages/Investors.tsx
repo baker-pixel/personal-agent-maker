@@ -117,7 +117,7 @@ export default function Investors() {
               transition={{ delay: i * 0.06, duration: 0.4 }}
               className="rounded-2xl border border-border bg-card p-5 md:p-6"
             >
-              <div className="font-display text-2xl md:text-4xl font-semibold text-foreground">{s.value}</div>
+              <div className="font-body text-2xl md:text-4xl font-semibold text-foreground">{s.value}</div>
               <div className="text-xs md:text-sm font-medium text-foreground/80 mt-2">{s.label}</div>
               <div className="text-xs text-muted-foreground mt-1">{s.sub}</div>
             </motion.div>
