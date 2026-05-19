@@ -78,6 +78,11 @@ const faqs = [
     answer:
       "Direct-to-SMB via organic content, founder networks, and referral loops. Our founding pricing at $20/month per agent per department is designed to be a no-brainer for any business owner who values their time. As customers expand into additional departments, revenue per account grows organically without additional acquisition spend.",
   },
+  {
+    question: "How does Normy keep customer data private and secure?",
+    answer:
+      "Every customer's data lives in its own locked room. We use row-level security (RLS) at the database level, which means a query can only ever return data that belongs to the logged-in user — even if a bug or attacker tries to request someone else's records, the database itself blocks it. Google Workspace permissions are read-only and scoped (we never ask for deletion rights), tokens are encrypted at rest, and all traffic is over HTTPS. We do not train AI models on customer data, and we do not share data across tenants.",
+  },
 ];
 
 export default function Investors() {
