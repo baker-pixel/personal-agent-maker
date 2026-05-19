@@ -51,6 +51,34 @@ const traction = [
   "Built on a scalable serverless backend with full RLS isolation per tenant",
 ];
 
+const faqs = [
+  {
+    question: "Who is Normy's target customer?",
+    answer:
+      "Small business owners and solopreneurs who want executive-level support but can't afford a full-time assistant or IT team. Our sweet spot is 1–20 person companies in professional services, consulting, trades, and creative agencies — owners who live in Gmail and Google Calendar but don't have time to learn complex software.",
+  },
+  {
+    question: "What does the product roadmap look like?",
+    answer:
+      "Admin is live today with email triage, calendar management, contact intelligence, task extraction, and daily briefings. Next on the roadmap: Sales (lead scoring, pipeline nudges, follow-up automation), Operations (vendor management, inventory alerts), Finance (invoice tracking, expense categorization), and Legal (contract reminders, compliance checks). Each new department unlocks a new revenue stream per customer at near-zero incremental CAC.",
+  },
+  {
+    question: "Why does Normy's approach beat tech-first agents?",
+    answer:
+      "Most AI tools are built by engineers for engineers — they assume you know how to prompt, configure workflows, and integrate APIs. Normy was built by founders who couldn't code. That means zero setup, trust-based delegation (draft-first, approve-second), and an interface that feels like texting a human assistant rather than programming a robot. The result: a non-technical owner can deploy Normy in 60 seconds and see value on day one.",
+  },
+  {
+    question: "How does Normy build a competitive moat?",
+    answer:
+      "Every approved action teaches the agent your voice, your VIPs, your priorities, and your preferences. The more a customer uses Normy, the better it gets — and the harder it becomes to switch. This compounding data moat, combined with department-by-department expansion, creates high switching costs and strong lifetime value.",
+  },
+  {
+    question: "What is the go-to-market strategy?",
+    answer:
+      "Direct-to-SMB via organic content, founder networks, and referral loops. Our founding pricing at $20/month per agent per department is designed to be a no-brainer for any business owner who values their time. As customers expand into additional departments, revenue per account grows organically without additional acquisition spend.",
+  },
+];
+
 export default function Investors() {
   const navigate = useNavigate();
 
