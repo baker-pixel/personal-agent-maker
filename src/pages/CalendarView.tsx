@@ -5,7 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, ChevronLeft, ChevronRight, X, Send, Mic, MicOff, Sparkles, Loader2, Calendar, RefreshCw, ExternalLink } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, X, Send, Mic, MicOff, Sparkles, Loader2, Calendar, RefreshCw, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
 
 import { useAgent } from "@/contexts/AgentContext";
@@ -63,9 +64,14 @@ function formatDate(iso: string): string {
   }
 }
 
+// Always use LOCAL date so IST/non-UTC users see events on the correct day
+function toLocalDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function getDateKey(iso: string): string {
   try {
-    return new Date(iso).toISOString().slice(0, 10);
+    return toLocalDateStr(new Date(iso));
   } catch {
     return iso;
   }
@@ -89,9 +95,25 @@ export default function CalendarView() {
   const [needsReconnect, setNeedsReconnect] = useState(false);
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [weekOffset, setWeekOffset] = useState(0);   // 0 = current week, +1 = next, -1 = prev
+  const [monthOffset, setMonthOffset] = useState(0); // 0 = current month
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [agentSheetOpen, setAgentSheetOpen] = useState(false);
   const [agentInput, setAgentInput] = useState("");
+  const [createSheetOpen, setCreateSheetOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [notifyAttendees, setNotifyAttendees] = useState(true);
+  const [cancelMessage, setCancelMessage] = useState("");
+  const [createForm, setCreateForm] = useState({
+    summary: "",
+    date: new Date().toISOString().slice(0, 10),
+    startTime: "09:00",
+    endTime: "10:00",
+    location: "",
+    allDay: false,
+  });
   const annieChat = useAnnieChat(agentName);
   const speech = useSpeechRecognition({
     onResult: (text) => setAgentInput((prev) => (prev ? prev + " " : "") + text),
@@ -140,16 +162,116 @@ export default function CalendarView() {
     }
   }, []);
 
+  const createEvent = useCallback(async () => {
+    if (!createForm.summary.trim()) return;
+    setCreating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const start = createForm.allDay
+        ? createForm.date
+        : `${createForm.date}T${createForm.startTime}:00`;
+      const end = createForm.allDay
+        ? undefined
+        : `${createForm.date}T${createForm.endTime}:00`;
+
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-event-create`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            summary: createForm.summary.trim(),
+            location: createForm.location.trim() || undefined,
+            start,
+            end,
+            allDay: createForm.allDay,
+          }),
+        }
+      );
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error || "Failed to create event");
+
+      setCreateSheetOpen(false);
+      setCreateForm({ summary: "", date: new Date().toISOString().slice(0, 10), startTime: "09:00", endTime: "10:00", location: "", allDay: false });
+      fetchEvents();
+    } catch (err: any) {
+      console.error("Create event error:", err);
+    } finally {
+      setCreating(false);
+    }
+  }, [createForm, fetchEvents]);
+
+  const cancelEvent = useCallback(async () => {
+    if (!selectedEvent) return;
+    setCancelling(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-event-delete`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ eventId: selectedEvent.id, notifyAttendees, message: cancelMessage.trim() || undefined }),
+        }
+      );
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error || "Failed to cancel event");
+      setEvents((prev) => prev.filter((e) => e.id !== selectedEvent.id));
+      setSelectedEvent(null);
+      setConfirmCancel(false);
+      setCancelMessage("");
+    } catch (err: any) {
+      console.error("Cancel event error:", err);
+    } finally {
+      setCancelling(false);
+    }
+  }, [selectedEvent, notifyAttendees, cancelMessage]);
+
   useEffect(() => {
     if (calendarConnected) fetchEvents();
   }, [calendarConnected, fetchEvents]);
 
-  // Group events by date
-  const today = new Date().toISOString().slice(0, 10);
+  useEffect(() => {
+    if (!calendarConnected) return;
+    let lastFetchTs = Date.now();
+    const maybeRefresh = () => {
+      if (Date.now() - lastFetchTs > 30_000) {
+        lastFetchTs = Date.now();
+        fetchEvents();
+      }
+    };
+    const onVisibility = () => { if (!document.hidden) maybeRefresh(); };
+    window.addEventListener("focus", maybeRefresh);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", maybeRefresh);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [calendarConnected, fetchEvents]);
+
+  const now = new Date();
+  // Use LOCAL date string everywhere — fixes off-by-one for non-UTC timezones
+  const today = toLocalDateStr(now);
   const todayEvents = events.filter((e) => getDateKey(e.start) === today);
   const upcomingEvents = events.filter((e) => getDateKey(e.start) > today);
 
-  // Group upcoming by date
+  // Group events by date key (includes today + upcoming for selected day filtering)
+  const eventsByDate = events.reduce<Record<string, CalendarEvent[]>>((acc, e) => {
+    const key = getDateKey(e.start);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(e);
+    return acc;
+  }, {});
+
   const upcomingByDate = upcomingEvents.reduce<Record<string, CalendarEvent[]>>((acc, e) => {
     const key = getDateKey(e.start);
     if (!acc[key]) acc[key] = [];
@@ -157,14 +279,15 @@ export default function CalendarView() {
     return acc;
   }, {});
 
-  const now = new Date();
-  const currentMonth = now.toLocaleDateString([], { month: "long", year: "numeric" });
-
-  // Week header
-  const startOfWeek = new Date(now);
+  // Week navigation — offset by weekOffset weeks from today's Monday
   const dayOfWeek = now.getDay();
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  startOfWeek.setDate(now.getDate() + mondayOffset);
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() + mondayOffset + weekOffset * 7);
+
+  // Month navigation
+  const displayMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+  const currentMonth = displayMonth.toLocaleDateString([], { month: "long", year: "numeric" });
 
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const weekDates = Array.from({ length: 7 }, (_, i) => {
@@ -214,8 +337,8 @@ export default function CalendarView() {
   // Not connected state
   if (!calendarConnected) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+      <div className="min-h-screen bg-background flex flex-col pt-[var(--header-h)]">
+        <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
           <div className="container flex items-center justify-between h-14 px-4">
             <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <ArrowLeft className="w-4 h-4" />
@@ -242,8 +365,8 @@ export default function CalendarView() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+    <div className="min-h-screen bg-background flex flex-col pt-[var(--header-h)]">
+      <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
         <div className="container flex items-center justify-between h-14 px-4">
           <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
@@ -253,6 +376,9 @@ export default function CalendarView() {
           <div className="flex items-center gap-2">
             <button onClick={fetchEvents} disabled={loading} className="p-2 text-muted-foreground hover:text-foreground transition-colors">
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            </button>
+            <button onClick={() => setCreateSheetOpen(true)} className="p-2 text-muted-foreground hover:text-foreground transition-colors">
+              <Plus className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -478,7 +604,7 @@ export default function CalendarView() {
       {/* Event Modal */}
       <AnimatePresence>
         {selectedEvent && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-foreground/40 flex items-end sm:items-center justify-center" onClick={() => setSelectedEvent(null)}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-foreground/40 flex items-end sm:items-center justify-center" onClick={() => { setSelectedEvent(null); setConfirmCancel(false); setNotifyAttendees(true); setCancelMessage(""); }}>
             <motion.div
               initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
@@ -487,7 +613,7 @@ export default function CalendarView() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="w-3 h-3 rounded-full mt-1 bg-accent" />
-                <button onClick={() => setSelectedEvent(null)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+                <button onClick={() => { setSelectedEvent(null); setConfirmCancel(false); setNotifyAttendees(true); setCancelMessage(""); }} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
               </div>
               <h2 className="font-display text-xl font-semibold mb-1">{selectedEvent.summary}</h2>
               <p className="text-sm text-muted-foreground mb-1">
@@ -522,18 +648,64 @@ export default function CalendarView() {
                 </div>
               )}
 
-              <div className="flex gap-2">
-                {selectedEvent.htmlLink && (
-                  <Button variant="outline" className="flex-1" asChild>
-                    <a href={selectedEvent.htmlLink} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="w-4 h-4 mr-2" /> Open in Calendar
-                    </a>
+              {confirmCancel ? (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-destructive">Cancel this event?</p>
+                  <textarea
+                    value={cancelMessage}
+                    onChange={(e) => setCancelMessage(e.target.value)}
+                    placeholder="Add a message to attendees (optional)"
+                    rows={3}
+                    disabled={cancelling}
+                    className="w-full text-sm bg-background border border-border/60 rounded-xl px-3 py-2 resize-none placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-destructive/40 disabled:opacity-50"
+                  />
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={notifyAttendees}
+                      onChange={(e) => setNotifyAttendees(e.target.checked)}
+                      className="w-4 h-4 rounded border-border"
+                    />
+                    Notify attendees
+                  </label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="destructive"
+                      className="flex-1"
+                      disabled={cancelling}
+                      onClick={cancelEvent}
+                    >
+                      {cancelling ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Cancelling…</> : "Yes, Cancel Event"}
+                    </Button>
+                    <Button variant="outline" onClick={() => { setConfirmCancel(false); setCancelMessage(""); }} disabled={cancelling}>
+                      Never mind
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    {selectedEvent.htmlLink && (
+                      <Button variant="outline" className="flex-1" asChild>
+                        <a href={selectedEvent.htmlLink} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="w-4 h-4 mr-2" /> Open in Calendar
+                        </a>
+                      </Button>
+                    )}
+                    <Button onClick={() => { setSelectedEvent(null); setAgentSheetOpen(true); }} className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90">
+                      <Sparkles className="w-4 h-4 mr-2" /> Ask {agentName}
+                    </Button>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => setConfirmCancel(true)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Cancel Event
                   </Button>
-                )}
-                <Button onClick={() => { setSelectedEvent(null); setAgentSheetOpen(true); }} className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90">
-                  <Sparkles className="w-4 h-4 mr-2" /> Ask {agentName}
-                </Button>
-              </div>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}
@@ -591,6 +763,59 @@ export default function CalendarView() {
           <span className="font-display font-bold text-lg">{agentName.charAt(0)}</span>
         </button>
       )}
+
+      {/* Create Event Sheet */}
+      <AnimatePresence>
+        {createSheetOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-foreground/40 flex items-end sm:items-center justify-center" onClick={() => setCreateSheetOpen(false)}>
+            <motion.div
+              initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-background w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 rounded-full bg-border mx-auto mb-4 sm:hidden" />
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="font-display font-semibold text-lg">New Event</h2>
+                <button onClick={() => setCreateSheetOpen(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="evt-title" className="text-xs text-muted-foreground mb-1.5 block">Title *</Label>
+                  <Input id="evt-title" placeholder="Event title" value={createForm.summary} onChange={(e) => setCreateForm((p) => ({ ...p, summary: e.target.value }))} />
+                </div>
+                <div>
+                  <Label htmlFor="evt-date" className="text-xs text-muted-foreground mb-1.5 block">Date</Label>
+                  <Input id="evt-date" type="date" value={createForm.date} onChange={(e) => setCreateForm((p) => ({ ...p, date: e.target.value }))} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="evt-allday" checked={createForm.allDay} onChange={(e) => setCreateForm((p) => ({ ...p, allDay: e.target.checked }))} className="w-4 h-4 rounded border-border" />
+                  <Label htmlFor="evt-allday" className="text-sm cursor-pointer">All day</Label>
+                </div>
+                {!createForm.allDay && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="evt-start" className="text-xs text-muted-foreground mb-1.5 block">Start time</Label>
+                      <Input id="evt-start" type="time" value={createForm.startTime} onChange={(e) => setCreateForm((p) => ({ ...p, startTime: e.target.value }))} />
+                    </div>
+                    <div>
+                      <Label htmlFor="evt-end" className="text-xs text-muted-foreground mb-1.5 block">End time</Label>
+                      <Input id="evt-end" type="time" value={createForm.endTime} onChange={(e) => setCreateForm((p) => ({ ...p, endTime: e.target.value }))} />
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <Label htmlFor="evt-loc" className="text-xs text-muted-foreground mb-1.5 block">Location</Label>
+                  <Input id="evt-loc" placeholder="Optional" value={createForm.location} onChange={(e) => setCreateForm((p) => ({ ...p, location: e.target.value }))} />
+                </div>
+                <Button onClick={createEvent} disabled={creating || !createForm.summary.trim()} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
+                  {creating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating…</> : "Create Event"}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

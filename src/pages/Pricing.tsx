@@ -205,7 +205,7 @@ export default function Pricing() {
           </div>
           <div className="flex items-center gap-1 md:gap-3">
             <Button onClick={() => navigate("/auth")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs md:text-sm px-2 md:px-3">Log In</Button>
-            <Button onClick={() => navigate("/onboarding")} variant="default" size="sm" className="text-xs md:text-sm px-2.5 md:px-3">Get Started <ArrowRight className="w-3.5 h-3.5 md:w-4 md:h-4 ml-1" /></Button>
+            <Button onClick={() => navigate("/auth")} variant="default" size="sm" className="text-xs md:text-sm px-2.5 md:px-3">Get Started <ArrowRight className="w-3.5 h-3.5 md:w-4 md:h-4 ml-1" /></Button>
           </div>
         </div>
       </nav>
@@ -276,7 +276,7 @@ export default function Pricing() {
                 <div className="p-6 pt-2 space-y-2">
                   {dept.available ? (
                     <>
-                      <Button onClick={() => navigate("/onboarding")} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
+                      <Button onClick={() => navigate("/auth")} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
                         {dept.cta} <ArrowRight className="w-4 h-4 ml-1" />
                       </Button>
                       <Button
@@ -411,7 +411,7 @@ export default function Pricing() {
             <motion.h2 variants={fadeUp} custom={0} className="font-display text-2xl md:text-5xl font-bold tracking-tight mb-5 md:mb-6">Ready to hire your AI team?</motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-muted-foreground text-base md:text-lg mb-8 md:mb-10">Start with the Admin Agent — set up in under 2 minutes. No credit card required.</motion.p>
             <motion.div variants={fadeUp} custom={2}>
-              <Button onClick={() => navigate("/onboarding")} size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 text-sm md:text-base px-6 md:px-8 py-5 md:py-6 rounded-xl shadow-lg shadow-accent/20 w-full sm:w-auto">
+              <Button onClick={() => navigate("/auth")} size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 text-sm md:text-base px-6 md:px-8 py-5 md:py-6 rounded-xl shadow-lg shadow-accent/20 w-full sm:w-auto">
                 Get Started <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </motion.div>

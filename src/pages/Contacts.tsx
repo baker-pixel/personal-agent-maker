@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, Search, Star, StarOff, Mail, Calendar as CalIcon, Users, Sparkles, Cake, Clock } from "lucide-react";
+import { Loader2, RefreshCw, Search, Star, StarOff, Mail, Calendar as CalIcon, Users, Sparkles, Cake, Clock, Trash2 } from "lucide-react";
 import { formatDistanceToNow, differenceInDays, format } from "date-fns";
 
 type Contact = {
@@ -91,6 +91,16 @@ export default function Contacts() {
     }
   };
 
+  const deleteContact = async () => {
+    if (!editing) return;
+    if (!confirm(`Remove ${editing.name} from your contacts?`)) return;
+    const { error } = await supabase.from("contacts").delete().eq("id", editing.id);
+    if (error) return toast.error("Failed to delete");
+    toast.success("Contact removed");
+    setEditing(null);
+    setContacts((prev) => prev.filter((c) => c.id !== editing.id));
+  };
+
   const saveEdit = async () => {
     if (!editing) return;
     const { error } = await supabase
@@ -137,7 +147,8 @@ export default function Contacts() {
     const birthdays = contacts.filter((c) => {
       if (!c.birthday) return false;
       const b = new Date(c.birthday);
-      const next = new Date(today.getFullYear(), b.getMonth(), b.getDate());
+      let next = new Date(today.getFullYear(), b.getMonth(), b.getDate());
+      if (next < today) next = new Date(today.getFullYear() + 1, b.getMonth(), b.getDate());
       const days = differenceInDays(next, today);
       return days >= 0 && days <= 14;
     }).slice(0, 3);
@@ -146,11 +157,11 @@ export default function Contacts() {
   }, [contacts]);
 
   return (
-    <div className="min-h-screen bg-background pt-[env(safe-area-inset-top)]">
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+    <div className="min-h-screen bg-background pt-[var(--header-h)]">
+      <div className="max-w-4xl mx-auto pl-4 pr-4 py-6 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-serif text-foreground flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-serif text-foreground flex items-center gap-2">
               <Users className="w-7 h-7 text-accent" /> Contacts
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
@@ -292,11 +303,11 @@ export default function Contacts() {
 
               <div><Label>Name</Label><Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
               <div><Label>Email</Label><Input value={editing.email || ""} disabled /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><Label>Company</Label><Input value={editing.company || ""} onChange={(e) => setEditing({ ...editing, company: e.target.value })} /></div>
                 <div><Label>Role</Label><Input value={editing.role || ""} onChange={(e) => setEditing({ ...editing, role: e.target.value })} /></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label className="flex items-center gap-1"><Cake className="w-3 h-3" /> Birthday</Label>
                   <Input type="date" value={editing.birthday || ""} onChange={(e) => setEditing({ ...editing, birthday: e.target.value })} />
@@ -310,7 +321,10 @@ export default function Contacts() {
               <p className="text-xs text-muted-foreground">{editing.interaction_count} interactions tracked</p>
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex-wrap gap-2">
+            <Button variant="ghost" size="sm" onClick={deleteContact} className="text-destructive hover:text-destructive mr-auto">
+              <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
+            </Button>
             <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
             <Button onClick={saveEdit}>Save</Button>
           </DialogFooter>

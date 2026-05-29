@@ -7,82 +7,69 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// --- Token helpers ---
-async function refreshIfNeeded(adminClient: any, tokenRow: any) {
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) return tokenRow.access_token;
-  if (!tokenRow.refresh_token) return null;
+const NYLAS_BASE = "https://api.us.nylas.com";
+
+function formatAddress(people: Array<{ name?: string; email: string }>): string {
+  if (!people?.length) return "";
+  return people.map(p => p.name ? `${p.name} <${p.email}>` : p.email).join(", ");
+}
+
+function unixToIso(ts: number): string {
+  return new Date(ts * 1000).toISOString();
+}
+
+function participantStatus(status: string): string {
+  const m: Record<string, string> = { yes: "accepted", no: "declined", maybe: "tentative", noreply: "needsAction" };
+  return m[status] ?? "needsAction";
+}
+
+// --- Nylas grant helpers ---
+async function getNylasGrant(adminClient: any, userId: string): Promise<{ grantId: string; email: string | null } | null> {
   try {
-    const response = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-        client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-        refresh_token: tokenRow.refresh_token,
-        grant_type: "refresh_token",
-      }),
-    });
-    const data = await response.json();
-    if (data.error) return null;
-    await adminClient
-      .from("google_oauth_tokens")
-      .update({
-        access_token: data.access_token,
-        token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", tokenRow.id);
-    return data.access_token;
+    const { data: grant, error } = await adminClient
+      .from("nylas_grants")
+      .select("grant_id, email")
+      .eq("user_id", userId)
+      .eq("provider", "google")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !grant) return null;
+    return { grantId: grant.grant_id, email: grant.email };
   } catch {
     return null;
   }
 }
 
-async function getValidToken(userId: string, provider: string) {
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
-  const { data: tokenRow, error } = await adminClient
-    .from("google_oauth_tokens")
-    .select("*")
+// Get ALL Nylas grants for a user (multi-account support)
+async function getAllNylasGrants(adminClient: any, userId: string): Promise<{ grantId: string; email: string }[]> {
+  const { data: rows, error } = await adminClient
+    .from("nylas_grants")
+    .select("grant_id, email")
     .eq("user_id", userId)
-    .eq("provider", provider)
-    .maybeSingle();
-  if (error || !tokenRow) return null;
-  return await refreshIfNeeded(adminClient, tokenRow);
-}
-
-// Get ALL Gmail tokens for a user (multi-account support)
-async function getAllGmailTokens(userId: string): Promise<{ token: string; email: string }[]> {
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
-  const { data: rows } = await adminClient
-    .from("google_oauth_tokens")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("provider", "gmail");
-  if (!rows || rows.length === 0) return [];
-  const results: { token: string; email: string }[] = [];
-  for (const row of rows) {
-    const t = await refreshIfNeeded(adminClient, row);
-    if (t) results.push({ token: t, email: row.email || "primary" });
+    .eq("provider", "google");
+  if (error) {
+    console.error("[chat] getAllNylasGrants error:", error.message ?? error);
+    return [];
   }
-  return results;
+  if (!rows?.length) return [];
+  return rows.map((r: any) => ({ grantId: r.grant_id, email: r.email || "primary" }));
 }
 
 // --- Gmail fetch with timeout ---
-// Returns { emails, error } so the caller can distinguish empty inbox from a failed fetch.
-async function fetchRecentEmails(accessToken: string, maxResults = 30, accountLabel = "") {
+async function fetchRecentEmails(grantId: string, nylasApiKey: string, maxResults = 30, accountLabel = "") {
   try {
     const ctrl = new AbortController();
     const timeoutId = setTimeout(() => ctrl.abort(), 10000);
+    const receivedAfter = Math.floor((Date.now() - 2 * 24 * 60 * 60 * 1000) / 1000);
+    const params = new URLSearchParams({
+      limit: String(maxResults),
+      in: "INBOX",
+      received_after: String(receivedAfter),
+    });
     const listRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=in:inbox newer_than:2d`,
-      { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
+      `${NYLAS_BASE}/v3/grants/${grantId}/messages?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${nylasApiKey}` }, signal: ctrl.signal }
     );
     if (!listRes.ok) {
       clearTimeout(timeoutId);
@@ -91,46 +78,34 @@ async function fetchRecentEmails(accessToken: string, maxResults = 30, accountLa
         emails: [],
         error: needsReauth
           ? `authentication expired (HTTP ${listRes.status}) — user needs to reconnect this account`
-          : `Gmail API returned ${listRes.status}`,
+          : `email service temporarily unavailable (${listRes.status})`,
         needsReauth,
         account: accountLabel,
       };
     }
     const listData = await listRes.json();
-    if (!listData.messages?.length) { clearTimeout(timeoutId); return { emails: [], error: null, needsReauth: false, account: accountLabel }; }
-
-    const emails = await Promise.all(
-      listData.messages.slice(0, maxResults).map(async (msg: { id: string }) => {
-        const msgRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-          { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
-        );
-        const msgData = await msgRes.json();
-        const headers = msgData.payload?.headers || [];
-        const getHeader = (name: string) =>
-          headers.find((h: { name: string }) => h.name.toLowerCase() === name.toLowerCase())?.value || "";
-
-        return {
-          id: msg.id,
-          from: getHeader("From"),
-          subject: getHeader("Subject"),
-          date: getHeader("Date"),
-          snippet: msgData.snippet,
-          isUnread: (msgData.labelIds || []).includes("UNREAD"),
-          account: accountLabel,
-        };
-      })
-    );
     clearTimeout(timeoutId);
+    const messages: any[] = listData.data || [];
+    if (!messages.length) return { emails: [], error: null, needsReauth: false, account: accountLabel };
+
+    const emails = messages.slice(0, maxResults).map((msg: any) => ({
+      id: msg.id,
+      from: formatAddress(msg.from || []),
+      subject: msg.subject || "",
+      date: msg.date ? new Date(msg.date * 1000).toUTCString() : "",
+      snippet: msg.snippet || "",
+      isUnread: msg.unread === true,
+      account: accountLabel,
+    }));
     return { emails, error: null, needsReauth: false, account: accountLabel };
   } catch (e) {
-    console.error("Gmail fetch error or timeout:", e);
+    console.error("Nylas fetch error or timeout:", e);
     return { emails: [], error: e instanceof Error ? e.message : "fetch failed", needsReauth: false, account: accountLabel };
   }
 }
 
 // --- Calendar fetch (multi-day for conflict detection) ---
-async function fetchEvents(accessToken: string, days = 7) {
+async function fetchEvents(grantId: string, nylasApiKey: string, days = 7) {
   try {
     const ctrl = new AbortController();
     const timeoutId = setTimeout(() => ctrl.abort(), 6000);
@@ -139,16 +114,15 @@ async function fetchEvents(accessToken: string, days = 7) {
     endDate.setDate(endDate.getDate() + days);
 
     const params = new URLSearchParams({
-      timeMin: now.toISOString(),
-      timeMax: endDate.toISOString(),
-      singleEvents: "true",
-      orderBy: "startTime",
-      maxResults: "50",
+      calendar_id: "primary",
+      start: String(Math.floor(now.getTime() / 1000)),
+      end: String(Math.floor(endDate.getTime() / 1000)),
+      limit: "50",
     });
 
     const calRes = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
-      { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal }
+      `${NYLAS_BASE}/v3/grants/${grantId}/events?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${nylasApiKey}` }, signal: ctrl.signal }
     );
     if (!calRes.ok) {
       clearTimeout(timeoutId);
@@ -157,7 +131,7 @@ async function fetchEvents(accessToken: string, days = 7) {
         events: [],
         error: needsReauth
           ? `authentication expired (HTTP ${calRes.status}) — user needs to reconnect calendar`
-          : `Calendar API returned ${calRes.status}`,
+          : `calendar service temporarily unavailable (${calRes.status})`,
         needsReauth,
       };
     }
@@ -165,18 +139,34 @@ async function fetchEvents(accessToken: string, days = 7) {
     clearTimeout(timeoutId);
     if (calData.error) return { events: [], error: calData.error.message || "calendar error", needsReauth: false };
 
-    const events = (calData.items || []).map((event: any) => ({
-      summary: event.summary || "(No title)",
-      start: event.start?.dateTime || event.start?.date,
-      end: event.end?.dateTime || event.end?.date,
-      attendees: (event.attendees || []).map((a: any) => ({
-        name: a.displayName || a.email,
-        email: a.email,
-        status: a.responseStatus,
-      })),
-      location: event.location || "",
-      conferenceLink: event.hangoutLink || "",
-    }));
+    const events = (calData.data || []).map((event: any) => {
+      const when = event.when || {};
+      let start: string | undefined;
+      let end: string | undefined;
+      if (when.object === "timespan") {
+        start = unixToIso(when.start_time);
+        end = unixToIso(when.end_time);
+      } else if (when.object === "date") {
+        start = when.date;
+        end = when.end_date || when.date;
+      } else if (when.object === "datespan") {
+        start = when.start_date;
+        end = when.end_date;
+      }
+      return {
+        id: event.id || "",
+        summary: event.title || "(No title)",
+        start,
+        end,
+        attendees: (event.participants || []).map((a: any) => ({
+          name: a.name || a.email,
+          email: a.email,
+          status: participantStatus(a.status || "noreply"),
+        })),
+        location: event.location || "",
+        conferenceLink: event.conferencing?.details?.url || "",
+      };
+    });
     return { events, error: null, needsReauth: false };
   } catch (e) {
     console.error("Calendar fetch error or timeout:", e);
@@ -217,8 +207,8 @@ function needsRealData(latestMessage: string): { emails: boolean; calendar: bool
 }
 
 // --- Sliding-window memory: keep recent turns verbatim, summarize older ones ---
-const RECENT_TURNS_KEEP = 30; // last N messages sent verbatim
-const SUMMARY_TRIGGER = 40;   // only summarize when total exceeds this
+const RECENT_TURNS_KEEP = 30;
+const SUMMARY_TRIGGER = 40;
 
 async function summarizeOlderMessages(older: any[], apiKey: string): Promise<string> {
   if (older.length === 0) return "";
@@ -226,11 +216,11 @@ async function summarizeOlderMessages(older: any[], apiKey: string): Promise<str
     .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${(m.content || "").slice(0, 600)}`)
     .join("\n");
   try {
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "llama-3.3-70b-versatile",
         messages: [
           {
             role: "system",
@@ -259,25 +249,29 @@ serve(async (req) => {
   try {
     const { messages, agentName, clientTimezone, clientNowIso, mode } = await req.json();
     const isVoice = mode === "voice";
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "The AI service is not configured yet. Please contact support.", code: "AI_NOT_CONFIGURED" }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const nylasApiKey = Deno.env.get("NYLAS_API_KEY") ?? "";
+    if (!nylasApiKey) console.error("[chat] NYLAS_API_KEY not set — email/calendar fetch will be skipped");
 
-    // Apply sliding window: if conversation is long, summarize older turns
+    // Apply sliding window: summarize older turns when conversation gets long
     let conversationMemoryNote = "";
     let effectiveMessages = messages;
     if (Array.isArray(messages) && messages.length > SUMMARY_TRIGGER) {
       const older = messages.slice(0, messages.length - RECENT_TURNS_KEEP);
       const recent = messages.slice(messages.length - RECENT_TURNS_KEEP);
-      const summary = await summarizeOlderMessages(older, LOVABLE_API_KEY);
+      const summary = await summarizeOlderMessages(older, GROQ_API_KEY);
       if (summary) {
-        conversationMemoryNote = `\n\n## CONVERSATION MEMORY (summary of earlier turns — treat as established context)\n${summary}\n`;
+        conversationMemoryNote = `\n\n## Earlier Conversation Summary\n${summary}\n`;
       }
       effectiveMessages = recent;
-      console.log(`[memory] summarized ${older.length} older turns, kept ${recent.length} recent`);
     }
 
-    // Use the user's local time/timezone (sent from the client) so the model
-    // doesn't think it's "evening" when the server's UTC clock says so.
     const tz = (typeof clientTimezone === "string" && clientTimezone) || "UTC";
     const now = clientNowIso ? new Date(clientNowIso) : new Date();
     const hourInTz = Number(
@@ -294,7 +288,7 @@ serve(async (req) => {
     let realDataContext = "";
     const authHeader = req.headers.get("Authorization");
 
-    // Always fetch real data when user is authenticated — no keyword gating
+    // Always fetch real data when user is authenticated
     if (authHeader) {
       const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
@@ -305,18 +299,18 @@ serve(async (req) => {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        const [gmailAccounts, calToken] = await Promise.all([
-          getAllGmailTokens(user.id),
-          getValidToken(user.id, "google-calendar"),
-        ]);
-
         const adminForContacts = createClient(
           Deno.env.get("SUPABASE_URL")!,
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
         );
+        const nylasGrants = await getAllNylasGrants(adminForContacts, user.id);
+        // One grant covers both Gmail and Calendar in Nylas
+        const primaryGrant = nylasGrants.length > 0 ? nylasGrants[0] : null;
 
         const todayDate = new Date().toISOString().slice(0, 10);
         const inSevenDays = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+        const canFetchNylas = nylasApiKey.length > 0;
 
         const [
           gmailResults,
@@ -328,10 +322,10 @@ serve(async (req) => {
           briefingRes,
           stenoSessionsRes,
         ] = await Promise.all([
-          gmailAccounts.length > 0
-            ? Promise.all(gmailAccounts.map((acc) => fetchRecentEmails(acc.token, 8, acc.email)))
+          canFetchNylas && nylasGrants.length > 0
+            ? Promise.all(nylasGrants.map((g) => fetchRecentEmails(g.grantId, nylasApiKey, 8, g.email)))
             : Promise.resolve([]),
-          calToken ? fetchEvents(calToken, 7) : Promise.resolve({ events: [], error: null }),
+          canFetchNylas && primaryGrant ? fetchEvents(primaryGrant.grantId, nylasApiKey, 7) : Promise.resolve({ events: [], error: null }),
           adminForContacts
             .from("contacts")
             .select("name, email, company, role, notes, is_vip, last_interaction_at, last_interaction_summary, interaction_count, ai_summary, ai_topics, birthday")
@@ -375,7 +369,7 @@ serve(async (req) => {
             .limit(15),
         ]);
 
-        // Helper: load the archived transcript .txt from storage (preferred over DB transcript)
+        // Helper: load the archived transcript .txt from storage
         const loadArchivedTranscript = async (s: any): Promise<string> => {
           if (s?.transcript_file_path) {
             try {
@@ -392,7 +386,7 @@ serve(async (req) => {
           return s?.transcript || "";
         };
 
-        // Aggregate emails across all Gmail accounts; track per-account fetch errors
+        // Aggregate emails across all Nylas grants
         const allEmails: any[] = [];
         const gmailErrors: string[] = [];
         const gmailReauth: string[] = [];
@@ -418,17 +412,17 @@ serve(async (req) => {
         const stenoSessions = stenoSessionsRes.data || [];
 
         if (allEmails.length > 0) {
-          const accountNote = gmailAccounts.length > 1 ? ` (across ${gmailAccounts.length} connected accounts)` : "";
+          const accountNote = nylasGrants.length > 1 ? ` (across ${nylasGrants.length} connected accounts)` : "";
           realDataContext += `\n\n--- REAL INBOX DATA${accountNote} ---\n`;
           allEmails.slice(0, 16).forEach((e: any, i: number) => {
-            realDataContext += `\n[Email ${i + 1}] ${e.isUnread ? "🔵 UNREAD" : ""}${gmailAccounts.length > 1 ? ` [${e.account}]` : ""}
+            realDataContext += `\n[Email ${i + 1}] ${e.isUnread ? "🔵 UNREAD" : ""}${nylasGrants.length > 1 ? ` [${e.account}]` : ""}
 From: ${e.from}
 Subject: ${e.subject}
 Date: ${e.date}
 Preview: ${e.snippet}\n`;
           });
           realDataContext += "\n--- END INBOX DATA ---\n";
-        } else if (gmailAccounts.length > 0 && gmailErrors.length === 0 && gmailReauth.length === 0) {
+        } else if (nylasGrants.length > 0 && gmailErrors.length === 0 && gmailReauth.length === 0) {
           realDataContext += "\n\n[Inbox is empty for the last 2 days — no recent messages.]\n";
         }
 
@@ -436,13 +430,14 @@ Preview: ${e.snippet}\n`;
           realDataContext += `\n\n[🔌 RECONNECT NEEDED: Google access expired for: ${gmailReauth.join(", ")}. Tell the user clearly: "I lost access to your Gmail (${gmailReauth.join(", ")}). Please reconnect via the plug icon → Integrations." Do NOT invent emails. Do NOT pretend you have access.]\n`;
         }
         if (gmailErrors.length > 0) {
-          realDataContext += `\n\n[⚠️ Could not fetch emails from: ${gmailErrors.join("; ")}. Tell the user honestly. Do NOT invent emails.]\n`;
+          realDataContext += `\n\n[⚠️ Email data temporarily unavailable. Tell the user: "I'm having trouble reaching your inbox right now — it should resolve on its own. Try again in a moment." Do NOT mention any API names, service names, or technical details. Do NOT invent emails.]\n`;
         }
 
         if (events.length > 0) {
           realDataContext += "\n\n--- REAL CALENDAR DATA (next 7 days) ---\n";
           events.forEach((e: any, i: number) => {
             realDataContext += `\n[Event ${i + 1}]
+ID: ${e.id}
 Title: ${e.summary}
 Time: ${e.start} – ${e.end}
 Attendees: ${e.attendees?.map((a: any) => `${a.name} (${a.status})`).join(", ") || "None"}
@@ -456,7 +451,7 @@ Location: ${e.location || "None"}\n`;
             realDataContext += "--- END CONFLICTS ---\n";
           }
           realDataContext += "\n--- END CALENDAR DATA ---\n";
-        } else if (calToken && !calendarError) {
+        } else if (primaryGrant && !calendarError) {
           realDataContext += "\n\n[No calendar events scheduled for the next 7 days.]\n";
         }
 
@@ -464,7 +459,7 @@ Location: ${e.location || "None"}\n`;
           if (calendarNeedsReauth) {
             realDataContext += `\n\n[🔌 RECONNECT NEEDED: Google Calendar access expired. Tell the user: "I lost access to your calendar. Please reconnect via the plug icon → Integrations." Do NOT invent meetings.]\n`;
           } else {
-            realDataContext += `\n\n[⚠️ Could not fetch calendar: ${calendarError}. Tell the user honestly. Do NOT invent meetings.]\n`;
+            realDataContext += `\n\n[⚠️ Calendar data temporarily unavailable. Tell the user: "I'm having trouble reaching your calendar right now — it should resolve on its own. Try again in a moment." Do NOT mention any API names, service names, or technical details. Do NOT invent meetings.]\n`;
           }
         }
 
@@ -500,18 +495,14 @@ Location: ${e.location || "None"}\n`;
         }
 
         // ---- STENO PAD: recent sessions + on-demand search across ALL sessions ----
-        // If the user's latest message hints at recalling a past meeting/note, search
-        // the FULL steno_sessions table (not just the recent 15) for matching sessions
-        // and inject their full transcripts so the agent can answer specifics.
         const latestUser = (effectiveMessages || []).filter((m: any) => m.role === "user").slice(-1)[0]?.content || "";
         const latestLower = String(latestUser).toLowerCase();
         const stenoRecallTriggers = ["steno", "recording", "dictation", "meeting", "what did i say", "what was said", "remind me what", "from my notes", "from my recording", "what did we talk about", "in the meeting", "during the meeting", "with sarah", "with mark", "with mike", "with jay", "the call with", "the meeting with"];
         const recallTriggered = stenoRecallTriggers.some((k) => latestLower.includes(k));
         let matchedSessions: any[] = [];
-        const TOP_N_FULL_RECALL = 3; // only load full .txt for the top N most relevant
+        const TOP_N_FULL_RECALL = 3;
         const fullRecallIds = new Set<string>();
         if (recallTriggered) {
-          // Pull names/keywords (3+ chars) from the user's message
           const stop = new Set(["the","and","with","what","that","this","about","meeting","recording","steno","said","from","tell","told","talk","talked","remind","were","there","have","has","you","your","mine","our","they","them","when","where","who","why","how","did","does","done","ago","last","past","week","day","days","time","just","some","any","ours","into","over","after","before"]);
           const tokens = String(latestUser)
             .split(/[^a-zA-Z0-9']+/)
@@ -521,7 +512,6 @@ Location: ${e.location || "None"}\n`;
           const tokensLower = tokens.map((t) => t.toLowerCase());
           const recentIds = new Set(stenoSessions.map((s: any) => s.id));
 
-          // 1) KEYWORD CANDIDATE POOL — wider net (up to 25 candidates) using ilike OR search
           let candidates: any[] = [];
           if (tokens.length > 0) {
             const orParts: string[] = [];
@@ -540,7 +530,6 @@ Location: ${e.location || "None"}\n`;
           }
 
           if (candidates.length > 0) {
-            // 2) KEYWORD OVERLAP SCORE — count distinct tokens hit across metadata fields
             const keywordScore = (s: any): number => {
               const hay = [
                 s.title || "",
@@ -555,7 +544,6 @@ Location: ${e.location || "None"}\n`;
               return tokensLower.length ? hits / tokensLower.length : 0;
             };
 
-            // 3) SEMANTIC RELEVANCE SCORE via AI gateway (single batched call, structured output)
             const semanticScores = new Map<string, number>();
             try {
               const briefs = candidates.map((s: any, idx: number) => {
@@ -565,11 +553,11 @@ Location: ${e.location || "None"}\n`;
                 const sum = (s.summary || "").slice(0, 300);
                 return `#${idx} id=${s.id}\nTitle: ${s.title || "(untitled)"}\nWho: ${att || "n/a"} | Where: ${s.location || "n/a"} | Topics: ${top || "n/a"}\nSummary: ${sum}\nKey points: ${kp}`;
               }).join("\n---\n");
-              const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+              const aiResp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                 method: "POST",
-                headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+                headers: { Authorization: `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  model: "google/gemini-2.5-flash-lite",
+                  model: "llama-3.3-70b-versatile",
                   messages: [
                     { role: "system", content: "You score how semantically relevant each meeting session is to the user's recall question. Return a score 0.0-1.0 per session id. Be strict — only sessions plausibly answering the question score above 0.5." },
                     { role: "user", content: `Question: "${latestUser}"\n\nSessions:\n${briefs}` },
@@ -620,7 +608,6 @@ Location: ${e.location || "None"}\n`;
               console.error("[steno recall] semantic scoring failed:", e);
             }
 
-            // 4) COMBINE: 0.4 * keyword + 0.6 * semantic (fallback to keyword only if semantic missing)
             const ranked = candidates
               .map((s: any) => {
                 const kw = keywordScore(s);
@@ -643,8 +630,6 @@ Location: ${e.location || "None"}\n`;
           realDataContext += "Each session has a Title, Date, Attendees (who was there), Location, Summary, and full Transcript loaded from the archived .txt file in the user's steno folder. Reference these when the user asks 'what did I say about X', 'what was said in the meeting with Sarah', 'remind me what we discussed', or anything where their own past notes are relevant. Quote sparingly — don't dump full transcripts unless asked.\n";
           realDataContext += "PROACTIVE CALENDAR RULE: If a session transcript mentions something time-sensitive that does NOT already appear on the user's calendar above (a flight, dinner, demo, deadline, recurring 1:1, etc.), proactively offer to add it: \"Hey, you mentioned X on [date] in your meeting with [who] — should I add it to your calendar? Sounded important.\" Use the user's first name if you know it. Only offer once per item per conversation.\n";
 
-          // Pre-load archived transcript files in parallel ONLY for sessions rendered with full content.
-          // Recent: top 3 get full; matched (recall): only the top-N most relevant (by combined keyword+semantic score).
           const fullRecent = stenoSessions.slice(0, 3);
           const fullMatched = matchedSessions.filter((s: any) => fullRecallIds.has(s.id));
           const fullTranscriptMap = new Map<string, string>();
@@ -699,10 +684,7 @@ Location: ${e.location || "None"}\n`;
           realDataContext += "--- END CONTACTS ---\n";
         }
 
-        // ---- PEOPLE DIRECTORY: name → email lookup pool ----
-        // Combine contacts + leads + recent email senders + calendar attendees so
-        // the model can resolve "send a note to Jay Niblick" → his email without
-        // the user having to remember it.
+        // ---- PEOPLE DIRECTORY ----
         const directory = new Map<string, { name: string; email: string; sources: Set<string> }>();
         const addPerson = (rawName: string | null | undefined, rawEmail: string | null | undefined, source: string) => {
           if (!rawEmail) return;
@@ -712,7 +694,6 @@ Location: ${e.location || "None"}\n`;
           const existing = directory.get(email);
           if (existing) {
             existing.sources.add(source);
-            // Prefer a longer/more complete name
             if (name.length > existing.name.length) existing.name = name;
           } else {
             directory.set(email, { name, email, sources: new Set([source]) });
@@ -722,7 +703,6 @@ Location: ${e.location || "None"}\n`;
         contacts.forEach((c: any) => addPerson(c.name, c.email, "contacts"));
         hotLeads.forEach((l: any) => addPerson(l.from_name, l.from_email, "leads"));
 
-        // Mine recent inbox senders. e.from is typically formatted as: `"Jay Niblick" <jay@x.com>` or just `jay@x.com`.
         const parseFromHeader = (from: string): { name: string; email: string } | null => {
           if (!from) return null;
           const m = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
@@ -735,13 +715,11 @@ Location: ${e.location || "None"}\n`;
           if (parsed) addPerson(parsed.name, parsed.email, "inbox");
         });
 
-        // Calendar attendees (each event.attendees may have name+email)
         events.forEach((ev: any) => {
           (ev.attendees || []).forEach((a: any) => addPerson(a.name, a.email, "calendar"));
         });
 
         if (directory.size > 0) {
-          // Common English nickname ↔ formal name pairs (bidirectional).
           const NICKNAMES: Record<string, string[]> = {
             jay: ["jason", "james", "jacob"],
             jason: ["jay"], james: ["jim", "jimmy", "jamie", "jay"], jacob: ["jake", "jay"],
@@ -796,25 +774,20 @@ Location: ${e.location || "None"}\n`;
             if (parts.length >= 2) {
               const first = parts[0];
               const last = parts[parts.length - 1];
-              // Single tokens
               aliases.add(first.toLowerCase());
               aliases.add(last.toLowerCase());
-              // Swapped: "Niblick Jay" and "Niblick, Jay"
               aliases.add(`${last} ${first}`.toLowerCase());
               aliases.add(`${last}, ${first}`.toLowerCase());
-              // Initials & partials: "J Niblick", "J. Niblick", "Jay N", "Jay N."
               aliases.add(`${first[0]} ${last}`.toLowerCase());
               aliases.add(`${first[0]}. ${last}`.toLowerCase());
               aliases.add(`${first} ${last[0]}`.toLowerCase());
               aliases.add(`${first} ${last[0]}.`.toLowerCase());
-              // Middle tokens (e.g. "Mary Jane Watson" → also alias "Jane")
               if (parts.length > 2) {
                 for (let i = 1; i < parts.length - 1; i++) {
                   aliases.add(parts[i].toLowerCase());
                   aliases.add(`${parts[i]} ${last}`.toLowerCase());
                 }
               }
-              // Nickname expansions on first name
               expandFirst(first).forEach((alt) => {
                 if (alt !== first.toLowerCase()) {
                   aliases.add(alt);
@@ -827,7 +800,6 @@ Location: ${e.location || "None"}\n`;
               aliases.add(parts[0].toLowerCase());
               expandFirst(parts[0]).forEach((alt) => aliases.add(alt));
             }
-            // Email local-part as last-resort token
             aliases.add(p.email.split("@")[0].toLowerCase());
 
             const aliasList = [...aliases].filter(Boolean).join(", ");
@@ -836,9 +808,7 @@ Location: ${e.location || "None"}\n`;
           realDataContext += "--- END PEOPLE DIRECTORY ---\n";
         }
 
-
-
-        // File search capability hint (read-only — Drive + Gmail attachments)
+        // File search capability hint
         realDataContext += "\n\n--- FILE SEARCH AVAILABLE ---\n";
         realDataContext += "The user has a Files page at /files where they can search across Google Drive and Gmail attachments using natural language (read-only — you cannot delete or modify files). When the user asks to find a file, document, attachment, contract, PDF, deck, spreadsheet, etc., suggest the Files page as a Next Step. Example asks: 'find the contract Sarah sent', 'where's the Q3 deck', 'pull up that invoice from Acme'.\n";
         realDataContext += "--- END FILE SEARCH ---\n";
@@ -848,7 +818,9 @@ Location: ${e.location || "None"}\n`;
         realDataContext += "The user has a Tasks page at /tasks for managing action items (open + completed, with priorities, due dates, assignees). The OPEN ACTION ITEMS section above is the live list. When the user asks 'what's on my list', 'what do I need to do', 'what's overdue', reference that data directly. When they say 'add a task to <X>' or 'remind me to <X>', tell them you've noted it and direct them to the Tasks page to confirm — do NOT silently insert. When asked to 'find tasks I owe people' or 'what did I commit to', scan recent emails in REAL INBOX DATA for implicit commitments and suggest they hit 'Scan inbox for tasks' on the /tasks page for an AI sweep.\n";
         realDataContext += "--- END TASKS ---\n";
 
-        if (gmailAccounts.length === 0 && !calToken) {
+        if (!canFetchNylas && nylasGrants.length > 0) {
+          realDataContext += "\n\n[Email and calendar are connected but temporarily unavailable due to a backend configuration issue. Do NOT tell the user to reconnect — their connection is fine. Just say email data isn't available right now and you'll check again shortly.]\n";
+        } else if (nylasGrants.length === 0) {
           realDataContext += "\n\n[No Google accounts connected. If the user asks about emails or calendar, let them know they can connect via Integrations (plug icon in the top right).]\n";
         }
       }
@@ -862,6 +834,7 @@ You are speaking out loud through TTS. Sound like a real human EA on the phone �
 - **NO bullet points. NO headers. NO "Next Steps:" labels. NO emojis. NO markdown.** Ever. Spoken speech only.
 - Use natural spoken English with contractions ("you've", "I'll", "let's"). Never read raw data, ISO dates, or URLs aloud — reference them naturally ("Sarah's email about the budget", "your 3 PM with Jay").
 - No draft-json blocks — if asked to draft something, briefly say what you'll draft and confirm verbally.
+- calendar-json blocks ARE allowed in voice mode — the user can't hear them (TTS strips code blocks), but the UI will show a tap-to-confirm button. When the user asks to create/add/schedule an event, say it naturally ("I'll add that to your calendar and send an invite to John — just tap to confirm") AND emit the calendar-json block silently below your spoken response. Follow the same calendar-json rules as text mode, including resolving attendee emails from the PEOPLE DIRECTORY.
 
 ### Pacing — match length to the request
 **Default (normal questions, status checks, quick asks): 1-2 short sentences, then one natural follow-up question.**
@@ -895,6 +868,36 @@ When you draft email replies, include a structured JSON block so the user can sa
 \`\`\`
 
 Keep draft bodies concise and professional. Only show drafts when the user asks you to draft something.
+
+## CALENDAR EVENT FORMAT
+When the user asks you to create, add, or schedule a calendar event, include a structured JSON block so the event can be created with one tap. Use this exact format:
+
+\`\`\`calendar-json
+{"summary": "Event title", "start": "2026-05-29T10:00:00", "end": "2026-05-29T11:00:00", "description": "Optional notes", "location": "Optional location", "allDay": false, "attendees": [{"email": "person@example.com", "name": "Person Name"}]}
+\`\`\`
+
+Rules:
+- \`summary\` and \`start\` are required. \`end\` defaults to 1 hour after start if omitted.
+- \`start\` and \`end\` must be ISO 8601 datetime strings in the user's local timezone (e.g. "2026-05-29T14:00:00"). For all-day events set \`allDay\` to true and use date-only strings like "2026-05-29".
+- Always infer the date from context (today is ${new Date().toISOString().slice(0, 10)}). If the user says "tomorrow at 3pm", compute the correct date.
+- **\`attendees\` is critical**: whenever the user mentions inviting someone or scheduling WITH someone, include them in \`attendees\` with their resolved email from the PEOPLE DIRECTORY. This is what sends the calendar invite to their inbox. If you cannot resolve their email, ask before emitting the block.
+- \`attendees\` may be an empty array [] if no guests — do NOT omit the field.
+- Only emit a calendar-json block when the user explicitly asks to create/add/schedule an event. Do NOT emit one just because you mention a date.
+- You may emit both a draft-json and a calendar-json in the same response (e.g. send an invite email + add the event to calendar).
+
+## CANCEL EVENT FORMAT
+When the user asks to cancel, delete, or remove a calendar event, emit this block so it can be cancelled with one tap (attendees get notified automatically):
+
+\`\`\`cancel-event-json
+{"eventId": "nylas_event_id_here", "summary": "Event title", "notifyAttendees": true}
+\`\`\`
+
+Rules:
+- \`eventId\` MUST come from the event data in REAL CALENDAR DATA above — look for the event by title/time and use its id field exactly. Never invent an id.
+- \`summary\` is the human-readable event title shown on the button.
+- \`notifyAttendees\` defaults to true — sends cancellation emails to all attendees. Only set false if the user explicitly says "don't notify" or "quietly remove".
+- If the user says "cancel my 3pm" and you can identify the event from REAL CALENDAR DATA, emit the block immediately. If ambiguous (multiple matches), ask which one before emitting.
+- Do NOT emit cancel-event-json if the event is not found in REAL CALENDAR DATA — tell the user you can't see it.
 `}
 
 ## Data Relevance Rule
@@ -939,15 +942,15 @@ When the user refers to someone by name (e.g., "send Jay Niblick a calendar invi
 ${conversationMemoryNote}${realDataContext}`;
 
     const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${GROQ_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: "llama-3.3-70b-versatile",
           messages: [
             { role: "system", content: systemPrompt },
             ...effectiveMessages,
@@ -986,9 +989,6 @@ ${conversationMemoryNote}${realDataContext}`;
       );
     }
 
-    // For voice mode, tee the SSE stream so we can compute simple metrics
-    // (sentence count + whether extended pacing was requested/produced) without
-    // delaying the user-facing stream.
     if (isVoice && response.body) {
       const lastUserMsg = [...effectiveMessages].reverse().find((m: any) => m?.role === "user");
       const userText: string = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
@@ -1056,7 +1056,6 @@ ${conversationMemoryNote}${realDataContext}`;
   } catch (e) {
     console.error("chat error:", e);
     const msg = e instanceof Error ? e.message : "Unknown error";
-    // Network failure reaching the gateway
     const isNetwork = /fetch|network|timeout|abort/i.test(msg);
     return new Response(
       JSON.stringify({

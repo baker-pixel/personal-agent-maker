@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, lazy, Suspense } from "react";
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -42,8 +42,17 @@ import TermsOfService from "./pages/TermsOfService";
 
 const queryClient = new QueryClient();
 
-const ProtectedRoute = ({ session, children }: { session: Session | null; children: React.ReactNode }) => {
+const ProtectedRoute = ({
+  session,
+  isOnboarded,
+  children,
+}: {
+  session: Session | null;
+  isOnboarded: boolean | null;
+  children: React.ReactNode;
+}) => {
   if (!session) return <Navigate to="/auth" replace />;
+  if (!isOnboarded) return <Navigate to="/onboarding" replace />;
   return (
     <>
       <AppHeader />
@@ -54,33 +63,60 @@ const ProtectedRoute = ({ session, children }: { session: Session | null; childr
 
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
   const [isRecovery, setIsRecovery] = useState(() => getPasswordRecoveryParams().hasRecoveryIntent || hasStoredPasswordRecovery());
   const recoveryRedirected = useRef(false);
+
+  // null = not yet fetched; false = not onboarded; true = onboarded
+  const [isOnboarded, setIsOnboarded] = useState<boolean | null>(null);
+
+  const fetchOnboardingState = useCallback(async (userId: string) => {
+    const { data } = await supabase
+      .from("user_preferences")
+      .select("onboarding_completed")
+      .eq("user_id", userId)
+      .maybeSingle();
+    setIsOnboarded(data?.onboarding_completed ?? false);
+  }, []);
 
   useEffect(() => {
     const recoveryUrl = getPasswordRecoveryParams().hasRecoveryIntent || hasStoredPasswordRecovery();
     if (recoveryUrl) setIsRecovery(true);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setLoading(false);
+      (event, newSession) => {
+        setSession(newSession);
+        setAuthLoading(false);
         if (event === "PASSWORD_RECOVERY" && !recoveryRedirected.current) {
           recoveryRedirected.current = true;
           setIsRecovery(true);
         }
+        if (event === "SIGNED_OUT") {
+          setIsOnboarded(null);
+        }
+        if (newSession?.user && (event === "SIGNED_IN" || event === "PASSWORD_RECOVERY")) {
+          fetchOnboardingState(newSession.user.id);
+        }
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      setSession(initialSession);
       if (recoveryUrl) setIsRecovery(true);
-      setLoading(false);
+      setAuthLoading(false);
+      if (initialSession?.user) {
+        fetchOnboardingState(initialSession.user.id);
+      } else {
+        setIsOnboarded(null);
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [fetchOnboardingState]);
+
+  // During password recovery the /reset-password page is unprotected and
+  // doesn't need isOnboarded — skip that wait so no spinner flashes mid-flow.
+  const loading = authLoading || (!isRecovery && session !== null && isOnboarded === null);
 
   if (loading) {
     return (
@@ -104,31 +140,35 @@ const App = () => {
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/pricing" element={<Pricing />} />
-             <Route path="/investors" element={<Investors />} />
-             <Route path="/investors/contact" element={<InvestorContact />} />
+              <Route path="/investors" element={<Investors />} />
+              <Route path="/investors/contact" element={<InvestorContact />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsOfService />} />
-              <Route path="/onboarding" element={<Onboarding />} />
-              <Route path="/mode-select" element={<ProtectedRoute session={session}><ModeSelect /></ProtectedRoute>} />
-              <Route path="/office" element={<ProtectedRoute session={session}><Office /></ProtectedRoute>} />
-              <Route path="/office-3d" element={<ProtectedRoute session={session}><Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin" /></div>}><Office3D /></Suspense></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute session={session}><DashboardPage /></ProtectedRoute>} />
-              <Route path="/decision/text" element={<ProtectedRoute session={session}><DecisionText /></ProtectedRoute>} />
-              <Route path="/decision/voice" element={<ProtectedRoute session={session}><DecisionVoice /></ProtectedRoute>} />
-              <Route path="/email" element={<ProtectedRoute session={session}><EmailView /></ProtectedRoute>} />
-              <Route path="/calendar" element={<ProtectedRoute session={session}><CalendarView /></ProtectedRoute>} />
-              <Route path="/eod-wrapup" element={<ProtectedRoute session={session}><EodWrapup /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute session={session}><SettingsPage /></ProtectedRoute>} />
-              <Route path="/sms-log" element={<ProtectedRoute session={session}><SmsLog /></ProtectedRoute>} />
-              <Route path="/steno" element={<ProtectedRoute session={session}><Steno /></ProtectedRoute>} />
-              <Route path="/steno/history" element={<ProtectedRoute session={session}><StenoHistory /></ProtectedRoute>} />
-              <Route path="/contacts" element={<ProtectedRoute session={session}><Contacts /></ProtectedRoute>} />
-              <Route path="/files" element={<ProtectedRoute session={session}><Files /></ProtectedRoute>} />
-              <Route path="/leads" element={<ProtectedRoute session={session}><Leads /></ProtectedRoute>} />
-              <Route path="/tasks" element={<ProtectedRoute session={session}><Tasks /></ProtectedRoute>} />
+              <Route path="/onboarding" element={
+                !session ? <Navigate to="/auth" replace /> :
+                isOnboarded ? <Navigate to="/mode-select" replace /> :
+                <Onboarding onComplete={() => setIsOnboarded(true)} />
+              } />
+              <Route path="/mode-select" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><ModeSelect /></ProtectedRoute>} />
+              <Route path="/office" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Office /></ProtectedRoute>} />
+              <Route path="/office-3d" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin" /></div>}><Office3D /></Suspense></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><DashboardPage /></ProtectedRoute>} />
+              <Route path="/decision/text" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><DecisionText /></ProtectedRoute>} />
+              <Route path="/decision/voice" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><DecisionVoice /></ProtectedRoute>} />
+              <Route path="/email" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><EmailView /></ProtectedRoute>} />
+              <Route path="/calendar" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><CalendarView /></ProtectedRoute>} />
+              <Route path="/eod-wrapup" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><EodWrapup /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><SettingsPage /></ProtectedRoute>} />
+              <Route path="/sms-log" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><SmsLog /></ProtectedRoute>} />
+              <Route path="/steno" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Steno /></ProtectedRoute>} />
+              <Route path="/steno/history" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><StenoHistory /></ProtectedRoute>} />
+              <Route path="/contacts" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Contacts /></ProtectedRoute>} />
+              <Route path="/files" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Files /></ProtectedRoute>} />
+              <Route path="/leads" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Leads /></ProtectedRoute>} />
+              <Route path="/tasks" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Tasks /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-            {session && <InstallBanner />}
+            {session && isOnboarded && <InstallBanner />}
           </BrowserRouter>
           </AgentProvider>
         </IntegrationsProvider>

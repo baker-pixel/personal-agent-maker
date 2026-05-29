@@ -6,126 +6,61 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-async function getValidToken(userId: string) {
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+const NYLAS_BASE = "https://api.us.nylas.com";
 
-  const { data: tokenRow, error } = await adminClient
-    .from("google_oauth_tokens")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("provider", "gmail")
-    .maybeSingle();
-
-  if (error || !tokenRow) {
-    const e = new Error("Gmail not connected");
-    (e as any).code = "NOT_CONNECTED";
-    throw e;
-  }
-
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) {
-    return tokenRow.access_token;
-  }
-
-  if (!tokenRow.refresh_token) {
-    const e = new Error("Your Gmail session has expired. Please reconnect your account.");
-    (e as any).code = "RECONNECT_REQUIRED";
-    throw e;
-  }
-
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-      client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-      refresh_token: tokenRow.refresh_token,
-      grant_type: "refresh_token",
-    }),
-  });
-
-  const data = await response.json();
-  if (data.error) {
-    console.error("Token refresh failed:", data.error, data.error_description);
-    if (data.error === "invalid_grant" || data.error === "unauthorized_client") {
-      const e = new Error("Your Gmail session has expired. Please reconnect your account.");
-      (e as any).code = "RECONNECT_REQUIRED";
-      throw e;
-    }
-    throw new Error(data.error_description || data.error);
-  }
-
-  await adminClient
-    .from("google_oauth_tokens")
-    .update({
-      access_token: data.access_token,
-      token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId)
-    .eq("provider", "gmail");
-
-  return data.access_token;
+function formatAddress(people: Array<{ name?: string; email: string }>): string {
+  if (!people?.length) return "";
+  return people.map(p => p.name ? `${p.name} <${p.email}>` : p.email).join(", ");
 }
 
-async function fetchEmails(accessToken: string, maxResults = 20) {
+async function getNylasGrant(adminClient: any, userId: string): Promise<{ grantId: string; email: string | null }> {
+  const { data: grant, error } = await adminClient
+    .from("nylas_grants")
+    .select("grant_id, email")
+    .eq("user_id", userId)
+    .eq("provider", "google")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !grant) throw Object.assign(new Error("NOT_CONNECTED"), { code: "NOT_CONNECTED" });
+  return { grantId: grant.grant_id, email: grant.email };
+}
+
+async function fetchEmails(grantId: string, nylasApiKey: string, maxResults = 20) {
+  const params = new URLSearchParams({ limit: String(maxResults), in: "INBOX" });
   const listRes = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=is:inbox`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    `${NYLAS_BASE}/v3/grants/${grantId}/messages?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${nylasApiKey}` } }
   );
+  if (!listRes.ok) {
+    if (listRes.status === 401 || listRes.status === 403) {
+      const err = new Error("Your Gmail connection has expired. Please reconnect your account.") as any;
+      err.code = "RECONNECT_REQUIRED";
+      throw err;
+    }
+    return [];
+  }
   const listData = await listRes.json();
+  const messages: any[] = listData.data || [];
+  if (!messages.length) return [];
 
-  if (!listData.messages || listData.messages.length === 0) return [];
-
-  const emails = await Promise.all(
-    listData.messages.slice(0, maxResults).map(async (msg: { id: string }) => {
-      const msgRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      const msgData = await msgRes.json();
-      const headers = msgData.payload?.headers || [];
-      const getHeader = (name: string) =>
-        headers.find((h: { name: string }) => h.name.toLowerCase() === name.toLowerCase())?.value || "";
-
-      let body = "";
-      const extractText = (part: any): string => {
-        if (part.mimeType === "text/plain" && part.body?.data) {
-          return atob(part.body.data.replace(/-/g, "+").replace(/_/g, "/"));
-        }
-        if (part.parts) {
-          for (const p of part.parts) {
-            const text = extractText(p);
-            if (text) return text;
-          }
-        }
-        return "";
-      };
-      body = extractText(msgData.payload || {});
-
-      return {
-        id: msgData.id,
-        threadId: msgData.threadId,
-        snippet: msgData.snippet,
-        from: getHeader("From"),
-        to: getHeader("To"),
-        cc: getHeader("Cc"),
-        subject: getHeader("Subject"),
-        date: getHeader("Date"),
-        replyTo: getHeader("Reply-To"),
-        body: body.slice(0, 800),
-        labelIds: msgData.labelIds || [],
-        isUnread: (msgData.labelIds || []).includes("UNREAD"),
-        isStarred: (msgData.labelIds || []).includes("STARRED"),
-        isImportant: (msgData.labelIds || []).includes("IMPORTANT"),
-      };
-    })
-  );
-
-  return emails;
+  return messages.slice(0, maxResults).map((msg: any) => ({
+    id: msg.id,
+    threadId: msg.thread_id,
+    snippet: msg.snippet || "",
+    from: formatAddress(msg.from || []),
+    to: formatAddress(msg.to || []),
+    cc: formatAddress(msg.cc || []),
+    subject: msg.subject || "",
+    // Store as ISO directly — avoids double-parse (UTCString → Date → ISO) that caused flaky received_at
+    date: msg.date ? new Date(msg.date * 1000).toISOString() : new Date().toISOString(),
+    replyTo: formatAddress(msg.reply_to || []),
+    body: (msg.body || msg.snippet || "").slice(0, 800),
+    labelIds: msg.folders || [],
+    isUnread: msg.unread === true,
+    isStarred: (msg.folders || []).includes("STARRED"),
+    isImportant: (msg.folders || []).includes("IMPORTANT"),
+  }));
 }
 
 async function getUserTriagePrefs(userId: string) {
@@ -206,6 +141,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Parse optional body — force=true re-triages even already-classified emails
+    let force = false;
+    try {
+      const body = await req.clone().json();
+      force = body?.force === true;
+    } catch {
+      // no body or not JSON — that's fine
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -220,32 +164,121 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch emails and user preferences in parallel
-    const [accessToken, prefs] = await Promise.all([
-      getValidToken(user.id),
-      getUserTriagePrefs(user.id),
-    ]);
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
 
-    const emails = await fetchEmails(accessToken, 15);
+    const nylasApiKey = Deno.env.get("NYLAS_API_KEY")!;
+
+    let grantId: string;
+    try {
+      const grant = await getNylasGrant(adminClient, user.id);
+      grantId = grant.grantId;
+    } catch (tokenError: any) {
+      if (tokenError.code === "NOT_CONNECTED") {
+        return new Response(
+          JSON.stringify({ error: "Gmail not connected", code: "NOT_CONNECTED" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      throw tokenError;
+    }
+
+    let emails: any[];
+    let prefs: any;
+    try {
+      [emails, prefs] = await Promise.all([
+        fetchEmails(grantId, nylasApiKey, 30),
+        getUserTriagePrefs(user.id),
+      ]);
+    } catch (fetchError: any) {
+      if (fetchError.code === "RECONNECT_REQUIRED") {
+        return new Response(
+          JSON.stringify({ error: fetchError.message, code: "RECONNECT_REQUIRED" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      throw fetchError;
+    }
 
     if (emails.length === 0) {
       return new Response(
-        JSON.stringify({ categories: { urgent: [], needs_reply: [], fyi: [], newsletter: [] }, totalProcessed: 0 }),
+        JSON.stringify({ categories: { urgent: [], needs_reply: [], fyi: [], newsletter: [] }, totalProcessed: 0, actionItemsCreated: 0 }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    // Determine which emails need AI triage
+    // When force=false: skip emails already in DB with a category (prevents AI from flip-flopping)
+    // When force=true (Re-triage button): re-classify everything
+    let emailsToTriage = emails;
+    let alreadyCategorizedIds = new Set<string>();
 
-    // Build rich email context with more signals
-    const emailContext = emails.map((e: any, i: number) => {
+    if (!force) {
+      const { data: existing } = await adminClient
+        .from("email_metadata")
+        .select("nylas_message_id")
+        .eq("user_id", user.id)
+        .in("nylas_message_id", emails.map(e => e.id))
+        .not("category", "is", null);
+
+      alreadyCategorizedIds = new Set((existing || []).map((r: any) => r.nylas_message_id));
+      emailsToTriage = emails.filter(e => !alreadyCategorizedIds.has(e.id));
+
+      // Refresh is_unread for already-classified emails without touching category/priority
+      const staleEmails = emails.filter(e => alreadyCategorizedIds.has(e.id));
+      if (staleEmails.length > 0) {
+        await adminClient.from("email_metadata").upsert(
+          staleEmails.map(e => ({
+            user_id: user.id,
+            nylas_message_id: e.id,
+            is_unread: e.isUnread,
+          })),
+          { onConflict: "user_id,nylas_message_id" }
+        );
+      }
+    }
+
+    // Cleanup: delete email_metadata rows older than 30 days (always) and,
+    // during force re-triage, also remove emails no longer in the Nylas inbox
+    // (archived/deleted) — but only within the last 30 days to stay within our fetch window
+    if (force) {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const currentIds = emails.map(e => e.id);
+      if (currentIds.length > 0) {
+        await adminClient
+          .from("email_metadata")
+          .delete()
+          .eq("user_id", user.id)
+          .gte("received_at", thirtyDaysAgo)
+          .not("nylas_message_id", "in", `(${currentIds.map(id => `"${id}"`).join(",")})`)
+          .is("replied_at", null);
+      }
+      // Always purge rows older than 30 days (keeps DB lean)
+      await adminClient
+        .from("email_metadata")
+        .delete()
+        .eq("user_id", user.id)
+        .lt("received_at", thirtyDaysAgo);
+    }
+
+    if (emailsToTriage.length === 0) {
+      return new Response(
+        JSON.stringify({ totalProcessed: 0, actionItemsCreated: 0, skippedAlreadyClassified: alreadyCategorizedIds.size }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY not configured");
+
+    const emailContext = emailsToTriage.map((e: any, i: number) => {
       const signals: string[] = [];
       if (e.isUnread) signals.push("UNREAD");
       if (e.isStarred) signals.push("STARRED");
       if (e.isImportant) signals.push("GMAIL_IMPORTANT");
 
-      // Check VIP/dismiss sender match
       const fromLower = e.from.toLowerCase();
       if (prefs.vip_senders?.some((v: string) => fromLower.includes(v.toLowerCase()))) {
         signals.push("VIP_SENDER");
@@ -254,7 +287,6 @@ Deno.serve(async (req) => {
         signals.push("DISMISSED_SENDER");
       }
 
-      // Check keyword matches
       const textToSearch = `${e.subject} ${e.body}`.toLowerCase();
       const matchedPriorityKw = prefs.priority_keywords?.filter((k: string) => textToSearch.includes(k.toLowerCase())) || [];
       const matchedDismissKw = prefs.dismiss_keywords?.filter((k: string) => textToSearch.includes(k.toLowerCase())) || [];
@@ -305,28 +337,24 @@ ${personalizedRules ? `\n## USER PERSONALIZATION\n${personalizedRules}` : ""}
 - "fyi": Informational — status updates, shared docs, CC'd threads, read-only notifications.
 - "newsletter": Automated emails, marketing, subscriptions, system notifications, social media alerts.
 
-## DRAFT RESPONSE GUIDELINES
-For urgent and needs_reply emails, draft a response that:
-- Matches the sender's tone and formality
-- Directly addresses the ask
-- Is concise but complete
-- Includes any commitments or next steps`;
+`;
 
     const aiResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${GROQ_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "llama-3.3-70b-versatile",
+          temperature: 0,  // deterministic output — prevents category flipping between runs
           messages: [
             { role: "system", content: systemPrompt },
             {
               role: "user",
-              content: `Categorize these ${emails.length} emails. For "needs_reply" and "urgent" emails, draft a professional response. Extract concrete action items from urgent and needs_reply emails.
+              content: `Categorize these ${emailsToTriage.length} emails and extract concrete action items from urgent and needs_reply emails.
 
 ${emailContext}
 
@@ -350,11 +378,11 @@ Use the suggest_triage tool to return your analysis.`
                           email_index: { type: "number", description: "Index of the email (0-based)" },
                           category: { type: "string", enum: ["urgent", "needs_reply", "fyi", "newsletter"] },
                           reason: { type: "string", description: "Brief explanation of why this category" },
-                          draft_response: { type: "string", description: "Draft reply if category is urgent or needs_reply, empty string otherwise" },
+                          ai_summary: { type: "string", description: "One sentence summary of the email content" },
                           priority_score: { type: "number", description: "1-10 priority score, 10 being most urgent" },
                           confidence: { type: "number", description: "0-1 confidence in this categorization" }
                         },
-                        required: ["email_index", "category", "reason", "draft_response", "priority_score", "confidence"],
+                        required: ["email_index", "category", "reason", "ai_summary", "priority_score", "confidence"],
                         additionalProperties: false
                       }
                     },
@@ -405,7 +433,7 @@ Use the suggest_triage tool to return your analysis.`
 
     const aiData = await aiResponse.json();
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-    
+
     let categorizedEmails: any[] = [];
     let extractedActions: any[] = [];
     if (toolCall?.function?.arguments) {
@@ -426,18 +454,18 @@ Use the suggest_triage tool to return your analysis.`
     };
 
     for (const item of categorizedEmails) {
-      const email = emails[item.email_index];
+      const email = emailsToTriage[item.email_index];
       if (!email) continue;
-      
+
       const enriched = {
         ...email,
         category: item.category,
         reason: item.reason,
-        draftResponse: item.draft_response,
+        aiSummary: item.ai_summary,
         priorityScore: item.priority_score,
         confidence: item.confidence,
       };
-      
+
       if (categories[item.category]) {
         categories[item.category].push(enriched);
       }
@@ -446,35 +474,101 @@ Use the suggest_triage tool to return your analysis.`
     categories.urgent.sort((a: any, b: any) => b.priorityScore - a.priorityScore);
     categories.needs_reply.sort((a: any, b: any) => b.priorityScore - a.priorityScore);
 
-    // Save extracted action items
+    // Persist triage results — only for newly triaged emails
+    const metadataRows = categorizedEmails.map((item: any) => {
+      const email = emailsToTriage[item.email_index];
+      if (!email) return null;
+      const fromMatch = email.from.match(/<([^>]+)>/);
+      const fromEmail = fromMatch ? fromMatch[1] : email.from.trim();
+      const fromName = email.from.replace(/<[^>]+>/, "").replace(/"/g, "").trim() || null;
+      return {
+        user_id: user.id,
+        nylas_message_id: email.id,
+        nylas_thread_id: email.threadId || null,
+        from_address: fromEmail,
+        from_name: fromName,
+        subject: email.subject || null,
+        received_at: email.date,  // already ISO from fetchEmails
+        is_unread: email.isUnread,
+        category: item.category,
+        priority_score: Math.min(10, Math.max(1, Math.round(item.priority_score))),
+        ai_summary: item.ai_summary?.slice(0, 500) ?? null,
+        ai_reason: item.reason?.slice(0, 300) ?? null,
+        processed_at: new Date().toISOString(),
+      };
+    }).filter(Boolean);
+
+    if (metadataRows.length > 0) {
+      const { error: metaErr } = await adminClient
+        .from("email_metadata")
+        .upsert(metadataRows, { onConflict: "user_id,nylas_message_id" });
+      if (metaErr) console.error("email-triage metadata upsert error:", metaErr.message);
+    }
+
+    // Fetch replied_at for all processed messages
+    const messageIds = metadataRows.map((r: any) => r.nylas_message_id);
+    const repliedMap: Record<string, string | null> = {};
+    if (messageIds.length > 0) {
+      const { data: repliedRows } = await adminClient
+        .from("email_metadata")
+        .select("nylas_message_id, replied_at")
+        .eq("user_id", user.id)
+        .in("nylas_message_id", messageIds);
+      for (const row of repliedRows || []) {
+        repliedMap[row.nylas_message_id] = row.replied_at;
+      }
+    }
+
+    for (const cat of Object.keys(categories)) {
+      categories[cat] = categories[cat].map((e: any) => ({
+        ...e,
+        repliedAt: repliedMap[e.id] ?? null,
+      }));
+    }
+
+    // Deduplicated action items
     let actionItemsCreated = 0;
     if (extractedActions.length > 0) {
-      const adminClient = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: existingTitles } = await adminClient
+        .from("action_items")
+        .select("title")
+        .eq("user_id", user.id)
+        .eq("source", "email_triage")
+        .gte("created_at", sevenDaysAgo);
+      const seenTitles = new Set(
+        (existingTitles || []).map((r: any) => r.title.toLowerCase().trim())
       );
 
-      const rows = extractedActions.map((ai: any) => {
-        const sourceEmail = emails[ai.from_email_index];
-        return {
-          user_id: user.id,
-          title: ai.title,
-          priority: ai.priority || "medium",
-          due_date: ai.due_date || null,
-          source: "email_triage",
-          meeting_summary: sourceEmail ? `Email from ${sourceEmail.from}: ${sourceEmail.subject}` : null,
-        };
-      });
+      const rows = extractedActions
+        .map((ai: any) => {
+          const sourceEmail = emailsToTriage[ai.from_email_index];
+          return {
+            user_id: user.id,
+            title: ai.title,
+            priority: ai.priority || "medium",
+            due_date: ai.due_date || null,
+            status: "suggested",
+            source: "email_triage",
+            meeting_summary: sourceEmail
+              ? `Email from ${sourceEmail.from}: ${sourceEmail.subject}`
+              : null,
+          };
+        })
+        .filter((r: any) => !seenTitles.has(r.title.toLowerCase().trim()));
 
-      const { error: insertError } = await adminClient.from("action_items").insert(rows);
-      if (!insertError) actionItemsCreated = rows.length;
+      if (rows.length > 0) {
+        const { error: insertError } = await adminClient.from("action_items").insert(rows);
+        if (!insertError) actionItemsCreated = rows.length;
+      }
     }
 
     return new Response(
       JSON.stringify({
         categories,
-        totalProcessed: emails.length,
+        totalProcessed: emailsToTriage.length,
         actionItemsCreated,
+        skippedAlreadyClassified: alreadyCategorizedIds.size,
         stats: {
           urgent: categories.urgent.length,
           needs_reply: categories.needs_reply.length,
@@ -484,7 +578,7 @@ Use the suggest_triage tool to return your analysis.`
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("email-triage error:", error);
     const code = (error as any).code || "UNKNOWN";
     const status = code === "RECONNECT_REQUIRED" ? 401 : code === "NOT_CONNECTED" ? 404 : 500;

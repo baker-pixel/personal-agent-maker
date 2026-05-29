@@ -35,6 +35,7 @@
     --ring: 16 80% 58%;
 
     --radius: 0.75rem;
+    --header-h: calc(env(safe-area-inset-top, 0px) + 3.5rem);
 
     /* Priority colors */
     --priority-urgent: 0 72% 51%;

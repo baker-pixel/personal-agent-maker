@@ -7,6 +7,7 @@ import { useAnnieChat } from "@/hooks/useAnnieChat";
 import { DelegateSidebar } from "@/components/chat/DelegateSidebar";
 import ReactMarkdown from "react-markdown";
 import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
+import { CalendarJsonParser } from "@/components/chat/CalendarJsonParser";
 import { useAgent } from "@/contexts/AgentContext";
 
 export default function DecisionText() {
@@ -29,7 +30,7 @@ export default function DecisionText() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-[100dvh] bg-background flex pt-[var(--header-h)]">
       <DelegateSidebar
         conversations={chat.conversations}
         activeId={chat.activeConversationId}
@@ -41,8 +42,8 @@ export default function DecisionText() {
         agentName={agentName}
       />
 
-      <div className="flex-1 flex flex-col min-h-screen">
-        <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+      <div className="flex-1 flex flex-col min-h-[100dvh]">
+        <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
           <div className="container flex items-center h-14 px-4">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -68,7 +69,7 @@ export default function DecisionText() {
           </div>
         </nav>
 
-        <div className="flex-1 container max-w-lg py-6 px-4 overflow-y-auto">
+        <div className="flex-1 container max-w-lg mx-auto w-full py-6 px-4 overflow-y-auto">
           {chat.loading && (
             <div className="flex items-center justify-center h-full pt-20">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -100,7 +101,7 @@ export default function DecisionText() {
                 className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
+                  className={`max-w-[82%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-sm ${
                     msg.role === "user"
                       ? "bg-accent text-accent-foreground"
                       : "bg-secondary text-secondary-foreground"
@@ -109,9 +110,10 @@ export default function DecisionText() {
                   {msg.role === "agent" ? (
                     <>
                       <div className="prose prose-sm max-w-none">
-                        <ReactMarkdown>{msg.text.replace(/```draft-json[\s\S]*?```/g, "")}</ReactMarkdown>
+                        <ReactMarkdown>{msg.text.replace(/```draft-json[\s\S]*?```/g, "").replace(/```calendar-json[\s\S]*?```/g, "").replace(/```cancel-event-json[\s\S]*?```/g, "")}</ReactMarkdown>
                       </div>
                       <DraftJsonParser text={msg.text} />
+                      <CalendarJsonParser text={msg.text} />
                     </>
                   ) : (
                     msg.text

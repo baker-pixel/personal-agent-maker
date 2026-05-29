@@ -350,7 +350,7 @@ export default function Office() {
         navigate("/dashboard");
         break;
       case "tasks":
-        navigate("/dashboard");
+        navigate("/tasks");
         break;
       case "calendar":
         navigate("/calendar");
@@ -420,20 +420,19 @@ export default function Office() {
         ))}
       </div>
 
-      {/* Top bar */}
-      <header className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
+      {/* Top bar — pr-14 clears the fixed AppMenu button (w-8 + p-3 = ~44px from right) */}
+      <header className="relative z-10 flex items-center justify-between pl-4 sm:pl-6 pr-14 py-3 sm:py-4 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
         <button
           onClick={() => navigate("/mode-select")}
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
         >
           ← Back
         </button>
-        <div className="flex items-center gap-2 sm:gap-4">
-          {/* Live clock */}
-          <AnalogClock size={40} />
+        <div className="flex items-center gap-2 sm:gap-3">
+          <AnalogClock size={36} />
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[11px] sm:text-xs text-muted-foreground">{agentName} online</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">{agentName} online</span>
           </div>
         </div>
       </header>
@@ -463,7 +462,7 @@ export default function Office() {
         </div>
       </div>
 
-      <div className="relative z-10 max-w-5xl mx-auto px-5 pb-10">
+      <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-5 pb-10">
         {/* Agent greeting */}
         <AnimatePresence>
           {showGreeting && (
@@ -474,7 +473,7 @@ export default function Office() {
               transition={{ delay: 0.5, duration: 0.6, ease: "easeOut" }}
               className="mb-8"
             >
-              <div className="relative bg-card border border-border/50 rounded-2xl p-6 shadow-lg max-w-2xl mx-auto">
+              <div className="relative bg-card border border-border/50 rounded-2xl p-4 sm:p-6 shadow-lg max-w-2xl mx-auto">
                 <button
                   onClick={() => setShowGreeting(false)}
                   className="absolute top-3 right-3 p-1.5 rounded-lg text-muted-foreground/40 hover:text-foreground hover:bg-muted/50 transition-all"
@@ -564,7 +563,7 @@ export default function Office() {
         </motion.div>
 
         {/* Office grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 max-w-3xl mx-auto">
           {officeItems.map((item, i) => {
             const Icon = item.icon;
             const isHovered = hoveredItem === item.id;
@@ -578,20 +577,21 @@ export default function Office() {
                 onMouseEnter={() => setHoveredItem(item.id)}
                 onMouseLeave={() => setHoveredItem(null)}
                 onClick={() => handleAction(item.action)}
-                className={`${item.id === "desk" ? "col-span-2 md:col-span-2" : ""} relative group rounded-2xl border ${item.borderColor} bg-gradient-to-br ${item.color} p-5 sm:p-6 text-left transition-all duration-300 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] overflow-hidden`}
+                aria-label={item.description}
+                className={`${item.id === "desk" ? "col-span-2 md:col-span-3" : ""} relative group rounded-2xl border ${item.borderColor} bg-gradient-to-br ${item.color} p-4 sm:p-5 md:p-6 text-left transition-all duration-300 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] overflow-hidden`}
               >
                 {/* Subtle shine effect on hover */}
                 <div className={`absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 translate-x-[-100%] transition-transform duration-700 ${isHovered ? "translate-x-[100%]" : ""}`} />
 
                 <div className="relative z-10">
-                  <div className="flex items-start justify-between mb-3">
-                    <span className="text-3xl sm:text-4xl">{item.emoji}</span>
+                  <div className="flex items-start justify-between mb-2 sm:mb-3">
+                    <span className="text-2xl sm:text-3xl md:text-4xl">{item.emoji}</span>
                     <ChevronRight className={`w-4 h-4 text-muted-foreground/30 transition-all duration-300 ${isHovered ? "translate-x-1 text-foreground/50" : ""}`} />
                   </div>
-                  <h3 className="font-display text-base sm:text-lg font-semibold text-foreground mb-0.5">
+                  <h3 className="font-display text-sm sm:text-base md:text-lg font-semibold text-foreground mb-0.5">
                     {item.id === "desk" ? `Chat with ${agentName}` : item.id === "sms-log" ? `${agentName} SMS Log` : item.label}
                   </h3>
-                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                  <p className="text-[11px] sm:text-xs md:text-sm text-muted-foreground leading-relaxed line-clamp-2 text-[10px] sm:text-xs md:text-sm">
                     {item.description}
                   </p>
 

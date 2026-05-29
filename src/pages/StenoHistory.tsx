@@ -225,8 +225,8 @@ export default function StenoHistory() {
     : sessions;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+    <div className="min-h-screen bg-background flex flex-col pt-[var(--header-h)]">
+      <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
         <div className="container max-w-5xl flex items-center h-14 px-4">
           <button
             onClick={() => navigate("/steno")}
@@ -299,7 +299,7 @@ export default function StenoHistory() {
                             <span>due {format(parseISO(item.due_date), "MMM d")}</span>
                           )}
                           {item.session_title && (
-                            <span className="truncate max-w-[200px]">from "{item.session_title}"</span>
+                            <span className="truncate max-w-[140px] sm:max-w-[200px]">from "{item.session_title}"</span>
                           )}
                         </div>
                       </div>
@@ -613,7 +613,7 @@ export default function StenoHistory() {
                     <p className="text-sm text-foreground/90">{selectedRelated.keyPoint}</p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
                       <p className="font-semibold uppercase tracking-wide text-muted-foreground mb-1">Status</p>
                       <p className="text-sm capitalize text-foreground">{r.status.replace(/_/g, " ")}</p>

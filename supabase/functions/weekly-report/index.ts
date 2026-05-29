@@ -13,8 +13,8 @@ serve(async (req) => {
 
   try {
     const { agentName } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY is not configured");
 
     const today = new Date();
     const weekStart = new Date(today);
@@ -45,15 +45,15 @@ Create a professional weekly summary that includes:
 Make it realistic and professional. Use specific but fictional details.`;
 
     const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${GROQ_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: "llama-3.3-70b-versatile",
           messages: [
             { role: "system", content: "You are a professional executive assistant generating weekly reports." },
             { role: "user", content: prompt },

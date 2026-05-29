@@ -53,7 +53,7 @@ export const useGoogleOAuthPopup = () => {
     try {
       // Always request a freshly-generated OAuth URL (new state param) — we
       // never reuse a cached URL across attempts or services.
-      const response = await supabase.functions.invoke("google-auth", {
+      const response = await supabase.functions.invoke("nylas-auth", {
         body: { service, origin: window.location.origin },
       });
       if (response.error) throw response.error;

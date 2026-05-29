@@ -89,9 +89,9 @@ export default function Files() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container max-w-4xl py-6 sm:py-10 px-4">
+      <div className="container max-w-4xl pt-[var(--header-h)] pb-6 sm:py-10 pl-4 pr-4">
         <div className="mb-6">
-          <h1 className="font-display text-3xl font-bold mb-1">Files</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold mb-1">Files</h1>
           <p className="text-muted-foreground">
             Ask {agentName} to find any file across your Google Drive and email attachments.
           </p>
@@ -129,7 +129,7 @@ export default function Files() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder='Try "the contract Sarah sent me last month"'
-              className="w-full pl-12 pr-32 py-4 rounded-2xl bg-card border border-border focus:border-accent focus:ring-1 focus:ring-accent outline-none text-foreground"
+              className="w-full pl-12 pr-24 sm:pr-32 py-4 rounded-2xl bg-card border border-border focus:border-accent focus:ring-1 focus:ring-accent outline-none text-foreground"
             />
             <button
               type="submit"
@@ -137,7 +137,7 @@ export default function Files() {
               className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-accent-foreground text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {loading ? "Searching" : "Search"}
+              <span className="hidden sm:inline">{loading ? "Searching" : "Search"}</span>
             </button>
           </div>
         </form>

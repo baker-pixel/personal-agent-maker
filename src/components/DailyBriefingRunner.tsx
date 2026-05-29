@@ -36,7 +36,7 @@ export default function DailyBriefingRunner() {
   };
 
   const levelColor = (l: LogEntry["level"]) =>
-    l === "error" ? "text-destructive" : l === "warn" ? "text-amber-600" : "text-muted-foreground";
+    l === "error" ? "text-destructive" : l === "warn" ? "text-important" : "text-muted-foreground";
 
   return (
     <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">

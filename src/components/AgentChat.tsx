@@ -4,6 +4,7 @@ import { useAgent } from "@/contexts/AgentContext";
 import { Send, Loader2, Zap, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
+import { CalendarJsonParser } from "@/components/chat/CalendarJsonParser";
 import { toast } from "@/hooks/use-toast";
 
 type Message = { role: "user" | "assistant"; content: string };
@@ -120,6 +121,8 @@ export const AgentChat = () => {
         body: JSON.stringify({
           messages: [...messages, userMsg],
           agentName,
+          clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          clientNowIso: new Date().toISOString(),
         }),
         signal: controller.signal,
       });
@@ -272,9 +275,10 @@ export const AgentChat = () => {
               {msg.role === "assistant" ? (
                 <>
                   <div className="prose prose-sm max-w-none text-foreground prose-headings:font-display prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-accent prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
-                    <ReactMarkdown>{msg.content.replace(/```draft-json[\s\S]*?```/g, "")}</ReactMarkdown>
+                    <ReactMarkdown>{msg.content.replace(/```draft-json[\s\S]*?```/g, "").replace(/```calendar-json[\s\S]*?```/g, "").replace(/```cancel-event-json[\s\S]*?```/g, "")}</ReactMarkdown>
                   </div>
                   <DraftJsonParser text={msg.content} />
+                  <CalendarJsonParser text={msg.content} />
                 </>
               ) : (
                 <p className="text-sm whitespace-pre-wrap">{msg.content}</p>

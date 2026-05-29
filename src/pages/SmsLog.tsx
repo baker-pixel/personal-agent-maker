@@ -49,9 +49,9 @@ export default function SmsLog() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
-        <div className="container flex items-center justify-between h-14">
+    <div className="min-h-screen bg-background pt-[var(--header-h)]">
+      <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
+        <div className="container flex items-center justify-between h-14 px-4">
           <button
             onClick={() => navigate("/office")}
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -60,7 +60,7 @@ export default function SmsLog() {
             <span className="text-sm font-medium">Back</span>
           </button>
           <h1 className="font-display font-semibold">{agentName} SMS Log</h1>
-          <div className="w-8" />
+          <div className="w-14" />
         </div>
       </nav>
 
@@ -70,9 +70,8 @@ export default function SmsLog() {
             <Smartphone className="w-5 h-5 text-teal-500" />
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">
-              Text {agentName} at <span className="font-mono font-semibold text-foreground">+1 (844) 392-6449</span>
-            </p>
+            <p className="text-sm text-muted-foreground">Text {agentName} at</p>
+            <p className="font-mono font-semibold text-foreground text-sm">+1 (844) 392-6449</p>
           </div>
         </div>
 
@@ -94,9 +93,9 @@ export default function SmsLog() {
 
         {!loading && conversations.map((convo) => (
           <div key={convo.id} className="border rounded-2xl overflow-hidden">
-            <div className="bg-muted/30 px-4 py-3 border-b flex items-center justify-between">
-              <span className="text-sm font-medium font-mono">{convo.phone_number}</span>
-              <span className="text-xs text-muted-foreground">
+            <div className="bg-muted/30 px-4 py-3 border-b flex items-center justify-between gap-2 min-w-0">
+              <span className="text-sm font-medium font-mono truncate">{convo.phone_number}</span>
+              <span className="text-xs text-muted-foreground shrink-0">
                 {new Date(convo.updated_at).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
               </span>
             </div>

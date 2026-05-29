@@ -1,11 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
-import { Zap, Check, Bell, RotateCcw } from "lucide-react";
+import { Zap, Check, Bell, RotateCcw, ToggleLeft } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AgentSettingsProps {
   onReplayOnboarding?: () => void;
 }
+
+const FEATURES = [
+  { id: "email_triage", label: "Email Triage", description: "Agent reads and categorizes your incoming emails" },
+  { id: "calendar_sync", label: "Calendar Sync", description: "Agent accesses your calendar for scheduling and reminders" },
+  { id: "lead_detection", label: "Lead Detection", description: "Agent identifies potential leads from emails and contacts" },
+  { id: "daily_briefing", label: "Daily Briefing", description: "Morning summary of your day, emails, and priorities" },
+  { id: "follow_up_tracking", label: "Follow-Up Tracking", description: "Track emails and tasks that need follow-up" },
+  { id: "contact_sync", label: "Contact Sync", description: "Enrich and sync your contacts from email activity" },
+];
+
+const DEFAULT_FEATURES: Record<string, boolean> = {
+  email_triage: true,
+  calendar_sync: true,
+  lead_detection: true,
+  daily_briefing: true,
+  follow_up_tracking: true,
+  contact_sync: true,
+};
 
 const PREFS = [
   { id: "daily_briefing", label: "Daily Briefing", description: "Get an AI summary of your day every morning" },
@@ -19,10 +38,40 @@ export const AgentSettings = ({ onReplayOnboarding }: AgentSettingsProps) => {
   const [nameInput, setNameInput] = useState(agentName);
   const [saved, setSaved] = useState(false);
   const [prefs, setPrefs] = useState<Record<string, boolean>>(() => {
-    const saved = localStorage.getItem("normy_preferences");
-    if (saved) return JSON.parse(saved);
+    const stored = localStorage.getItem("normy_preferences");
+    if (stored) return JSON.parse(stored);
     return { daily_briefing: true, email_nudges: true, meeting_prep: true, task_reminders: false };
   });
+  const [features, setFeatures] = useState<Record<string, boolean>>(DEFAULT_FEATURES);
+  const [featuresLoading, setFeaturesLoading] = useState(true);
+
+  const loadFeatures = useCallback(async () => {
+    const { data } = await supabase
+      .from("user_preferences")
+      .select("features_enabled")
+      .maybeSingle();
+    if (data?.features_enabled) {
+      setFeatures({ ...DEFAULT_FEATURES, ...(data.features_enabled as Record<string, boolean>) });
+    }
+    setFeaturesLoading(false);
+  }, []);
+
+  useEffect(() => { loadFeatures(); }, [loadFeatures]);
+
+  const toggleFeature = useCallback(async (id: string) => {
+    const next = { ...features, [id]: !features[id] };
+    setFeatures(next);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error } = await supabase
+      .from("user_preferences")
+      .update({ features_enabled: next })
+      .eq("user_id", user.id);
+    if (error) {
+      console.error("Failed to save feature toggle:", error.message);
+      setFeatures(features);
+    }
+  }, [features]);
 
   const handleSave = () => {
     if (nameInput.trim()) {
@@ -114,6 +163,33 @@ export const AgentSettings = ({ onReplayOnboarding }: AgentSettingsProps) => {
           ))}
         </div>
       </div>
+      <div className="glass-card rounded-2xl p-6" style={{ animation: "fade-up 0.4s ease-out both", animationDelay: "0.15s" }}>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
+            <ToggleLeft className="w-5 h-5 text-accent" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-foreground">Features</h2>
+            <p className="text-xs text-muted-foreground">Turn agent capabilities on or off</p>
+          </div>
+        </div>
+        <div className="space-y-4">
+          {featuresLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            FEATURES.map((feat) => (
+              <div key={feat.id} className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{feat.label}</p>
+                  <p className="text-xs text-muted-foreground">{feat.description}</p>
+                </div>
+                <Switch checked={features[feat.id] ?? true} onCheckedChange={() => toggleFeature(feat.id)} />
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       {onReplayOnboarding && (
         <div className="glass-card rounded-2xl p-6" style={{ animation: "fade-up 0.4s ease-out both", animationDelay: "0.2s" }}>
           <div className="flex items-center gap-3 mb-4">

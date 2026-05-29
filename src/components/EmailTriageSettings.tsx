@@ -125,7 +125,7 @@ export default function EmailTriageSettings() {
       {/* VIP Senders */}
       <div className="border rounded-xl p-4 space-y-2">
         <div className="flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 text-orange-500" />
+          <ShieldAlert className="w-4 h-4 text-accent" />
           <label className="text-sm font-semibold">VIP Senders</label>
         </div>
         <p className="text-xs text-muted-foreground">Emails from these people/domains are always flagged as high priority. Use email addresses or domains (e.g., boss@company.com or company.com).</p>

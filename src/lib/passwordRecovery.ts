@@ -9,7 +9,10 @@ export type PasswordRecoveryParams = {
   hasRecoveryIntent: boolean;
 };
 
-export const PASSWORD_RESET_REDIRECT_URL = "https://normyagent.com/reset-password";
+export const PASSWORD_RESET_REDIRECT_URL =
+  typeof window !== "undefined"
+    ? `${window.location.origin}/reset-password`
+    : "https://normyagent.com/reset-password";
 
 const addParams = (sets: URLSearchParams[], raw: string) => {
   const value = raw.trim().replace(/^[?#]/, "");
@@ -63,8 +66,8 @@ export const getPasswordRecoveryParams = (href = typeof window !== "undefined" ?
     hasRecoveryIntent:
       isResetPath ||
       type === "recovery" ||
-      Boolean(tokenHash) ||
-      Boolean(accessToken && refreshToken) ||
+      (Boolean(tokenHash) && type !== "signup") ||
+      (Boolean(accessToken && refreshToken) && type !== "signup") ||
       Boolean(errorDesc || errorCode) ||
       Boolean(code && isResetPath),
   };

@@ -315,7 +315,11 @@ export const IntegrationsSetup = () => {
                       ) : (
                         <>
                           {integration.connected ? <Plus className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
-                          {integration.connected ? "Add another account" : `Connect ${integration.name}`}
+                          {integration.connected
+                            ? "Add another account"
+                            : GOOGLE_PROVIDERS.includes(integration.id)
+                            ? "Connect Google Account"
+                            : `Connect ${integration.name}`}
                         </>
                       )}
                     </button>

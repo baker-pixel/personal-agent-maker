@@ -6,79 +6,64 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-async function getValidToken(adminClient: any, userId: string, provider: string) {
-  const { data: tokenRow } = await adminClient
-    .from("google_oauth_tokens")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("provider", provider)
-    .maybeSingle();
+const NYLAS_BASE = "https://api.us.nylas.com";
 
-  if (!tokenRow) return null;
+function formatAddress(people: Array<{ name?: string; email: string }>): string {
+  if (!people?.length) return "";
+  return people.map(p => p.name ? `${p.name} <${p.email}>` : p.email).join(", ");
+}
 
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) return tokenRow.access_token;
-  if (!tokenRow.refresh_token) return null;
+function unixToIso(ts: number): string {
+  return new Date(ts * 1000).toISOString();
+}
 
+async function getNylasGrant(adminClient: any, userId: string): Promise<{ grantId: string; email: string | null } | null> {
   try {
-    const res = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-        client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-        refresh_token: tokenRow.refresh_token,
-        grant_type: "refresh_token",
-      }),
-    });
-    const data = await res.json();
-    if (data.error) return null;
-
-    await adminClient
-      .from("google_oauth_tokens")
-      .update({
-        access_token: data.access_token,
-        token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+    const { data: grant, error } = await adminClient
+      .from("nylas_grants")
+      .select("grant_id, email")
       .eq("user_id", userId)
-      .eq("provider", provider);
-
-    return data.access_token;
+      .eq("provider", "google")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !grant) return null;
+    return { grantId: grant.grant_id, email: grant.email };
   } catch {
     return null;
   }
 }
 
-async function fetchTodaysSentEmails(token: string) {
+async function fetchTodaysSentEmails(grantId: string, nylasApiKey: string) {
   try {
-    const today = new Date().toISOString().split("T")[0].replace(/-/g, "/");
+    // Nylas: search sent folder (SENT) for today's messages
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const receivedAfter = Math.floor(startOfDay.getTime() / 1000);
+    const params = new URLSearchParams({
+      limit: "15",
+      in: "SENT",
+      received_after: String(receivedAfter),
+    });
     const listRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=15&q=is:sent after:${today}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      `${NYLAS_BASE}/v3/grants/${grantId}/messages?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${nylasApiKey}` } }
     );
+    if (!listRes.ok) return [];
     const listData = await listRes.json();
-    if (!listData.messages?.length) return [];
+    const messages: any[] = listData.data || [];
+    if (!messages.length) return [];
 
-    const emails = await Promise.all(
-      listData.messages.slice(0, 10).map(async (msg: { id: string }) => {
-        const r = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const d = await r.json();
-        const headers = d.payload?.headers || [];
-        const get = (n: string) => headers.find((h: any) => h.name.toLowerCase() === n.toLowerCase())?.value || "";
-        return { to: get("To"), subject: get("Subject") };
-      })
-    );
-    return emails;
+    return messages.slice(0, 10).map((msg: any) => ({
+      to: formatAddress(msg.to || []),
+      subject: msg.subject || "",
+    }));
   } catch {
     return [];
   }
 }
 
-async function fetchTodaysEvents(token: string) {
+async function fetchTodaysEvents(grantId: string, nylasApiKey: string) {
   try {
     const now = new Date();
     const startOfDay = new Date(now);
@@ -87,23 +72,30 @@ async function fetchTodaysEvents(token: string) {
     endOfDay.setHours(23, 59, 59, 999);
 
     const params = new URLSearchParams({
-      timeMin: startOfDay.toISOString(),
-      timeMax: endOfDay.toISOString(),
-      singleEvents: "true",
-      orderBy: "startTime",
-      maxResults: "20",
+      calendar_id: "primary",
+      start: String(Math.floor(startOfDay.getTime() / 1000)),
+      end: String(Math.floor(endOfDay.getTime() / 1000)),
+      limit: "20",
     });
 
     const r = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      `${NYLAS_BASE}/v3/grants/${grantId}/events?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${nylasApiKey}` } }
     );
+    if (!r.ok) return [];
     const data = await r.json();
-    return (data.items || []).map((e: any) => ({
-      summary: e.summary || "(No title)",
-      start: e.start?.dateTime || e.start?.date,
-      attendees: (e.attendees || []).length,
-    }));
+    return (data.data || []).map((e: any) => {
+      const when = e.when || {};
+      let start: string | undefined;
+      if (when.object === "timespan") start = unixToIso(when.start_time);
+      else if (when.object === "date") start = when.date;
+      else if (when.object === "datespan") start = when.start_date;
+      return {
+        summary: e.title || "(No title)",
+        start,
+        attendees: (e.participants || []).length,
+      };
+    });
   } catch {
     return [];
   }
@@ -143,14 +135,12 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const [gmailToken, calToken] = await Promise.all([
-      getValidToken(adminClient, user.id, "gmail"),
-      getValidToken(adminClient, user.id, "google-calendar"),
-    ]);
+    const nylasApiKey = Deno.env.get("NYLAS_API_KEY")!;
+    const grant = await getNylasGrant(adminClient, user.id);
 
     const [sentEmails, todaysEvents, completedItems, openItems, overdueItems, handledDrafts] = await Promise.all([
-      gmailToken ? fetchTodaysSentEmails(gmailToken) : [],
-      calToken ? fetchTodaysEvents(calToken) : [],
+      grant ? fetchTodaysSentEmails(grant.grantId, nylasApiKey) : [],
+      grant ? fetchTodaysEvents(grant.grantId, nylasApiKey) : [],
       supabase
         .from("action_items")
         .select("title, priority")
@@ -197,8 +187,8 @@ Deno.serve(async (req) => {
       .limit(10);
 
     // Generate AI summary
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("AI not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) throw new Error("AI not configured");
 
     const dayOfWeek = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
@@ -244,14 +234,14 @@ Rules:
 - Sound like a trusted chief of staff wrapping up the day
 - If there's nothing for a section, say "Nothing here — nice work!" or similar`;
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: "You are a sharp executive assistant writing an end-of-day wrap-up. Use markdown formatting." },
           { role: "user", content: prompt },
@@ -292,7 +282,7 @@ Rules:
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("eod-wrapup error:", error);
     return new Response(
       JSON.stringify({ error: error.message }),

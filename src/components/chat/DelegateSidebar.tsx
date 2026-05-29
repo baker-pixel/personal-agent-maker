@@ -30,9 +30,9 @@ export const DelegateSidebar = ({
       />
     )}
     <aside
-      className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-300 ease-out ${
+      className={`fixed lg:static inset-y-0 left-0 z-40 w-64 pt-[var(--header-h)] lg:pt-0 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-300 ease-out ${
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-      } lg:flex hidden`}
+      }`}
     >
       <div className="p-4 pb-3 flex items-center justify-between">
         <span className="font-display text-sm font-semibold text-sidebar-foreground tracking-tight">

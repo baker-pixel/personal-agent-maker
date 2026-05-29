@@ -34,9 +34,8 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -51,8 +50,8 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY not configured");
 
     const TWILIO_API_KEY = Deno.env.get("TWILIO_API_KEY");
     if (!TWILIO_API_KEY) throw new Error("TWILIO_API_KEY not configured");
@@ -63,7 +62,7 @@ serve(async (req) => {
     const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "X-Connection-Api-Key": TWILIO_API_KEY,
         "Content-Type": "application/x-www-form-urlencoded",
       },

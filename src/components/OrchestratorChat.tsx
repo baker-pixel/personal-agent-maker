@@ -176,6 +176,9 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
         return { role: m.role, content };
       });
 
+      const controller = new AbortController();
+      const safetyTimer = setTimeout(() => controller.abort(), 60000);
+
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -185,8 +188,12 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
         body: JSON.stringify({
           messages: messagesPayload,
           agentName,
+          clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          clientNowIso: new Date().toISOString(),
         }),
+        signal: controller.signal,
       });
+      clearTimeout(safetyTimer);
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: "Request failed" }));
@@ -225,9 +232,13 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
           }
         }
       }
-    } catch (e) {
-      console.error(e);
-      upsertAssistant("⚠️ Connection error. Please try again.");
+    } catch (e: any) {
+      if (e?.name === "AbortError") {
+        upsertAssistant("⚠️ Request timed out. Please try again.");
+      } else {
+        console.error(e);
+        upsertAssistant("⚠️ Connection error. Please try again.");
+      }
     }
 
     if (currentConvId && assistantSoFar) {

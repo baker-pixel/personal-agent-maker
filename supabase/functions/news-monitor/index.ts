@@ -35,8 +35,8 @@ Deno.serve(async (req) => {
     }
 
     const { topics } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("AI not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) throw new Error("AI not configured");
 
     const topicList = topics && topics.length > 0
       ? topics.join(", ")
@@ -54,14 +54,14 @@ Return a JSON object with an "articles" array. Each article should have:
 
 Return 8-12 articles, prioritized by importance. Focus on actionable business intelligence.`;
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: "You are a sharp news analyst. Return valid JSON only." },
           { role: "user", content: prompt },

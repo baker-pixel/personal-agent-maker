@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Sparkles, Loader2, Check, X, Mail } from "lucide-react";
+import { ArrowLeft, Sparkles, Loader2, Check, X, Mail, Calendar } from "lucide-react";
 import { ActionItems } from "@/components/ActionItems";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -32,8 +32,8 @@ export default function Tasks() {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-[env(safe-area-inset-top)]">
-      <div className="container max-w-3xl py-8 px-4">
+    <div className="min-h-screen bg-background pt-[var(--header-h)]">
+      <div className="container max-w-3xl py-8 pl-4 pr-4">
         <button
           onClick={() => navigate("/dashboard")}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
@@ -46,10 +46,10 @@ export default function Tasks() {
             onClick={scanInboxForTasks}
             disabled={scanning}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/15 transition-colors disabled:opacity-40"
-            title="Have Normy scan your recent emails for implicit tasks"
+            title="Have Normy extract tasks from your triaged emails and upcoming calendar events"
           >
             {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-            {scanning ? "Scanning…" : "Scan inbox for tasks"}
+            {scanning ? "Scanning…" : <><span className="hidden sm:inline">Scan emails & calendar</span><span className="sm:hidden">Scan</span></>}
           </button>
         </div>
 
@@ -120,7 +120,17 @@ function SuggestedTasks() {
                 {item.description && (
                   <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
                 )}
-                {item.meeting_summary && (
+                {item.source === "calendar_event" && item.description && (
+                  <p className="text-[11px] text-accent/80 mt-1.5 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> {item.description}
+                  </p>
+                )}
+                {item.source === "email_metadata" && item.description && (
+                  <p className="text-[11px] text-accent/80 mt-1.5 flex items-center gap-1">
+                    <Mail className="w-3 h-3" /> {item.description}
+                  </p>
+                )}
+                {item.source === "ai_email_extract" && item.meeting_summary && (
                   <p className="text-[11px] text-accent/80 mt-1.5 flex items-center gap-1">
                     <Mail className="w-3 h-3" /> From: {item.meeting_summary}
                   </p>

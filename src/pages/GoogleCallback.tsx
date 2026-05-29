@@ -54,7 +54,7 @@ const GoogleCallback = () => {
           return;
         }
 
-        const { data, error } = await supabase.functions.invoke("google-callback", {
+        const { data, error } = await supabase.functions.invoke("nylas-callback", {
           body: { code, provider, redirectUrl: window.location.origin },
         });
 

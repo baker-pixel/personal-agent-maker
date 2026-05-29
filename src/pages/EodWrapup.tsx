@@ -5,7 +5,7 @@ export default function EodWrapupPage() {
   return (
     <AgentProvider>
       <div className="min-h-screen bg-background">
-        <div className="container py-10">
+        <div className="container pt-[var(--header-h)] pb-10">
           <EndOfDayWrapup />
         </div>
       </div>

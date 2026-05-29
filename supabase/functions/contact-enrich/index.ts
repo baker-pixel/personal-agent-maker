@@ -8,43 +8,16 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function refreshIfNeeded(adminClient: any, tokenRow: any) {
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) return tokenRow.access_token;
-  if (!tokenRow.refresh_token) return null;
-  const r = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-      client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-      refresh_token: tokenRow.refresh_token,
-      grant_type: "refresh_token",
-    }),
-  });
-  const data = await r.json();
-  if (data.error) return null;
-  await adminClient.from("google_oauth_tokens").update({
-    access_token: data.access_token,
-    token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  }).eq("id", tokenRow.id);
-  return data.access_token;
-}
+const NYLAS_BASE = "https://api.us.nylas.com";
 
-async function getAllGmailTokens(adminClient: any, userId: string) {
+async function getAllNylasGrants(adminClient: any, userId: string): Promise<Array<{ grantId: string; email: string }>> {
   const { data: rows } = await adminClient
-    .from("google_oauth_tokens")
-    .select("*")
+    .from("nylas_grants")
+    .select("grant_id, email")
     .eq("user_id", userId)
-    .eq("provider", "gmail");
+    .eq("provider", "google");
   if (!rows?.length) return [];
-  const out: string[] = [];
-  for (const row of rows) {
-    const t = await refreshIfNeeded(adminClient, row);
-    if (t) out.push(t);
-  }
-  return out;
+  return rows.map((r: any) => ({ grantId: r.grant_id, email: r.email || "primary" }));
 }
 
 function decode64Url(s: string) {
@@ -54,47 +27,56 @@ function decode64Url(s: string) {
   } catch { return ""; }
 }
 
-function extractText(payload: any): string {
-  if (!payload) return "";
-  if (payload.body?.data) return decode64Url(payload.body.data);
-  if (payload.parts) {
-    for (const p of payload.parts) {
-      if (p.mimeType === "text/plain" && p.body?.data) return decode64Url(p.body.data);
-    }
-    for (const p of payload.parts) {
-      const nested = extractText(p);
-      if (nested) return nested;
-    }
-  }
-  return "";
-}
-
-async function fetchEmailsFromContact(token: string, email: string, max = 5) {
+async function fetchEmailsFromContact(grantId: string, nylasApiKey: string, email: string, max = 8) {
+  const results: any[] = [];
   try {
-    const q = encodeURIComponent(`from:${email} OR to:${email}`);
-    const listRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${max}&q=${q}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+    // Fetch messages FROM this contact
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 10000);
+    const fromParams = new URLSearchParams({ limit: String(max), from: email });
+    const fromRes = await fetch(
+      `${NYLAS_BASE}/v3/grants/${grantId}/messages?${fromParams.toString()}`,
+      { headers: { Authorization: `Bearer ${nylasApiKey}` }, signal: ctrl.signal }
     );
-    if (!listRes.ok) return [];
-    const list = await listRes.json();
-    const ids = (list.messages || []).slice(0, max).map((m: any) => m.id);
-    const results: any[] = [];
-    for (const id of ids) {
-      const msgRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!msgRes.ok) continue;
-      const msg = await msgRes.json();
-      const headers = msg.payload?.headers || [];
-      const subject = headers.find((h: any) => h.name === "Subject")?.value || "";
-      const date = headers.find((h: any) => h.name === "Date")?.value || "";
-      const body = extractText(msg.payload).slice(0, 800);
-      results.push({ subject, date, snippet: msg.snippet || body.slice(0, 200) });
+    clearTimeout(tid);
+    if (fromRes.ok) {
+      const data = await fromRes.json();
+      results.push(...(data.data || []));
     }
-    return results;
-  } catch { return []; }
+
+    // Also fetch messages TO this contact (sent by us)
+    if (results.length < max) {
+      const ctrl2 = new AbortController();
+      const tid2 = setTimeout(() => ctrl2.abort(), 10000);
+      const toParams = new URLSearchParams({ limit: String(max), to: email });
+      const toRes = await fetch(
+        `${NYLAS_BASE}/v3/grants/${grantId}/messages?${toParams.toString()}`,
+        { headers: { Authorization: `Bearer ${nylasApiKey}` }, signal: ctrl2.signal }
+      );
+      clearTimeout(tid2);
+      if (toRes.ok) {
+        const data = await toRes.json();
+        results.push(...(data.data || []));
+      }
+    }
+
+    // Dedupe by message id, sort by date desc, take top max
+    const seen = new Set<string>();
+    const deduped = results
+      .filter((m) => { if (seen.has(m.id)) return false; seen.add(m.id); return true; })
+      .sort((a, b) => (b.date || 0) - (a.date || 0))
+      .slice(0, max);
+
+    return deduped.map((msg: any) => ({
+      subject: msg.subject || "",
+      date: msg.date ? new Date(msg.date * 1000).toUTCString() : "",
+      snippet: msg.snippet || "",
+      body: (msg.body || "").slice(0, 800),
+    }));
+  } catch (e) {
+    console.error("fetchEmailsFromContact error:", e);
+    return [];
+  }
 }
 
 Deno.serve(async (req) => {
@@ -128,11 +110,12 @@ Deno.serve(async (req) => {
     if (!contact) return new Response(JSON.stringify({ error: "Contact not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     if (!contact.email) return new Response(JSON.stringify({ error: "Contact has no email" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    // Fetch recent emails from this contact across all connected Gmail accounts
-    const tokens = await getAllGmailTokens(adminClient, user.id);
+    // Fetch recent emails from this contact across all connected Nylas grants
+    const nylasApiKey = Deno.env.get("NYLAS_API_KEY")!;
+    const grants = await getAllNylasGrants(adminClient, user.id);
     const allEmails: any[] = [];
-    for (const t of tokens) {
-      const emails = await fetchEmailsFromContact(t, contact.email, 5);
+    for (const g of grants) {
+      const emails = await fetchEmailsFromContact(g.grantId, nylasApiKey, contact.email, 5);
       allEmails.push(...emails);
     }
 
@@ -148,14 +131,14 @@ Deno.serve(async (req) => {
       `Email ${i + 1} (${e.date}):\nSubject: ${e.subject}\n${e.snippet}`
     ).join("\n\n---\n\n");
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY")}`,
+        Authorization: `Bearer ${Deno.env.get("GROQ_API_KEY")}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "llama-3.3-70b-versatile",
         messages: [
           {
             role: "system",

@@ -86,8 +86,8 @@ serve(async (req) => {
     const trimmedHistory = conversationHistory.slice(-20);
 
     // Call the AI
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY is not configured");
 
     const now = new Date();
     const timeOfDay =
@@ -114,15 +114,15 @@ serve(async (req) => {
 You can help with email triage, calendar management, task tracking, and general questions. Keep it snappy.`;
 
     const aiResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${GROQ_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "llama-3.3-70b-versatile",
           messages: [
             { role: "system", content: systemPrompt },
             ...trimmedHistory,
@@ -172,11 +172,11 @@ You can help with email triage, calendar management, task tracking, and general 
 });
 
 async function sendSms(to: string, body: string) {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
   const TWILIO_API_KEY = Deno.env.get("TWILIO_API_KEY");
   const TWILIO_PHONE_NUMBER = Deno.env.get("TWILIO_PHONE_NUMBER");
 
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+  if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY not configured");
   if (!TWILIO_API_KEY) throw new Error("TWILIO_API_KEY not configured");
   if (!TWILIO_PHONE_NUMBER) throw new Error("TWILIO_PHONE_NUMBER not configured");
 
@@ -187,7 +187,7 @@ async function sendSms(to: string, body: string) {
     const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "X-Connection-Api-Key": TWILIO_API_KEY,
         "Content-Type": "application/x-www-form-urlencoded",
       },

@@ -390,8 +390,8 @@ export default function Steno() {
   }, [prepAttendees, prepTopic]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+    <div className="min-h-screen bg-background flex flex-col pt-[var(--header-h)]">
+      <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
         <div className="container max-w-3xl flex items-center h-14 px-4">
           <button
             onClick={() => { speech.stopListening(); navigate("/office"); }}
@@ -405,13 +405,14 @@ export default function Steno() {
             onClick={() => { speech.stopListening(); navigate("/steno/history"); }}
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mr-3"
           >
-            History
+            <span className="hidden sm:inline">History</span>
+            <History className="w-4 h-4 sm:hidden" />
           </button>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center">
               <Sparkles className="w-3.5 h-3.5 text-accent" />
             </div>
-            <span className="font-display text-base font-semibold">Steno</span>
+            <span className="hidden sm:inline font-display text-base font-semibold">Steno</span>
           </div>
         </div>
       </nav>
@@ -713,11 +714,11 @@ export default function Steno() {
                               <select
                                 value={it.priority || "medium"}
                                 onChange={(e) => updateItem(it.id, { priority: e.target.value as any })}
-                                className="h-9 text-xs rounded-md border border-input bg-background px-3"
+                                className="h-9 text-xs rounded-md border border-input bg-background px-2"
                               >
-                                <option value="low">Low priority</option>
-                                <option value="medium">Medium priority</option>
-                                <option value="high">High priority</option>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
                               </select>
                             </div>
                           )}

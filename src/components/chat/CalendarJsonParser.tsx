@@ -1,0 +1,195 @@
+import { useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { CalendarPlus, CalendarX, Check, ExternalLink, Loader2 } from "lucide-react";
+
+interface Attendee {
+  email: string;
+  name?: string;
+}
+
+interface CalendarEventData {
+  summary: string;
+  start: string;
+  end?: string;
+  description?: string;
+  location?: string;
+  allDay?: boolean;
+  attendees?: Attendee[];
+}
+
+interface CancelEventData {
+  eventId: string;
+  summary: string;
+  notifyAttendees?: boolean;
+}
+
+// supabase.functions.invoke returns FunctionsHttpError on non-2xx.
+// The actual response body is in error.context (a Response object) — not error.message.
+async function extractErrMsg(e: any): Promise<string> {
+  // Try to read the actual JSON body from the response context
+  if (e?.context && typeof e.context.json === "function") {
+    try {
+      const body = await e.context.json();
+      return body?.error || body?.message || e.message || "Unknown error";
+    } catch { /* fall through */ }
+  }
+  // Fallback: try parsing message as JSON (older supabase-js versions)
+  const raw: string = e?.message || e?.error || "Unknown error";
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed?.error || parsed?.message || raw;
+  } catch {
+    return raw;
+  }
+}
+
+// Append local UTC offset to bare ISO datetime strings so Deno (UTC) interprets them correctly.
+function withLocalTz(isoStr: string): string {
+  if (!isoStr || isoStr.includes("Z") || isoStr.includes("+") || /T.*-\d\d:\d\d$/.test(isoStr)) return isoStr;
+  const offsetMins = -new Date().getTimezoneOffset();
+  const sign = offsetMins >= 0 ? "+" : "-";
+  const h = String(Math.floor(Math.abs(offsetMins) / 60)).padStart(2, "0");
+  const m = String(Math.abs(offsetMins) % 60).padStart(2, "0");
+  return `${isoStr}${sign}${h}:${m}`;
+}
+
+function parseBlocks<T>(text: string, tag: string, validate: (p: any) => boolean): T[] {
+  const results: T[] = [];
+  const regex = new RegExp("```" + tag + "\\s*\\n([\\s\\S]*?)\\n```", "g");
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      if (validate(parsed)) results.push(parsed as T);
+    } catch { /* skip malformed */ }
+  }
+  return results;
+}
+
+export function CalendarJsonParser({ text }: { text: string }) {
+  const [addedIndices, setAddedIndices] = useState<Set<number>>(new Set());
+  const [cancelledIndices, setCancelledIndices] = useState<Set<number>>(new Set());
+  const [loadingAdd, setLoadingAdd] = useState<Set<number>>(new Set());
+  const [loadingCancel, setLoadingCancel] = useState<Set<number>>(new Set());
+  const [eventLinks, setEventLinks] = useState<Record<number, string>>({});
+
+  const { creates, cancels } = useMemo(() => ({
+    creates: parseBlocks<CalendarEventData>(text, "calendar-json", (p) => !!(p.summary && p.start)),
+    cancels: parseBlocks<CancelEventData>(text, "cancel-event-json", (p) => !!(p.eventId && p.summary)),
+  }), [text]);
+
+  if (creates.length === 0 && cancels.length === 0) return null;
+
+  const handleAdd = async (event: CalendarEventData, index: number) => {
+    setLoadingAdd((prev) => new Set(prev).add(index));
+    try {
+      const { data, error } = await supabase.functions.invoke("calendar-event-create", {
+        body: {
+          summary: event.summary,
+          start: event.allDay ? event.start : withLocalTz(event.start),
+          end: event.end ? (event.allDay ? event.end : withLocalTz(event.end)) : undefined,
+          description: event.description,
+          location: event.location,
+          allDay: event.allDay ?? false,
+          attendees: event.attendees ?? [],
+        },
+      });
+      if (error) throw error;
+      const link: string | undefined = data?.event?.htmlLink;
+      const invited: Attendee[] = data?.event?.attendees ?? [];
+      setAddedIndices((prev) => new Set(prev).add(index));
+      if (link) setEventLinks((prev) => ({ ...prev, [index]: link }));
+      const inviteNote = invited.length > 0
+        ? ` · invite sent to ${invited.map((a) => a.name || a.email).join(", ")}`
+        : "";
+      toast.success(`"${event.summary}" added to calendar${inviteNote}`, {
+        action: link ? { label: "Open", onClick: () => window.open(link, "_blank") } : undefined,
+      });
+    } catch (e: any) {
+      const msg = await extractErrMsg(e);
+      if (msg.includes("NOT_CONNECTED") || msg.includes("RECONNECT") || msg.includes("expired")) {
+        toast.error("Calendar not connected — reconnect via Integrations.");
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setLoadingAdd((prev) => { const s = new Set(prev); s.delete(index); return s; });
+    }
+  };
+
+  const handleCancel = async (event: CancelEventData, index: number) => {
+    setLoadingCancel((prev) => new Set(prev).add(index));
+    try {
+      const { error } = await supabase.functions.invoke("calendar-event-delete", {
+        body: {
+          eventId: event.eventId,
+          notifyAttendees: event.notifyAttendees ?? true,
+        },
+      });
+      if (error) throw error;
+      setCancelledIndices((prev) => new Set(prev).add(index));
+      toast.success(`"${event.summary}" cancelled${event.notifyAttendees !== false ? " · attendees notified" : ""}`);
+    } catch (e: any) {
+      const msg = await extractErrMsg(e);
+      if (msg.includes("NOT_CONNECTED") || msg.includes("RECONNECT") || msg.includes("expired")) {
+        toast.error("Calendar not connected — reconnect via Integrations.");
+      } else if (msg.toLowerCase().includes("not found") || msg.includes("404") || msg.includes("already")) {
+        toast.error("Event not found — it may already be deleted.");
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setLoadingCancel((prev) => { const s = new Set(prev); s.delete(index); return s; });
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2">
+      {creates.map((event, i) => (
+        <div key={`create-${i}`} className="flex items-center gap-2">
+          <button
+            onClick={() => handleAdd(event, i)}
+            disabled={addedIndices.has(i) || loadingAdd.has(i)}
+            className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50 disabled:cursor-default"
+          >
+            {loadingAdd.has(i) ? (
+              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding…</>
+            ) : addedIndices.has(i) ? (
+              <><Check className="w-3.5 h-3.5" /> Added to Calendar</>
+            ) : (
+              <><CalendarPlus className="w-3.5 h-3.5" /> Add to Calendar: {event.summary}</>
+            )}
+          </button>
+          {eventLinks[i] && (
+            <a
+              href={eventLinks[i]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs text-blue-500 hover:underline"
+            >
+              <ExternalLink className="w-3 h-3" /> Open
+            </a>
+          )}
+        </div>
+      ))}
+
+      {cancels.map((event, i) => (
+        <button
+          key={`cancel-${i}`}
+          onClick={() => handleCancel(event, i)}
+          disabled={cancelledIndices.has(i) || loadingCancel.has(i)}
+          className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50 disabled:cursor-default"
+        >
+          {loadingCancel.has(i) ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Cancelling…</>
+          ) : cancelledIndices.has(i) ? (
+            <><Check className="w-3.5 h-3.5" /> Cancelled</>
+          ) : (
+            <><CalendarX className="w-3.5 h-3.5" /> Cancel Event: {event.summary}</>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}

@@ -12,9 +12,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     const SLACK_API_KEY = Deno.env.get("SLACK_API_KEY");
@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
       const res = await fetch(url, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${GROQ_API_KEY}`,
           "X-Connection-Api-Key": SLACK_API_KEY,
         },
       });

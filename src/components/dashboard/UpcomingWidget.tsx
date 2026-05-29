@@ -3,15 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   ListTodo,
   Gift,
-  Calendar,
-  AlertCircle,
   ArrowUpRight,
   CheckCircle2,
   Heart,
   Mail,
   Bell,
 } from "lucide-react";
-import { format, parseISO, isPast, isToday, differenceInDays, addYears, isBefore } from "date-fns";
+import { format, parseISO, isPast, isToday, differenceInDays, addYears, isBefore, addDays, startOfDay } from "date-fns";
 
 interface ActionItem {
   id: string;
@@ -75,8 +73,13 @@ export const UpcomingWidget = ({ onNavigateToTasks, onNavigateToReminders }: Pro
 
       if (items) {
         const typed = items as unknown as ActionItem[];
-        setOverdueItems(typed.filter((i) => i.due_date && isPast(parseISO(i.due_date)) && !isToday(parseISO(i.due_date))));
-        setOpenItems(typed.slice(0, 4));
+        // Only show items due tomorrow or later (today/overdue handled by TasksWidget)
+        const tomorrow = startOfDay(addDays(new Date(), 1));
+        const future = typed.filter(
+          (i) => i.due_date && parseISO(i.due_date) >= tomorrow
+        ).slice(0, 4);
+        setOverdueItems([]);
+        setOpenItems(future);
       }
 
       const { data: reminders } = await supabase
@@ -108,12 +111,7 @@ export const UpcomingWidget = ({ onNavigateToTasks, onNavigateToReminders }: Pro
             <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
               <ListTodo className="w-4 h-4 text-accent" />
             </div>
-            <h2 className="text-sm font-semibold text-foreground">Action Items</h2>
-            {overdueItems.length > 0 && (
-              <span className="text-[10px] font-semibold text-destructive flex items-center gap-0.5">
-                <AlertCircle className="w-3 h-3" /> {overdueItems.length} overdue
-              </span>
-            )}
+            <h2 className="text-sm font-semibold text-foreground">Upcoming Tasks</h2>
           </div>
           <button
             onClick={onNavigateToTasks}
@@ -125,7 +123,7 @@ export const UpcomingWidget = ({ onNavigateToTasks, onNavigateToReminders }: Pro
         <div className="px-4 pb-4">
           {openItems.length === 0 ? (
             <div className="flex items-center justify-center py-6 text-muted-foreground/50">
-              <span className="text-xs">All clear — no open items! 🎉</span>
+              <span className="text-xs">Nothing due in the next few days</span>
             </div>
           ) : (
             <div className="space-y-1">

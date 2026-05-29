@@ -20,6 +20,8 @@ interface IntegrationsContextType {
   removeAccount: (provider: string, email: string) => Promise<void>;
   /** True while the integration list is being re-fetched from the server. */
   refreshing: boolean;
+  /** True until the very first fetchConnected completes — prevents flash of "not connected". */
+  integrationsLoading: boolean;
   /** Error from the most recent token metadata fetch, if any. */
   tokensError: string | null;
 }
@@ -115,6 +117,7 @@ const IntegrationsContext = createContext<IntegrationsContextType>({
   refreshConnections: async () => {},
   removeAccount: async () => {},
   refreshing: false,
+  integrationsLoading: true,
   tokensError: null,
 });
 
@@ -123,6 +126,7 @@ export const useIntegrations = () => useContext(IntegrationsContext);
 export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [integrations, setIntegrations] = useState<Integration[]>(defaultIntegrations);
   const [refreshing, setRefreshing] = useState(false);
+  const [integrationsLoading, setIntegrationsLoading] = useState(true);
   const [tokensError, setTokensError] = useState<string | null>(null);
 
   const fetchConnected = useCallback(async () => {
@@ -131,42 +135,39 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    const { data: tokens, error: tokensQueryError } = await supabase
-      .from("google_oauth_token_metadata" as any)
-      .select("provider, email") as { data: { provider: string; email: string | null }[] | null; error: { message: string } | null };
+    const { data: grants, error: grantsQueryError } = await supabase
+      .from("nylas_grants")
+      .select("email, provider");
 
-    if (tokensQueryError) {
-      // Surface the error instead of silently swallowing it — the UI can now
-      // show a meaningful message instead of pretending nothing is connected.
-      console.error("Failed to load integration tokens metadata:", tokensQueryError);
-      setTokensError(tokensQueryError.message ?? "Failed to load integrations");
+    if (grantsQueryError) {
+      console.error("Failed to load nylas_grants:", grantsQueryError);
+      setTokensError(grantsQueryError.message ?? "Failed to load integrations");
       return;
     }
     setTokensError(null);
 
-    // Group emails by provider (empty map if no tokens — this is what clears stale state).
-    const providerEmails = new Map<string, string[]>();
-    for (const t of tokens ?? []) {
-      const emails = providerEmails.get(t.provider) || [];
-      if (t.email && !emails.includes(t.email)) emails.push(t.email);
-      providerEmails.set(t.provider, emails);
+    // One Nylas Google grant covers both Gmail and Calendar.
+    // Collect unique emails from google grants and apply to both services.
+    const googleEmails: string[] = [];
+    for (const g of grants ?? []) {
+      if (g.provider === "google" && g.email && !googleEmails.includes(g.email)) {
+        googleEmails.push(g.email);
+      }
     }
 
-    // Always re-derive connected state for every Google provider so that
-    // a disconnect (which removes the row) reliably flips connected → false.
     setIntegrations((prev) =>
       prev.map((i) => {
         if (i.id !== "gmail" && i.id !== "google-calendar") return i;
-        const emails = providerEmails.get(i.id) || [];
         return {
           ...i,
-          connected: emails.length > 0,
-          connectedAccounts: emails,
+          connected: googleEmails.length > 0,
+          connectedAccounts: googleEmails,
         };
       })
     );
     } finally {
       setRefreshing(false);
+      setIntegrationsLoading(false);
     }
   }, []);
 
@@ -224,65 +225,29 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
   }, []);
 
-  const removeAccount = useCallback(async (provider: string, email: string) => {
-    // 0. Optimistic UI: drop the email from the affected provider only.
+  const removeAccount = useCallback(async (_provider: string, email: string) => {
+    // Optimistic UI: one Nylas Google grant covers both Gmail and Calendar.
     setIntegrations((prev) =>
       prev.map((i) => {
-        if (i.id !== provider) return i;
+        if (i.id !== "gmail" && i.id !== "google-calendar") return i;
         const remaining = i.connectedAccounts.filter((e) => e !== email);
         return { ...i, connected: remaining.length > 0, connectedAccounts: remaining };
       })
     );
 
-    // 1. Best-effort: revoke token directly with Google before deleting our row.
-    // The revoke function also tells us if a sibling service shares the same
-    // refresh_token (legacy shared-token state). If so, revoking this token
-    // has already broken the sibling — clean it up too so the UI shows it as
-    // properly disconnected rather than stuck in a broken-connected state.
-    let sharedSiblingProviders: string[] = [];
+    // Revoke the Nylas grant (handles DB deletion internally).
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        const { data: revokeData } = await supabase.functions.invoke("google-revoke", {
-          body: { provider, email },
+        await supabase.functions.invoke("nylas-revoke", {
+          body: { provider: "google", email },
         });
-        sharedSiblingProviders = (revokeData as any)?.sharedSiblingProviders ?? [];
       }
     } catch (err) {
-      console.warn("Google token revoke failed (continuing with local delete):", err);
+      console.warn("Nylas revoke failed (continuing):", err);
     }
 
-    // If sibling services share the same (now-revoked) refresh_token, optimistic-
-    // update them to disconnected immediately so the UI is accurate.
-    if (sharedSiblingProviders.length > 0) {
-      setIntegrations((prev) =>
-        prev.map((i) => {
-          if (!sharedSiblingProviders.includes(i.id)) return i;
-          const remaining = i.connectedAccounts.filter((e) => e !== email);
-          return { ...i, connected: remaining.length > 0, connectedAccounts: remaining };
-        })
-      );
-    }
-
-    // 2. Delete the target row AND any sibling rows that shared the token.
-    const allProvidersToDelete = [provider, ...sharedSiblingProviders];
-    await supabase
-      .from("google_oauth_tokens")
-      .delete()
-      .in("provider", allProvidersToDelete)
-      .eq("email", email);
-
-    // 3. Clear local cache for all affected providers.
-    try {
-      const saved = localStorage.getItem("integrations-state");
-      if (saved) {
-        const ids: string[] = JSON.parse(saved);
-        const next = ids.filter((id) => !allProvidersToDelete.includes(id));
-        localStorage.setItem("integrations-state", JSON.stringify(next));
-      }
-    } catch {}
-
-    // 4. Re-sync from the server so state is authoritative (runs even if delete failed).
+    // Re-sync from server so state is authoritative.
     await fetchConnected();
   }, [fetchConnected]);
 
@@ -292,7 +257,7 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   );
 
   return (
-    <IntegrationsContext.Provider value={{ integrations, toggleConnection, isConnected, refreshConnections: fetchConnected, removeAccount, refreshing, tokensError }}>
+    <IntegrationsContext.Provider value={{ integrations, toggleConnection, isConnected, refreshConnections: fetchConnected, removeAccount, refreshing, integrationsLoading, tokensError }}>
       {children}
     </IntegrationsContext.Provider>
   );

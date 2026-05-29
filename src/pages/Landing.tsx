@@ -29,7 +29,7 @@ const steps = [
 export default function Landing() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-  const goOnboard = () => { setMenuOpen(false); navigate("/onboarding"); };
+  const goOnboard = () => { setMenuOpen(false); navigate("/auth"); };
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">

@@ -1,3 +1,7 @@
+// Smart task extraction from email_metadata (already AI-triaged) + upcoming
+// calendar events. Reads from DB — no extra Nylas email API calls.
+// Inserts rows with status='suggested' for user review in the Tasks page.
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -7,64 +11,60 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function refreshIfNeeded(adminClient: any, tokenRow: any) {
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) return tokenRow.access_token;
-  if (!tokenRow.refresh_token) return null;
-  try {
-    const response = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-        client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-        refresh_token: tokenRow.refresh_token,
-        grant_type: "refresh_token",
-      }),
-    });
-    const data = await response.json();
-    if (data.error) return null;
-    await adminClient
-      .from("google_oauth_tokens")
-      .update({
-        access_token: data.access_token,
-        token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", tokenRow.id);
-    return data.access_token;
-  } catch {
-    return null;
-  }
+const NYLAS_BASE = "https://api.us.nylas.com";
+
+async function getNylasGrant(admin: any, userId: string): Promise<{ grantId: string } | null> {
+  const { data } = await admin
+    .from("nylas_grants")
+    .select("grant_id")
+    .eq("user_id", userId)
+    .eq("provider", "google")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? { grantId: data.grant_id } : null;
 }
 
-async function fetchRecentEmails(token: string) {
-  const list = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=15&q=in:inbox newer_than:3d",
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  if (!list.ok) return [];
-  const { messages } = await list.json();
-  if (!messages?.length) return [];
-  const out: any[] = [];
-  for (const m of messages.slice(0, 15)) {
-    const r = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!r.ok) continue;
-    const data = await r.json();
-    const headers = data.payload?.headers || [];
-    const get = (n: string) => headers.find((h: any) => h.name === n)?.value || "";
-    out.push({
-      id: m.id,
-      from: get("From"),
-      subject: get("Subject"),
-      date: get("Date"),
-      snippet: data.snippet || "",
-    });
+async function fetchUpcomingEvents(grantId: string, nylasApiKey: string): Promise<any[]> {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const weekAhead = now + 7 * 24 * 60 * 60;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8_000);
+    try {
+      const params = new URLSearchParams({
+        calendar_id: "primary",
+        start: String(now),
+        end: String(weekAhead),
+        limit: "20",
+      });
+      const r = await fetch(
+        `${NYLAS_BASE}/v3/grants/${grantId}/events?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${nylasApiKey}` }, signal: ctrl.signal }
+      );
+      if (!r.ok) return [];
+      const data = await r.json();
+      return (data.data || [])
+        .filter((e: any) => e.title && e.title !== "")
+        .map((e: any) => ({
+          id: e.id,
+          title: e.title || "(No title)",
+          start: e.when?.start_time
+            ? new Date(e.when.start_time * 1000).toISOString()
+            : e.when?.date || "",
+          attendees: (e.participants || [])
+            .map((p: any) => p.name || p.email)
+            .filter(Boolean)
+            .slice(0, 5)
+            .join(", "),
+          description: (e.description || "").slice(0, 200),
+        }));
+    } finally {
+      clearTimeout(t);
+    }
+  } catch {
+    return [];
   }
-  return out;
 }
 
 serve(async (req) => {
@@ -73,9 +73,8 @@ serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "No auth" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -87,102 +86,105 @@ serve(async (req) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const nylasApiKey = Deno.env.get("NYLAS_API_KEY")!;
+    const groqApiKey = Deno.env.get("GROQ_API_KEY")!;
 
-    const { data: tokens } = await admin
-      .from("google_oauth_tokens")
-      .select("*")
+    // ── 1. Pull already-triaged urgent/needs_reply emails from DB (last 7 days) ──
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: emailRows } = await admin
+      .from("email_metadata")
+      .select("nylas_message_id, from_address, from_name, subject, ai_summary, ai_reason, category, priority_score, received_at")
       .eq("user_id", user.id)
-      .eq("provider", "gmail");
+      .in("category", ["urgent", "needs_reply"])
+      .gte("received_at", sevenDaysAgo)
+      .order("priority_score", { ascending: false })
+      .limit(20);
 
-    if (!tokens?.length) {
-      return new Response(JSON.stringify({ error: "Connect Gmail first via Integrations" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // ── 2. Fetch upcoming calendar events ────────────────────────────────────────
+    const grant = await getNylasGrant(admin, user.id);
+    const calendarEvents = grant
+      ? await fetchUpcomingEvents(grant.grantId, nylasApiKey)
+      : [];
 
-    const allEmails: any[] = [];
-    for (const t of tokens) {
-      const token = await refreshIfNeeded(admin, t);
-      if (!token) continue;
-      const emails = await fetchRecentEmails(token);
-      allEmails.push(...emails);
-    }
-
-    if (allEmails.length === 0) {
-      return new Response(JSON.stringify({ suggested: 0 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Avoid re-suggesting the same email source
+    // ── 3. Dedup — skip anything already suggested/created ────────────────────────
     const { data: existing } = await admin
       .from("action_items")
       .select("meeting_summary")
       .eq("user_id", user.id)
-      .eq("source", "ai_email_extract");
-    const seenSources = new Set((existing || []).map((r: any) => r.meeting_summary));
+      .in("source", ["email_metadata", "calendar_event", "ai_email_extract"]);
+    const seenKeys = new Set((existing || []).map((r: any) => r.meeting_summary));
 
-    const candidates = allEmails.filter((e) => {
-      const tag = `${e.from} — ${e.subject}`;
-      return !seenSources.has(tag);
-    });
+    const newEmails = (emailRows || []).filter(
+      (e: any) => !seenKeys.has(`email:${e.nylas_message_id}`)
+    );
+    const newEvents = calendarEvents.filter(
+      (e: any) => !seenKeys.has(`calendar:${e.id}`)
+    );
 
-    if (candidates.length === 0) {
+    if (!newEmails.length && !newEvents.length) {
       return new Response(JSON.stringify({ suggested: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const emailsBlock = candidates
-      .map((e, i) => `[Email ${i}] from: ${e.from} | subject: ${e.subject} | date: ${e.date}\nsnippet: ${e.snippet}`)
-      .join("\n\n");
-
+    // ── 4. Build AI prompt ────────────────────────────────────────────────────────
     const today = new Date().toISOString().slice(0, 10);
-    const prompt = `Today is ${today}. Read these recent emails and extract any IMPLICIT or EXPLICIT tasks the recipient (the user) needs to do. Examples: "can you send the report by Friday", "please review the deck", "let me know your thoughts", "we need your signature".
 
-Skip: marketing, newsletters, calendar invites, automated notifications, FYI-only updates, anything that doesn't require an action FROM THE USER.
+    const emailBlock = newEmails.length > 0
+      ? `## EMAILS REQUIRING ACTION\n${newEmails.map((e: any, i: number) => {
+          const from = e.from_name ? `${e.from_name} <${e.from_address}>` : e.from_address;
+          return `[E${i}] From: ${from} | Subject: ${e.subject}\nSummary: ${e.ai_summary || e.ai_reason || "(no summary)"}`;
+        }).join("\n\n")}`
+      : "";
 
-For each task return JSON: {"email_index": number, "title": "short imperative (e.g. 'Send Q3 report to Sarah')", "due_date": "YYYY-MM-DD or null if not specified", "priority": "high|medium|low"}
+    const calendarBlock = newEvents.length > 0
+      ? `## UPCOMING CALENDAR EVENTS\n${newEvents.map((e: any, i: number) => {
+          const when = e.start ? new Date(e.start).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
+          return `[C${i}] "${e.title}" on ${when}${e.attendees ? ` with ${e.attendees}` : ""}`;
+        }).join("\n")}`
+      : "";
 
-Emails:
-${emailsBlock}
+    const prompt = `Today is ${today}. Extract concrete, actionable tasks the user needs to do from the following data.
 
-Return ONLY a JSON array (possibly empty). No prose, no markdown fences.`;
+${emailBlock}
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+${calendarBlock}
+
+RULES:
+- From emails: extract EXPLICIT tasks the user must act on (reply, review, send, sign, approve, decide, schedule). Skip FYI-only or newsletters.
+- From calendar events: generate a PREP task if the meeting needs preparation (e.g. "Prepare slides for Product Review on Wed"), and a FOLLOW-UP task if it likely produces follow-up work (e.g. "Send meeting notes after Team Standup on Mon"). Only generate these if they make sense — skip one-on-ones with no context, blocked-time events, personal appointments.
+- Be specific and actionable. Write titles in imperative form: "Send Q3 report to Sarah", "Prepare demo for investor call".
+- Set due_date if there's a clear deadline or the event has a date.
+- Skip tasks already obvious from the summary (don't duplicate).
+
+Return ONLY a JSON array, no markdown:
+[{"source_type": "email"|"calendar", "source_index": number, "title": "...", "due_date": "YYYY-MM-DD or null", "priority": "high|medium|low"}]`;
+
+    const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY")}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${groqApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
       }),
     });
 
     if (!aiRes.ok) {
-      const txt = await aiRes.text();
-      console.error("AI error:", aiRes.status, txt);
+      console.error("AI error:", aiRes.status, await aiRes.text());
       return new Response(JSON.stringify({ error: "AI extraction failed" }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const aiData = await aiRes.json();
     const raw = aiData.choices?.[0]?.message?.content || "[]";
-    const cleaned = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+    const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
     let tasks: any[] = [];
     try {
       tasks = JSON.parse(cleaned);
@@ -191,29 +193,56 @@ Return ONLY a JSON array (possibly empty). No prose, no markdown fences.`;
       tasks = [];
     }
 
-    if (tasks.length === 0) {
+    if (!tasks.length) {
       return new Response(JSON.stringify({ suggested: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // ── 5. Build DB rows ──────────────────────────────────────────────────────────
     const rows = tasks
-      .filter((t) => t.title && typeof t.email_index === "number" && candidates[t.email_index])
-      .map((t) => {
-        const e = candidates[t.email_index];
-        return {
-          user_id: user.id,
-          title: String(t.title).slice(0, 200),
-          description: `From email: "${e.subject}"`,
-          due_date: t.due_date && /^\d{4}-\d{2}-\d{2}$/.test(t.due_date) ? t.due_date : null,
-          priority: ["high", "medium", "low"].includes(t.priority) ? t.priority : "medium",
-          status: "suggested",
-          source: "ai_email_extract",
-          meeting_summary: `${e.from} — ${e.subject}`,
-        };
-      });
+      .filter((t: any) => t.title && (t.source_type === "email" || t.source_type === "calendar"))
+      .map((t: any): any | null => {
+        const isEmail = t.source_type === "email";
+        const idx = Number(t.source_index);
 
-    if (rows.length === 0) {
+        if (isEmail) {
+          const e = newEmails[idx];
+          if (!e) return null;
+          const from = e.from_name ? `${e.from_name} <${e.from_address}>` : e.from_address;
+          return {
+            user_id: user.id,
+            title: String(t.title).slice(0, 200),
+            description: `From email: "${e.subject}"`,
+            due_date: t.due_date && /^\d{4}-\d{2}-\d{2}$/.test(t.due_date) ? t.due_date : null,
+            priority: ["high","medium","low"].includes(t.priority) ? t.priority : "medium",
+            status: "suggested",
+            source: "email_metadata",
+            meeting_summary: `email:${e.nylas_message_id}`,
+            meeting_date: null,
+          };
+        } else {
+          const e = newEvents[idx];
+          if (!e) return null;
+          const eventDate = e.start ? e.start.slice(0, 10) : null;
+          return {
+            user_id: user.id,
+            title: String(t.title).slice(0, 200),
+            description: `Meeting: "${e.title}"${e.attendees ? ` with ${e.attendees}` : ""}`,
+            due_date: t.due_date && /^\d{4}-\d{2}-\d{2}$/.test(t.due_date)
+              ? t.due_date
+              : eventDate,
+            priority: ["high","medium","low"].includes(t.priority) ? t.priority : "medium",
+            status: "suggested",
+            source: "calendar_event",
+            meeting_summary: `calendar:${e.id}`,
+            meeting_date: e.start ? e.start : null,
+          };
+        }
+      })
+      .filter(Boolean);
+
+    if (!rows.length) {
       return new Response(JSON.stringify({ suggested: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -223,19 +252,18 @@ Return ONLY a JSON array (possibly empty). No prose, no markdown fences.`;
     if (insErr) {
       console.error("insert error:", insErr);
       return new Response(JSON.stringify({ error: insErr.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     return new Response(JSON.stringify({ suggested: rows.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (e: any) {
     console.error("task-extract error:", e);
     return new Response(JSON.stringify({ error: e?.message || "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

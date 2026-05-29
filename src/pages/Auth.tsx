@@ -16,6 +16,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState<"confirm" | "reset" | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,10 +24,11 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (error) {
-      toast({ title: "Login failed", description: error.message, variant: "destructive" });
+    if (!error) { navigate("/mode-select"); return; }
+    if (error.message.toLowerCase().includes("email not confirmed")) {
+      toast({ title: "Email not confirmed", description: "Check your inbox and click the confirmation link we sent you.", variant: "destructive" });
     } else {
-      navigate("/mode-select");
+      toast({ title: "Login failed", description: error.message, variant: "destructive" });
     }
   };
 
@@ -41,13 +43,13 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
     const { error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: `${window.location.origin}/auth` },
     });
     setLoading(false);
     if (error) {
       toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Check your email", description: "We sent you a confirmation link." });
+      setEmailSent("confirm");
     }
   };
 
@@ -62,7 +64,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Email sent", description: "Check your inbox for the reset link." });
+      setEmailSent("reset");
     }
   };
 
@@ -74,7 +76,31 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
           <span className="font-display text-2xl font-bold" style={{ color: "#1e3a5f" }}>Agent</span>
         </div>
 
-        {mode === "login" && (
+        {emailSent === "confirm" && (
+          <div className="text-center space-y-4">
+            <h2 className="font-display text-xl font-semibold">Check your email</h2>
+            <p className="text-sm text-muted-foreground">
+              We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account.
+            </p>
+            <button type="button" onClick={() => { setEmailSent(null); setMode("login"); }} className="text-sm text-accent hover:underline">
+              Back to sign in
+            </button>
+          </div>
+        )}
+
+        {emailSent === "reset" && (
+          <div className="text-center space-y-4">
+            <h2 className="font-display text-xl font-semibold">Reset link sent</h2>
+            <p className="text-sm text-muted-foreground">
+              We sent a password reset link to <strong>{email}</strong>. Check your inbox.
+            </p>
+            <button type="button" onClick={() => { setEmailSent(null); setMode("login"); }} className="text-sm text-accent hover:underline">
+              Back to sign in
+            </button>
+          </div>
+        )}
+
+        {!emailSent && mode === "login" && (
           <form onSubmit={handleLogin} className="space-y-4">
             <h2 className="font-display text-xl font-semibold text-center mb-2">Welcome back</h2>
             <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -94,7 +120,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
           </form>
         )}
 
-        {mode === "signup" && (
+        {!emailSent && mode === "signup" && (
           <form onSubmit={handleSignup} className="space-y-4">
             <h2 className="font-display text-xl font-semibold text-center mb-2">Create your account</h2>
             <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -113,7 +139,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
           </form>
         )}
 
-        {mode === "forgot" && (
+        {!emailSent && mode === "forgot" && (
           <form onSubmit={handleForgot} className="space-y-4">
             <h2 className="font-display text-xl font-semibold text-center mb-2">Reset password</h2>
             <p className="text-sm text-muted-foreground text-center">Enter your email and we'll send a reset link.</p>
@@ -127,9 +153,11 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
           </form>
         )}
 
-        <button onClick={() => navigate("/")} className="mt-6 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mx-auto">
-          <ArrowLeft className="w-3 h-3" /> Back to home
-        </button>
+        {!emailSent && (
+          <button onClick={() => navigate("/")} className="mt-6 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mx-auto">
+            <ArrowLeft className="w-3 h-3" /> Back to home
+          </button>
+        )}
       </motion.div>
     </div>
   );

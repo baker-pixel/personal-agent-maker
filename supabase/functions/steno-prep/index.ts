@@ -6,45 +6,28 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-async function getValidToken(userId: string, provider: string) {
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
-  const { data: tokenRow, error } = await adminClient
-    .from("google_oauth_tokens")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("provider", provider)
-    .single();
-  if (error || !tokenRow) throw new Error(`${provider} not connected`);
+const NYLAS_BASE = "https://api.us.nylas.com";
 
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60_000)) return tokenRow.access_token;
+function formatAddress(people: Array<{ name?: string; email: string }>): string {
+  if (!people?.length) return "";
+  return people.map(p => p.name ? `${p.name} <${p.email}>` : p.email).join(", ");
+}
 
-  if (!tokenRow.refresh_token) throw new Error("Re-authentication required");
-  const r = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-      client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-      refresh_token: tokenRow.refresh_token,
-      grant_type: "refresh_token",
-    }),
-  });
-  const d = await r.json();
-  if (d.error) throw new Error(d.error_description || d.error);
-  await adminClient
-    .from("google_oauth_tokens")
-    .update({
-      access_token: d.access_token,
-      token_expires_at: new Date(Date.now() + d.expires_in * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId)
-    .eq("provider", provider);
-  return d.access_token;
+async function getNylasGrant(adminClient: any, userId: string): Promise<{ grantId: string; email: string | null } | null> {
+  try {
+    const { data: grant, error } = await adminClient
+      .from("nylas_grants")
+      .select("grant_id, email")
+      .eq("user_id", userId)
+      .eq("provider", "google")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !grant) return null;
+    return { grantId: grant.grant_id, email: grant.email };
+  } catch {
+    return null;
+  }
 }
 
 function norm(s: string) {
@@ -103,7 +86,7 @@ Deno.serve(async (req) => {
         return { s, score };
       });
       scored.sort((a, b) => b.score - a.score);
-      lastMeeting = scored[0]?.score > 0 ? scored[0].s : sessions[0]; // fall back to most recent
+      lastMeeting = scored[0]?.score > 0 ? scored[0].s : sessions[0];
     }
 
     // 2) Open action items (Steno-sourced), filtered loosely by tokens if provided
@@ -120,42 +103,55 @@ Deno.serve(async (req) => {
       return tokens.some((t) => hay.includes(t));
     });
 
-    // 3) Recent emails from/to attendees (last 7 days)
+    // 3) Recent emails from/to attendees (last 7 days) via Nylas
     let recentEmails: any[] = [];
     let gmailWarning: string | null = null;
     try {
-      const gmailToken = await getValidToken(user.id, "gmail");
+      const adminClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      const nylasApiKey = Deno.env.get("NYLAS_API_KEY")!;
+      const grant = await getNylasGrant(adminClient, user.id);
+      if (!grant) throw new Error("NOT_CONNECTED");
+
       const emailish = attendeesInput.filter((a) => /@/.test(a));
       const nameish = attendeesInput.filter((a) => !/@/.test(a) && a.trim().length > 1);
-      const parts: string[] = [];
-      for (const e of emailish.slice(0, 4)) parts.push(`from:${e} OR to:${e}`);
-      for (const n of nameish.slice(0, 3)) parts.push(`from:"${n}" OR "${n}"`);
-      const q = parts.length ? `(${parts.join(" OR ")}) newer_than:7d` : "";
-      if (q) {
+
+      if (emailish.length > 0 || nameish.length > 0) {
+        const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+        const params = new URLSearchParams({
+          limit: "20",
+          in: "INBOX",
+          received_after: String(sevenDaysAgo),
+        });
         const listRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=8&q=${encodeURIComponent(q)}`,
-          { headers: { Authorization: `Bearer ${gmailToken}` } }
+          `${NYLAS_BASE}/v3/grants/${grant.grantId}/messages?${params.toString()}`,
+          { headers: { Authorization: `Bearer ${nylasApiKey}` } }
         );
-        const listData = await listRes.json();
-        const ids = (listData.messages || []).slice(0, 6);
-        recentEmails = await Promise.all(
-          ids.map(async (m: any) => {
-            const r = await fetch(
-              `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-              { headers: { Authorization: `Bearer ${gmailToken}` } }
-            );
-            const d = await r.json();
-            const headers = d.payload?.headers || [];
-            const get = (n: string) =>
-              headers.find((h: any) => h.name.toLowerCase() === n.toLowerCase())?.value || "";
-            return {
-              subject: get("Subject"),
-              from: get("From"),
-              date: get("Date"),
-              snippet: d.snippet,
-            };
-          })
-        );
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          const msgs: any[] = listData.data || [];
+
+          // Filter by attendee email/name
+          const emailSet = new Set(emailish.map((e) => e.toLowerCase()));
+          const nameLower = nameish.map((n) => n.toLowerCase());
+
+          const relevant = msgs.filter((msg: any) => {
+            const fromEmails = (msg.from || []).map((f: any) => f.email?.toLowerCase() || "");
+            const fromNames = (msg.from || []).map((f: any) => (f.name || "").toLowerCase());
+            if (emailish.length > 0 && fromEmails.some((e: string) => emailSet.has(e))) return true;
+            if (nameish.length > 0 && fromNames.some((n: string) => nameLower.some((nl) => n.includes(nl)))) return true;
+            return false;
+          }).slice(0, 6);
+
+          recentEmails = relevant.map((msg: any) => ({
+            subject: msg.subject || "",
+            from: formatAddress(msg.from || []),
+            date: msg.date ? new Date(msg.date * 1000).toUTCString() : "",
+            snippet: msg.snippet || "",
+          }));
+        }
       }
     } catch (e) {
       gmailWarning = e instanceof Error ? e.message : "Gmail unavailable";

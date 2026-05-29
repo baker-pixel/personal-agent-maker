@@ -172,25 +172,25 @@ export default function Leads() {
     );
 
   return (
-    <div className="min-h-screen bg-background pt-[env(safe-area-inset-top)]">
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
-        <div className="flex items-center justify-between gap-3">
+    <div className="min-h-screen bg-background pt-[var(--header-h)]">
+      <div className="max-w-4xl mx-auto px-4 pt-14 pb-6 space-y-4">
+        <div className="flex items-start justify-between gap-3 pr-10 sm:pr-0">
           <div>
-            <h1 className="text-3xl font-serif text-foreground flex items-center gap-2">
-              <Flame className="w-7 h-7 text-accent" /> Leads
+            <h1 className="text-2xl sm:text-3xl font-serif text-foreground flex items-center gap-2">
+              <Flame className="w-6 h-6 sm:w-7 sm:h-7 text-accent" /> Leads
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">New inquiries Normy detected from your inbox</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">New inquiries Normy detected from your inbox</p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowSla(true)} size="sm" variant="outline">
-              <Clock className="w-4 h-4 mr-1" /> SLA
+          <div className="flex flex-wrap gap-2 justify-end shrink-0">
+            <Button onClick={() => setShowSla(true)} size="sm" variant="outline" className="px-2 sm:px-3">
+              <Clock className="w-4 h-4" /> <span className="hidden sm:inline ml-1">SLA</span>
             </Button>
-            <Button onClick={() => setShowRules(true)} size="sm" variant="outline">
-              <Settings className="w-4 h-4 mr-1" /> Rules
+            <Button onClick={() => setShowRules(true)} size="sm" variant="outline" className="px-2 sm:px-3">
+              <Settings className="w-4 h-4" /> <span className="hidden sm:inline ml-1">Rules</span>
             </Button>
-            <Button onClick={scan} disabled={scanning} size="sm">
-              {scanning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-              Scan
+            <Button onClick={scan} disabled={scanning} size="sm" className="px-2 sm:px-3">
+              {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              <span className="hidden sm:inline ml-2">Scan</span>
             </Button>
           </div>
         </div>
@@ -200,10 +200,22 @@ export default function Leads() {
         ) : (
           <Tabs defaultValue="hot">
             <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="hot">🔥 Hot ({counts.hot})</TabsTrigger>
-              <TabsTrigger value="responded">Responded ({counts.responded})</TabsTrigger>
-              <TabsTrigger value="qualified">Qualified ({counts.qualified})</TabsTrigger>
-              <TabsTrigger value="closed">Closed ({counts.closed})</TabsTrigger>
+              <TabsTrigger value="hot" className="text-xs sm:text-sm px-1 sm:px-3">
+                <span className="sm:hidden">🔥 {counts.hot}</span>
+                <span className="hidden sm:inline">🔥 Hot ({counts.hot})</span>
+              </TabsTrigger>
+              <TabsTrigger value="responded" className="text-xs sm:text-sm px-1 sm:px-3">
+                <span className="sm:hidden">Replied {counts.responded}</span>
+                <span className="hidden sm:inline">Responded ({counts.responded})</span>
+              </TabsTrigger>
+              <TabsTrigger value="qualified" className="text-xs sm:text-sm px-1 sm:px-3">
+                <span className="sm:hidden">Qual. {counts.qualified}</span>
+                <span className="hidden sm:inline">Qualified ({counts.qualified})</span>
+              </TabsTrigger>
+              <TabsTrigger value="closed" className="text-xs sm:text-sm px-1 sm:px-3">
+                <span className="sm:hidden">Closed {counts.closed}</span>
+                <span className="hidden sm:inline">Closed ({counts.closed})</span>
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="hot">{renderLeadList(filterByStatus(["new", "drafted"]))}</TabsContent>
             <TabsContent value="responded">{renderLeadList(filterByStatus(["responded"]))}</TabsContent>

@@ -294,10 +294,12 @@ export type Database = {
         Row: {
           body: string | null
           created_at: string
+          email_metadata_id: string | null
           gmail_message_id: string | null
           id: string
           in_reply_to: string | null
           metadata: Json | null
+          nylas_message_id: string | null
           status: string
           subject: string | null
           thread_id: string | null
@@ -310,10 +312,12 @@ export type Database = {
         Insert: {
           body?: string | null
           created_at?: string
+          email_metadata_id?: string | null
           gmail_message_id?: string | null
           id?: string
           in_reply_to?: string | null
           metadata?: Json | null
+          nylas_message_id?: string | null
           status?: string
           subject?: string | null
           thread_id?: string | null
@@ -326,10 +330,12 @@ export type Database = {
         Update: {
           body?: string | null
           created_at?: string
+          email_metadata_id?: string | null
           gmail_message_id?: string | null
           id?: string
           in_reply_to?: string | null
           metadata?: Json | null
+          nylas_message_id?: string | null
           status?: string
           subject?: string | null
           thread_id?: string | null
@@ -339,7 +345,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "draft_actions_email_metadata_id_fkey"
+            columns: ["email_metadata_id"]
+            isOneToOne: false
+            referencedRelation: "email_metadata"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       email_reminders: {
         Row: {
@@ -385,6 +399,96 @@ export type Database = {
           },
         ]
       }
+      email_metadata: {
+        Row: {
+          ai_reason: string | null
+          ai_summary: string | null
+          category: string | null
+          created_at: string
+          from_address: string
+          from_name: string | null
+          id: string
+          is_unread: boolean
+          nylas_message_id: string
+          nylas_thread_id: string | null
+          priority_score: number | null
+          processed_at: string | null
+          received_at: string
+          replied_at: string | null
+          subject: string | null
+          user_id: string
+        }
+        Insert: {
+          ai_reason?: string | null
+          ai_summary?: string | null
+          category?: string | null
+          created_at?: string
+          from_address: string
+          from_name?: string | null
+          id?: string
+          is_unread?: boolean
+          nylas_message_id: string
+          nylas_thread_id?: string | null
+          priority_score?: number | null
+          processed_at?: string | null
+          received_at: string
+          replied_at?: string | null
+          subject?: string | null
+          user_id: string
+        }
+        Update: {
+          ai_reason?: string | null
+          ai_summary?: string | null
+          category?: string | null
+          created_at?: string
+          from_address?: string
+          from_name?: string | null
+          id?: string
+          is_unread?: boolean
+          nylas_message_id?: string
+          nylas_thread_id?: string | null
+          priority_score?: number | null
+          processed_at?: string | null
+          received_at?: string
+          replied_at?: string | null
+          subject?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      email_processing_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          error_message: string | null
+          grant_id: string
+          id: string
+          nylas_message_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          grant_id: string
+          id?: string
+          nylas_message_id: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          grant_id?: string
+          id?: string
+          nylas_message_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       email_triage_preferences: {
         Row: {
           created_at: string
@@ -421,6 +525,36 @@ export type Database = {
           updated_at?: string
           user_id?: string
           vip_senders?: string[]
+        }
+        Relationships: []
+      }
+      nylas_grants: {
+        Row: {
+          id: string
+          user_id: string
+          grant_id: string
+          email: string | null
+          provider: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          grant_id: string
+          email?: string | null
+          provider?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          grant_id?: string
+          email?: string | null
+          provider?: string
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -689,16 +823,21 @@ export type Database = {
         Row: {
           agent_name: string
           created_at: string
+          decision_style: string
+          email_length: string
           id: string
           lead_escalate_drafted_minutes: number
           lead_escalate_to_slack: boolean
           lead_escalate_to_sms: boolean
           lead_nudge_enabled: boolean
           lead_nudge_minutes: number
+          onboarding_completed: boolean
           phone_number: string | null
+          priority_visibility: string
           slack_notification_channel_id: string | null
           slack_notification_channel_name: string | null
           stt_language: string | null
+          tone: string
           tts_elevenlabs_model_id: string | null
           tts_elevenlabs_voice_id: string | null
           tts_enabled: boolean | null
@@ -715,16 +854,21 @@ export type Database = {
         Insert: {
           agent_name?: string
           created_at?: string
+          decision_style?: string
+          email_length?: string
           id?: string
           lead_escalate_drafted_minutes?: number
           lead_escalate_to_slack?: boolean
           lead_escalate_to_sms?: boolean
           lead_nudge_enabled?: boolean
           lead_nudge_minutes?: number
+          onboarding_completed?: boolean
           phone_number?: string | null
+          priority_visibility?: string
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
           stt_language?: string | null
+          tone?: string
           tts_elevenlabs_model_id?: string | null
           tts_elevenlabs_voice_id?: string | null
           tts_enabled?: boolean | null
@@ -741,16 +885,21 @@ export type Database = {
         Update: {
           agent_name?: string
           created_at?: string
+          decision_style?: string
+          email_length?: string
           id?: string
           lead_escalate_drafted_minutes?: number
           lead_escalate_to_slack?: boolean
           lead_escalate_to_sms?: boolean
           lead_nudge_enabled?: boolean
           lead_nudge_minutes?: number
+          onboarding_completed?: boolean
           phone_number?: string | null
+          priority_visibility?: string
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
           stt_language?: string | null
+          tone?: string
           tts_elevenlabs_model_id?: string | null
           tts_elevenlabs_voice_id?: string | null
           tts_enabled?: boolean | null

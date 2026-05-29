@@ -6,102 +6,19 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-async function getValidToken(userId: string) {
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+const NYLAS_BASE = "https://api.us.nylas.com";
 
-  const { data: tokenRow, error } = await adminClient
-    .from("google_oauth_tokens")
-    .select("access_token, refresh_token, token_expires_at, email")
+async function getNylasGrant(adminClient: any, userId: string): Promise<{ grantId: string; email: string | null }> {
+  const { data: grant, error } = await adminClient
+    .from("nylas_grants")
+    .select("grant_id, email")
     .eq("user_id", userId)
-    .eq("provider", "gmail")
-    .order("updated_at", { ascending: false })
+    .eq("provider", "google")
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-
-  if (error || !tokenRow) {
-    const e = new Error("Gmail not connected");
-    (e as any).code = "NOT_CONNECTED";
-    throw e;
-  }
-
-  const expiresAtMs = new Date(tokenRow.token_expires_at).getTime();
-  const isExpired = !Number.isFinite(expiresAtMs) || Date.now() >= expiresAtMs - 60_000;
-  if (!isExpired) {
-    return tokenRow.access_token;
-  }
-
-  if (!tokenRow.refresh_token) {
-    const e = new Error("Re-authentication required");
-    (e as any).code = "RECONNECT_REQUIRED";
-    throw e;
-  }
-
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-      client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-      refresh_token: tokenRow.refresh_token,
-      grant_type: "refresh_token",
-    }),
-  });
-
-  const data = await response.json();
-  if (!response.ok || data.error) {
-    if (data.error === "invalid_grant") {
-      // Refresh token revoked — drop the row so the user is forced to reconnect.
-      let dq = adminClient
-        .from("google_oauth_tokens")
-        .delete()
-        .eq("user_id", userId)
-        .eq("provider", "gmail");
-      if (tokenRow.email) dq = dq.eq("email", tokenRow.email);
-      await dq;
-      const e = new Error("Your Gmail session has expired. Please reconnect your account.");
-      (e as any).code = "RECONNECT_REQUIRED";
-      throw e;
-    }
-    throw new Error(data.error_description || data.error || "Token refresh failed");
-  }
-
-  let updateQuery = adminClient
-    .from("google_oauth_tokens")
-    .update({
-      access_token: data.access_token,
-      token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId)
-    .eq("provider", "gmail");
-  if (tokenRow.email) updateQuery = updateQuery.eq("email", tokenRow.email);
-  await updateQuery;
-
-  return data.access_token;
-}
-
-function buildRawEmail(to: string, subject: string, body: string, threadId?: string, inReplyTo?: string): string {
-  const lines: string[] = [];
-  lines.push(`To: ${to}`);
-  lines.push(`Subject: ${subject}`);
-  lines.push("Content-Type: text/plain; charset=UTF-8");
-  if (inReplyTo) {
-    lines.push(`In-Reply-To: ${inReplyTo}`);
-    lines.push(`References: ${inReplyTo}`);
-  }
-  lines.push("");
-  lines.push(body);
-
-  const raw = lines.join("\r\n");
-  // Base64url encode
-  const encoded = btoa(unescape(encodeURIComponent(raw)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  return encoded;
+  if (error || !grant) throw Object.assign(new Error("NOT_CONNECTED"), { code: "NOT_CONNECTED" });
+  return { grantId: grant.grant_id, email: grant.email };
 }
 
 Deno.serve(async (req) => {
@@ -124,15 +41,14 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !user) {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    const userId = claimsData.claims.sub as string;
+    const userId = user.id;
 
     const { draftId } = await req.json();
     if (!draftId) {
@@ -169,28 +85,48 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get Gmail token
-    const accessToken = await getValidToken(userId);
-
-    // Build and send the email
-    const raw = buildRawEmail(
-      draft.to_email,
-      draft.subject,
-      draft.body,
-      draft.thread_id,
-      draft.in_reply_to
-    );
-
-    const sendUrl = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
-    const sendBody: Record<string, string> = { raw };
-    if (draft.thread_id) {
-      sendBody.threadId = draft.thread_id;
+    // Get Nylas grant
+    const nylasApiKey = Deno.env.get("NYLAS_API_KEY") ?? "";
+    if (!nylasApiKey) {
+      return new Response(
+        JSON.stringify({ error: "Email sending not configured. Contact support." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    let grantId: string;
+    try {
+      const grant = await getNylasGrant(adminClient, userId);
+      grantId = grant.grantId;
+    } catch (tokenError: any) {
+      if (tokenError.code === "NOT_CONNECTED") {
+        return new Response(
+          JSON.stringify({ error: "Gmail not connected", code: "NOT_CONNECTED" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      throw tokenError;
     }
 
-    const sendRes = await fetch(sendUrl, {
+    // Build and send the email via Nylas
+    const toRecipients = (draft.to_email as string)
+      .split(",")
+      .map((e: string) => e.trim())
+      .filter(Boolean)
+      .map((e: string) => ({ email: e }));
+
+    const sendBody: Record<string, any> = {
+      subject: draft.subject,
+      body: draft.body,
+      to: toRecipients,
+    };
+    if (draft.thread_id) {
+      sendBody.reply_to_message_id = draft.in_reply_to || draft.thread_id;
+    }
+
+    const sendRes = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/messages/send`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${nylasApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(sendBody),
@@ -199,6 +135,15 @@ Deno.serve(async (req) => {
     const sendData = await sendRes.json();
 
     if (!sendRes.ok) {
+      if (sendRes.status === 401) {
+        return new Response(
+          JSON.stringify({
+            error: "Your Gmail session has expired. Please reconnect your account.",
+            code: "RECONNECT_REQUIRED",
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       // Update draft status to failed
       await adminClient
         .from("draft_actions")
@@ -206,26 +151,37 @@ Deno.serve(async (req) => {
         .eq("id", draftId);
 
       return new Response(
-        JSON.stringify({ error: sendData.error?.message || "Failed to send email" }),
+        JSON.stringify({ error: sendData.message || "Failed to send email" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const sentMsgId = sendData.data?.id || null;
 
     // Update draft status to sent
     await adminClient
       .from("draft_actions")
       .update({
         status: "sent",
-        gmail_message_id: sendData.id,
+        gmail_message_id: sentMsgId,
         updated_at: new Date().toISOString(),
       })
       .eq("id", draftId);
 
+    // Mark the source email as replied in email_metadata
+    if (draft.nylas_message_id) {
+      await adminClient
+        .from("email_metadata")
+        .update({ replied_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("nylas_message_id", draft.nylas_message_id);
+    }
+
     return new Response(
-      JSON.stringify({ success: true, messageId: sendData.id }),
+      JSON.stringify({ success: true, messageId: sentMsgId }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -114,26 +114,41 @@ export default function Settings() {
   const calendarAccounts = integrations.find(i => i.id === "google-calendar")?.connectedAccounts || [];
 
   useEffect(() => {
-    const stored = localStorage.getItem("normy_agent");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setSettings((prev) => ({ ...prev, ...parsed, agentName }));
-      } catch {}
-    }
-
-    const loadEmail = async () => {
-      // Try session first (synchronous read of cached token), then getUser as fallback.
+    const loadSettings = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
-      const sessionEmail = sessionData.session?.user?.email;
-      if (sessionEmail) {
-        setUserEmail(sessionEmail);
-        return;
+      const user = sessionData.session?.user;
+      if (user?.email) setUserEmail(user.email);
+
+      if (user) {
+        const { data } = await supabase
+          .from("user_preferences")
+          .select("agent_name, phone_number, tone, email_length, priority_visibility, decision_style")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (data) {
+          setSettings((prev) => ({
+            ...prev,
+            agentName: data.agent_name ?? prev.agentName,
+            phoneNumber: data.phone_number ?? prev.phoneNumber,
+            tone: data.tone ?? prev.tone,
+            emailLength: data.email_length ?? prev.emailLength,
+            priorityVisibility: data.priority_visibility ?? prev.priorityVisibility,
+            decisionStyle: data.decision_style ?? prev.decisionStyle,
+          }));
+          return;
+        }
       }
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData.user?.email) setUserEmail(userData.user.email);
+
+      // Fallback to localStorage if DB load fails or no user yet
+      const stored = localStorage.getItem("normy_agent");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setSettings((prev) => ({ ...prev, ...parsed, agentName }));
+        } catch {}
+      }
     };
-    loadEmail();
+    loadSettings();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user?.email) setUserEmail(session.user.email);
@@ -164,38 +179,45 @@ export default function Settings() {
 
   const save = async () => {
     localStorage.setItem("normy_agent", JSON.stringify(settings));
-    if (settings.agentName && settings.agentName !== agentName) {
-      setAgentName(settings.agentName);
-    }
 
-    // Register phone number for SMS if provided and consent given
-    if (settings.phoneNumber && settings.smsConsent) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const normalizedPhone = settings.phoneNumber.replace(/[^+\d]/g, "");
-          
-          // Upsert SMS conversation for this phone
-          const { error: smsError } = await supabase
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const normalizedPhone = settings.phoneNumber.trim()
+          ? settings.phoneNumber.replace(/[^+\d]/g, "")
+          : null;
+
+        await supabase
+          .from("user_preferences")
+          .upsert(
+            {
+              user_id: user.id,
+              agent_name: settings.agentName,
+              phone_number: normalizedPhone,
+              tone: settings.tone,
+              email_length: settings.emailLength,
+              priority_visibility: settings.priorityVisibility,
+              decision_style: settings.decisionStyle,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id" }
+          );
+
+        if (settings.phoneNumber && settings.smsConsent) {
+          await supabase
             .from("sms_conversations" as any)
             .upsert(
               { user_id: user.id, phone_number: normalizedPhone, messages: [] },
               { onConflict: "phone_number" }
             );
-          
-          if (smsError) console.error("SMS registration error:", smsError);
-
-          // Also update user_preferences
-          await supabase
-            .from("user_preferences")
-            .upsert(
-              { user_id: user.id, phone_number: normalizedPhone } as any,
-              { onConflict: "user_id" }
-            );
         }
-      } catch (err) {
-        console.error("Failed to register phone for SMS:", err);
       }
+    } catch (err) {
+      console.error("Settings save error:", err);
+    }
+
+    if (settings.agentName && settings.agentName !== agentName) {
+      setAgentName(settings.agentName);
     }
 
     setSaved(true);
@@ -226,8 +248,8 @@ export default function Settings() {
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="border-b bg-background sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+    <div className="min-h-screen bg-background pt-[var(--header-h)]">
+      <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
         <div className="container flex items-center justify-between h-14 px-4">
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
@@ -312,7 +334,7 @@ export default function Settings() {
           </div>
           <div>
             <label className="text-sm font-medium mb-2 block">Tone</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {["direct", "friendly", "formal"].map((t) => (
                 <OptionBtn key={t} selected={settings.tone === t} onClick={() => update("tone", t)}>{t.charAt(0).toUpperCase() + t.slice(1)}</OptionBtn>
               ))}
@@ -320,7 +342,7 @@ export default function Settings() {
           </div>
           <div>
             <label className="text-sm font-medium mb-2 block">Email length</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {["short", "balanced", "detailed"].map((t) => (
                 <OptionBtn key={t} selected={settings.emailLength === t} onClick={() => update("emailLength", t)}>{t.charAt(0).toUpperCase() + t.slice(1)}</OptionBtn>
               ))}
@@ -328,7 +350,7 @@ export default function Settings() {
           </div>
           <div>
             <label className="text-sm font-medium mb-2 block">Priority visibility</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {["urgent", "important", "all"].map((t) => (
                 <OptionBtn key={t} selected={settings.priorityVisibility === t} onClick={() => update("priorityVisibility", t)}>
                   {t === "urgent" ? "Only urgent" : t.charAt(0).toUpperCase() + t.slice(1)}
@@ -338,7 +360,7 @@ export default function Settings() {
           </div>
           <div>
             <label className="text-sm font-medium mb-2 block">Decision style</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {["fast", "careful"].map((t) => (
                 <OptionBtn key={t} selected={settings.decisionStyle === t} onClick={() => update("decisionStyle", t)}>{t.charAt(0).toUpperCase() + t.slice(1)}</OptionBtn>
               ))}
@@ -451,18 +473,20 @@ export default function Settings() {
               { name: "Bookkeeping", description: "Invoices, expenses, reports & reconciliation", active: false },
               { name: "Operations", description: "Workflows, vendors, inventory & logistics", active: false },
             ].map((dept) => (
-              <div key={dept.name} className="flex items-center justify-between border rounded-xl p-4">
+              <div key={dept.name} className="flex items-center justify-between gap-3 border rounded-xl p-4">
                 <div>
                   <p className="font-medium text-sm">{dept.name}</p>
                   <p className="text-xs text-muted-foreground">{dept.description}</p>
                 </div>
-                {dept.active ? (
-                  <span className="text-xs font-medium text-accent bg-accent/10 px-3 py-1 rounded-full">Active</span>
-                ) : (
-                  <Button variant="outline" size="sm" className="text-xs" disabled>
-                    Coming Soon
-                  </Button>
-                )}
+                <div className="shrink-0">
+                  {dept.active ? (
+                    <span className="text-xs font-medium text-accent bg-accent/10 px-3 py-1 rounded-full">Active</span>
+                  ) : (
+                    <Button variant="outline" size="sm" className="text-xs" disabled>
+                      Coming Soon
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -551,7 +575,7 @@ export default function Settings() {
       </div>
 
       <AlertDialog open={!!pendingRemoval} onOpenChange={(open) => { if (!open && !removing) setPendingRemoval(null); }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle>Disconnect this Google account?</AlertDialogTitle>
             <AlertDialogDescription>

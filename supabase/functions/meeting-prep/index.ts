@@ -6,53 +6,33 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-async function getValidToken(userId: string, provider: string) {
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+const NYLAS_BASE = "https://api.us.nylas.com";
 
-  const { data: tokenRow, error } = await adminClient
-    .from("google_oauth_tokens")
-    .select("*")
+function formatAddress(people: Array<{ name?: string; email: string }>): string {
+  if (!people?.length) return "";
+  return people.map(p => p.name ? `${p.name} <${p.email}>` : p.email).join(", ");
+}
+
+function unixToIso(ts: number): string {
+  return new Date(ts * 1000).toISOString();
+}
+
+function participantStatus(status: string): string {
+  const m: Record<string, string> = { yes: "accepted", no: "declined", maybe: "tentative", noreply: "needsAction" };
+  return m[status] ?? "needsAction";
+}
+
+async function getNylasGrant(adminClient: any, userId: string): Promise<{ grantId: string; email: string | null }> {
+  const { data: grant, error } = await adminClient
+    .from("nylas_grants")
+    .select("grant_id, email")
     .eq("user_id", userId)
-    .eq("provider", provider)
-    .single();
-
-  if (error || !tokenRow) throw new Error(`${provider} not connected`);
-
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) {
-    return tokenRow.access_token;
-  }
-
-  if (!tokenRow.refresh_token) throw new Error("Re-authentication required");
-
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-      client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-      refresh_token: tokenRow.refresh_token,
-      grant_type: "refresh_token",
-    }),
-  });
-
-  const data = await response.json();
-  if (data.error) throw new Error(data.error_description || data.error);
-
-  await adminClient
-    .from("google_oauth_tokens")
-    .update({
-      access_token: data.access_token,
-      token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId)
-    .eq("provider", provider);
-
-  return data.access_token;
+    .eq("provider", "google")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !grant) throw Object.assign(new Error("NOT_CONNECTED"), { code: "NOT_CONNECTED" });
+  return { grantId: grant.grant_id, email: grant.email };
 }
 
 Deno.serve(async (req) => {
@@ -83,14 +63,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch calendar token and gmail token
-    const calToken = await getValidToken(user.id, "google-calendar");
-    let gmailToken: string | null = null;
-    try {
-      gmailToken = await getValidToken(user.id, "gmail");
-    } catch {
-      // Gmail not connected, proceed without email context
-    }
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    const nylasApiKey = Deno.env.get("NYLAS_API_KEY")!;
+
+    // Fetch calendar grant (same grant covers both calendar and email)
+    const { grantId } = await getNylasGrant(adminClient, user.id);
+
+    let gmailGrantId: string | null = grantId; // one grant covers both
 
     // Fetch today's events
     const now = new Date();
@@ -98,42 +81,57 @@ Deno.serve(async (req) => {
     endOfDay.setHours(23, 59, 59, 999);
 
     const params = new URLSearchParams({
-      timeMin: now.toISOString(),
-      timeMax: endOfDay.toISOString(),
-      singleEvents: "true",
-      orderBy: "startTime",
-      maxResults: "10",
+      calendar_id: "primary",
+      start: String(Math.floor(now.getTime() / 1000)),
+      end: String(Math.floor(endOfDay.getTime() / 1000)),
+      limit: "10",
     });
 
     const calRes = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
-      { headers: { Authorization: `Bearer ${calToken}` } }
+      `${NYLAS_BASE}/v3/grants/${grantId}/events?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${nylasApiKey}` } }
     );
     const calData = await calRes.json();
 
-    if (calData.error) {
-      return new Response(JSON.stringify({ error: calData.error.message }), {
+    if (!calRes.ok) {
+      return new Response(JSON.stringify({ error: calData.message || "Calendar fetch failed" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const events = (calData.items || [])
-      .filter((e: any) => (e.attendees && e.attendees.length > 0) || e.description)
-      .map((e: any) => ({
-        id: e.id,
-        summary: e.summary || "(No title)",
-        description: e.description || "",
-        start: e.start?.dateTime || e.start?.date,
-        end: e.end?.dateTime || e.end?.date,
-        location: e.location || "",
-        attendees: (e.attendees || []).map((a: any) => ({
-          email: a.email,
-          displayName: a.displayName,
-          responseStatus: a.responseStatus,
-        })),
-        htmlLink: e.htmlLink,
-      }));
+    const rawEvents = calData.data || [];
+    const events = rawEvents
+      .filter((e: any) => (e.participants && e.participants.length > 0) || e.description)
+      .map((e: any) => {
+        const when = e.when || {};
+        let start: string | undefined;
+        let end: string | undefined;
+        if (when.object === "timespan") {
+          start = unixToIso(when.start_time);
+          end = unixToIso(when.end_time);
+        } else if (when.object === "date") {
+          start = when.date;
+          end = when.end_date || when.date;
+        } else if (when.object === "datespan") {
+          start = when.start_date;
+          end = when.end_date;
+        }
+        return {
+          id: e.id,
+          summary: e.title || "(No title)",
+          description: e.description || "",
+          start,
+          end,
+          location: e.location || "",
+          attendees: (e.participants || []).map((a: any) => ({
+            email: a.email,
+            displayName: a.name,
+            responseStatus: participantStatus(a.status || "noreply"),
+          })),
+          htmlLink: e.html_link,
+        };
+      });
 
     if (events.length === 0) {
       return new Response(
@@ -145,58 +143,55 @@ Deno.serve(async (req) => {
     // For each meeting, search for related emails from attendees
     let emailContextByMeeting: Record<string, any[]> = {};
 
-    if (gmailToken) {
-      for (const event of events) {
-        const attendeeEmails = event.attendees
-          .map((a: any) => a.email)
-          .filter((e: string) => e && !e.includes("calendar.google.com"));
+    for (const event of events) {
+      const attendeeEmails = event.attendees
+        .map((a: any) => a.email)
+        .filter((e: string) => e && !e.includes("calendar.google.com") && !e.includes("resource.calendar.google.com"));
 
-        if (attendeeEmails.length === 0) continue;
+      if (attendeeEmails.length === 0) continue;
 
-        // Search for recent emails from/to attendees
-        const query = attendeeEmails.slice(0, 3).map((e: string) => `from:${e} OR to:${e}`).join(" OR ");
-        try {
-          const listRes = await fetch(
-            `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5&q=${encodeURIComponent(query + " newer_than:7d")}`,
-            { headers: { Authorization: `Bearer ${gmailToken}` } }
-          );
-          const listData = await listRes.json();
+      try {
+        // Search for recent emails from attendees using Nylas
+        // We fetch recent messages and filter by sender
+        const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+        const params = new URLSearchParams({
+          limit: "20",
+          in: "INBOX",
+          received_after: String(sevenDaysAgo),
+        });
+        const listRes = await fetch(
+          `${NYLAS_BASE}/v3/grants/${grantId}/messages?${params.toString()}`,
+          { headers: { Authorization: `Bearer ${nylasApiKey}` } }
+        );
+        if (!listRes.ok) continue;
+        const listData = await listRes.json();
+        const allMsgs: any[] = listData.data || [];
 
-          if (listData.messages && listData.messages.length > 0) {
-            const emails = await Promise.all(
-              listData.messages.slice(0, 5).map(async (msg: { id: string }) => {
-                const msgRes = await fetch(
-                  `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-                  { headers: { Authorization: `Bearer ${gmailToken}` } }
-                );
-                const msgData = await msgRes.json();
-                const headers = msgData.payload?.headers || [];
-                const getHeader = (name: string) =>
-                  headers.find((h: { name: string }) => h.name.toLowerCase() === name.toLowerCase())?.value || "";
-                return {
-                  subject: getHeader("Subject"),
-                  from: getHeader("From"),
-                  date: getHeader("Date"),
-                  snippet: msgData.snippet,
-                };
-              })
-            );
-            emailContextByMeeting[event.id] = emails;
-          }
-        } catch {
-          // Skip email fetch errors
+        // Filter to messages from/to attendees
+        const attendeeEmailSet = new Set(attendeeEmails.slice(0, 3).map((e: string) => e.toLowerCase()));
+        const relevantMsgs = allMsgs.filter((msg: any) => {
+          const fromEmails = (msg.from || []).map((f: any) => f.email?.toLowerCase());
+          const toEmails = (msg.to || []).map((t: any) => t.email?.toLowerCase());
+          return fromEmails.some((e: string) => attendeeEmailSet.has(e)) ||
+                 toEmails.some((e: string) => attendeeEmailSet.has(e));
+        }).slice(0, 5);
+
+        if (relevantMsgs.length > 0) {
+          emailContextByMeeting[event.id] = relevantMsgs.map((msg: any) => ({
+            subject: msg.subject || "",
+            from: formatAddress(msg.from || []),
+            date: msg.date ? new Date(msg.date * 1000).toUTCString() : "",
+            snippet: msg.snippet || "",
+          }));
         }
+      } catch {
+        // Skip email fetch errors
       }
     }
 
     // Generate AI prep for each meeting
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("AI not configured");
-
-    const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) throw new Error("AI not configured");
 
     const meetingsWithPrep = await Promise.all(
       events.map(async (event: any) => {
@@ -223,14 +218,14 @@ Generate a concise meeting prep card with:
 Keep it actionable and concise. Use markdown formatting.`;
 
         try {
-          const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              Authorization: `Bearer ${GROQ_API_KEY}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
+              model: "llama-3.3-70b-versatile",
               messages: [
                 { role: "system", content: "You are a sharp executive assistant. Be concise and actionable. NEVER fabricate URLs or links of any kind." },
                 { role: "user", content: prompt },
@@ -308,7 +303,6 @@ Keep it actionable and concise. Use markdown formatting.`;
               actionItems = parsed.action_items || [];
               attendeeResearch = parsed.attendee_research || [];
             } catch {
-              // Fallback to plain content
               prep = aiData.choices?.[0]?.message?.content || prep;
             }
           }
@@ -340,7 +334,7 @@ Keep it actionable and concise. Use markdown formatting.`;
       JSON.stringify({ meetings: meetingsWithPrep }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

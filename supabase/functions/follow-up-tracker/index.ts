@@ -6,119 +6,89 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-async function getValidToken(userId: string) {
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+const NYLAS_BASE = "https://api.us.nylas.com";
 
-  const { data: tokenRow, error } = await adminClient
-    .from("google_oauth_tokens")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("provider", "gmail")
-    .maybeSingle();
-
-  if (error || !tokenRow) throw new Error("Gmail not connected");
-
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) {
-    return tokenRow.access_token;
-  }
-
-  if (!tokenRow.refresh_token) throw new Error("Re-authentication required");
-
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-      client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-      refresh_token: tokenRow.refresh_token,
-      grant_type: "refresh_token",
-    }),
-  });
-
-  const data = await response.json();
-  if (data.error) throw new Error(data.error_description || data.error);
-
-  await adminClient
-    .from("google_oauth_tokens")
-    .update({
-      access_token: data.access_token,
-      token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId)
-    .eq("provider", "gmail");
-
-  return data.access_token;
+function formatAddress(people: Array<{ name?: string; email: string }>): string {
+  if (!people?.length) return "";
+  return people.map(p => p.name ? `${p.name} <${p.email}>` : p.email).join(", ");
 }
 
-async function fetchSentThreads(accessToken: string) {
+async function getNylasGrant(adminClient: any, userId: string): Promise<{ grantId: string; email: string | null }> {
+  const { data: grant, error } = await adminClient
+    .from("nylas_grants")
+    .select("grant_id, email")
+    .eq("user_id", userId)
+    .eq("provider", "google")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !grant) throw Object.assign(new Error("NOT_CONNECTED"), { code: "NOT_CONNECTED" });
+  return { grantId: grant.grant_id, email: grant.email };
+}
+
+async function fetchSentThreads(grantId: string, nylasApiKey: string) {
   // Fetch sent emails from last 7 days
   const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
-  const query = `in:sent after:${sevenDaysAgo}`;
+  const params = new URLSearchParams({
+    limit: "25",
+    in: "SENT",
+    received_after: String(sevenDaysAgo),
+  });
 
   const listRes = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=${encodeURIComponent(query)}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    `${NYLAS_BASE}/v3/grants/${grantId}/messages?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${nylasApiKey}` } }
   );
   const listData = await listRes.json();
+  const messages: any[] = listData.data || [];
+  if (!messages.length) return [];
 
-  if (!listData.messages || listData.messages.length === 0) return [];
-
-  // Fetch message details
-  const messages = await Promise.all(
-    listData.messages.slice(0, 25).map(async (msg: { id: string; threadId: string }) => {
-      const msgRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=Message-ID&metadataHeaders=In-Reply-To`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      const msgData = await msgRes.json();
-      const headers = msgData.payload?.headers || [];
-      const getHeader = (name: string) =>
-        headers.find((h: { name: string }) => h.name.toLowerCase() === name.toLowerCase())?.value || "";
-
-      return {
-        id: msgData.id,
-        threadId: msgData.threadId,
-        from: getHeader("From"),
-        to: getHeader("To"),
-        subject: getHeader("Subject"),
-        date: getHeader("Date"),
-        snippet: msgData.snippet,
-        labelIds: msgData.labelIds || [],
-      };
-    })
-  );
-
-  return messages;
+  return messages.slice(0, 25).map((msg: any) => ({
+    id: msg.id,
+    threadId: msg.thread_id,
+    from: formatAddress(msg.from || []),
+    to: formatAddress(msg.to || []),
+    subject: msg.subject || "",
+    date: msg.date ? new Date(msg.date * 1000).toUTCString() : "",
+    snippet: msg.snippet || "",
+    labelIds: msg.folders || [],
+  }));
 }
 
-async function getThreadReplyStatus(accessToken: string, threadId: string, sentMessageId: string) {
+async function getThreadReplyStatus(grantId: string, nylasApiKey: string, threadId: string, sentMessageId: string) {
+  // Fetch all messages in the thread
+  const params = new URLSearchParams({ limit: "50" });
   const threadRes = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=Date`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    `${NYLAS_BASE}/v3/grants/${grantId}/threads/${threadId}`,
+    { headers: { Authorization: `Bearer ${nylasApiKey}` } }
   );
   const threadData = await threadRes.json();
 
-  if (!threadData.messages) return { hasReply: false, messageCount: 1 };
+  if (!threadData.data) return { hasReply: false, messageCount: 1 };
 
-  // Find if there's a message after the sent one that's NOT from us (i.e., a reply)
-  const sentIdx = threadData.messages.findIndex((m: any) => m.id === sentMessageId);
-  if (sentIdx === -1) return { hasReply: false, messageCount: threadData.messages.length };
+  const thread = threadData.data;
+  const messageCount = thread.message_ids?.length || 1;
 
-  const laterMessages = threadData.messages.slice(sentIdx + 1);
-  const hasReply = laterMessages.some((m: any) => {
-    const fromHeader = (m.payload?.headers || []).find(
-      (h: any) => h.name.toLowerCase() === "from"
-    );
-    // If later message is NOT in SENT, it's a reply from someone else
-    return !(m.labelIds || []).includes("SENT");
-  });
+  // If there's more than one message in the thread and the last message is not from us,
+  // then someone replied. We check by fetching the full message list for the thread.
+  const listRes = await fetch(
+    `${NYLAS_BASE}/v3/grants/${grantId}/messages?thread_id=${threadId}&limit=50`,
+    { headers: { Authorization: `Bearer ${nylasApiKey}` } }
+  );
+  if (!listRes.ok) return { hasReply: false, messageCount };
 
-  return { hasReply, messageCount: threadData.messages.length };
+  const listData = await listRes.json();
+  const msgs: any[] = listData.data || [];
+
+  // Find the index of our sent message
+  const sentIdx = msgs.findIndex((m: any) => m.id === sentMessageId);
+  if (sentIdx === -1) return { hasReply: false, messageCount };
+
+  // Check if there are messages AFTER our sent message that are NOT in SENT folder
+  const laterMessages = msgs.slice(sentIdx + 1);
+  const hasReply = laterMessages.some((m: any) => !(m.folders || []).includes("SENT"));
+
+  return { hasReply, messageCount };
 }
 
 Deno.serve(async (req) => {
@@ -149,8 +119,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    const accessToken = await getValidToken(user.id);
-    const sentMessages = await fetchSentThreads(accessToken);
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    const nylasApiKey = Deno.env.get("NYLAS_API_KEY")!;
+    let grantId: string;
+    try {
+      const grant = await getNylasGrant(adminClient, user.id);
+      grantId = grant.grantId;
+    } catch (tokenError: any) {
+      return new Response(
+        JSON.stringify({ error: "Gmail not connected" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const sentMessages = await fetchSentThreads(grantId, nylasApiKey);
 
     if (sentMessages.length === 0) {
       return new Response(
@@ -171,7 +157,7 @@ Deno.serve(async (req) => {
     const uniqueThreads = Array.from(threadMap.values()).slice(0, 15);
     const replyStatuses = await Promise.all(
       uniqueThreads.map(async (msg) => {
-        const status = await getThreadReplyStatus(accessToken, msg.threadId, msg.id);
+        const status = await getThreadReplyStatus(grantId, nylasApiKey, msg.threadId, msg.id);
         return { ...msg, ...status };
       })
     );
@@ -187,8 +173,8 @@ Deno.serve(async (req) => {
     }
 
     // Use AI to generate follow-up suggestions
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY not configured");
 
     const emailContext = unanswered.map((e: any, i: number) => {
       const sentDate = new Date(e.date);
@@ -201,15 +187,15 @@ Preview: ${e.snippet}`;
     }).join("\n\n");
 
     const aiResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${GROQ_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "llama-3.3-70b-versatile",
           messages: [
             {
               role: "system",
@@ -326,7 +312,7 @@ Use the suggest_followups tool to return your analysis.`,
       JSON.stringify({ followUps, stats }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("follow-up-tracker error:", error);
     return new Response(
       JSON.stringify({ error: error.message }),

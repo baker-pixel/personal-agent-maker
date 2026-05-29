@@ -1,5 +1,5 @@
 // Cron-triggered daily briefing generator. Loops over all users that have at
-// least one Google account connected and generates today's briefing if it
+// least one Nylas grant connected and generates today's briefing if it
 // doesn't already exist. Designed to be invoked by pg_cron once per morning.
 //
 // Authentication: callers must present the Supabase service-role key as the
@@ -13,92 +13,69 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function refreshIfNeeded(adminClient: any, tokenRow: any): Promise<string | null> {
-  const expiresAt = new Date(tokenRow.token_expires_at);
-  if (expiresAt > new Date(Date.now() + 60000)) return tokenRow.access_token;
-  if (!tokenRow.refresh_token) return null;
-  try {
-    const res = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-        client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-        refresh_token: tokenRow.refresh_token,
-        grant_type: "refresh_token",
-      }),
-    });
-    const data = await res.json();
-    if (data.error) return null;
-    await adminClient
-      .from("google_oauth_tokens")
-      .update({
-        access_token: data.access_token,
-        token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", tokenRow.id);
-    return data.access_token;
-  } catch {
-    return null;
-  }
+const NYLAS_BASE = "https://api.us.nylas.com";
+
+function formatAddress(people: Array<{ name?: string; email: string }>): string {
+  if (!people?.length) return "";
+  return people.map(p => p.name ? `${p.name} <${p.email}>` : p.email).join(", ");
 }
 
-async function fetchEmailsForUser(token: string): Promise<any[]> {
+async function fetchEmailsForUser(grantId: string, nylasApiKey: string): Promise<any[]> {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
-    const listRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=10&q=is:inbox is:unread`,
-      { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal }
-    );
-    if (!listRes.ok) { clearTimeout(t); return []; }
-    const listData = await listRes.json();
-    if (!listData.messages?.length) { clearTimeout(t); return []; }
-    const emails = await Promise.all(
-      listData.messages.slice(0, 10).map(async (msg: any) => {
-        const r = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`,
-          { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal }
-        );
-        const d = await r.json();
-        const headers = d.payload?.headers || [];
-        const get = (n: string) => headers.find((h: any) => h.name.toLowerCase() === n.toLowerCase())?.value || "";
-        return { from: get("From"), subject: get("Subject"), snippet: d.snippet };
-      })
-    );
-    clearTimeout(t);
-    return emails;
+    try {
+      const params = new URLSearchParams({ limit: "10", in: "INBOX" });
+      const listRes = await fetch(
+        `${NYLAS_BASE}/v3/grants/${grantId}/messages?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${nylasApiKey}` }, signal: ctrl.signal }
+      );
+      if (!listRes.ok) return [];
+      const listData = await listRes.json();
+      const messages: any[] = listData.data || [];
+      if (!messages.length) return [];
+      return messages.slice(0, 10).map((msg: any) => ({
+        from: formatAddress(msg.from || []),
+        subject: msg.subject || "",
+        snippet: msg.snippet || "",
+      }));
+    } finally {
+      clearTimeout(t);
+    }
   } catch {
     return [];
   }
 }
 
-async function fetchEventsForUser(token: string): Promise<any[]> {
+async function fetchEventsForUser(grantId: string, nylasApiKey: string): Promise<any[]> {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 6000);
-    const now = new Date();
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
-    const params = new URLSearchParams({
-      timeMin: now.toISOString(),
-      timeMax: endOfDay.toISOString(),
-      singleEvents: "true",
-      orderBy: "startTime",
-      maxResults: "20",
-    });
-    const r = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
-      { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal }
-    );
-    if (!r.ok) { clearTimeout(t); return []; }
-    const data = await r.json();
-    clearTimeout(t);
-    return (data.items || []).map((e: any) => ({
-      summary: e.summary || "(No title)",
-      start: e.start?.dateTime || e.start?.date,
-    }));
+    try {
+      const now = new Date();
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+      const params = new URLSearchParams({
+        calendar_id: "primary",
+        start: String(Math.floor(now.getTime() / 1000)),
+        end: String(Math.floor(endOfDay.getTime() / 1000)),
+        limit: "20",
+      });
+      const r = await fetch(
+        `${NYLAS_BASE}/v3/grants/${grantId}/events?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${nylasApiKey}` }, signal: ctrl.signal }
+      );
+      if (!r.ok) return [];
+      const data = await r.json();
+      return (data.data || []).map((e: any) => ({
+        summary: e.title || "(No title)",
+        start: e.when?.start_time
+          ? new Date(e.when.start_time * 1000).toISOString()
+          : e.when?.date || "",
+      }));
+    } finally {
+      clearTimeout(t);
+    }
   } catch {
     return [];
   }
@@ -125,11 +102,11 @@ Rules:
 - No markdown, just clean conversational text
 - Sound like a trusted chief of staff, not a robot`;
 
-  const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash-lite",
+      model: "llama-3.3-70b-versatile",
       messages: [
         { role: "system", content: "You are a sharp executive assistant writing a morning notification. Be brief and specific." },
         { role: "user", content: prompt },
@@ -161,12 +138,14 @@ Deno.serve(async (req) => {
     });
   }
 
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
+  const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+  if (!GROQ_API_KEY) {
     return new Response(JSON.stringify({ error: "AI not configured" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
+  const nylasApiKey = Deno.env.get("NYLAS_API_KEY")!;
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -175,32 +154,34 @@ Deno.serve(async (req) => {
 
   const today = new Date().toISOString().split("T")[0];
 
-  // Find all distinct users who have ANY google token. (One briefing per user;
-  // we just need at least one connected account.)
-  const { data: tokenRows, error: tokErr } = await admin
-    .from("google_oauth_tokens")
-    .select("user_id, provider, access_token, refresh_token, token_expires_at, id");
+  // Find all distinct users who have at least one Nylas grant.
+  // (One briefing per user; we pick the most-recently-created grant.)
+  const { data: grantRows, error: grantErr } = await admin
+    .from("nylas_grants")
+    .select("user_id, grant_id, email, created_at")
+    .eq("provider", "google")
+    .order("created_at", { ascending: false });
 
-  if (tokErr) {
-    console.error("token query failed:", tokErr);
-    return new Response(JSON.stringify({ error: tokErr.message }), {
+  if (grantErr) {
+    console.error("nylas_grants query failed:", grantErr);
+    return new Response(JSON.stringify({ error: grantErr.message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  // Group tokens by user
-  const byUser = new Map<string, any[]>();
-  (tokenRows || []).forEach((row: any) => {
-    const list = byUser.get(row.user_id) || [];
-    list.push(row);
-    byUser.set(row.user_id, list);
-  });
+  // Group by user — keep first row per user (most recent grant, due to ORDER BY)
+  const byUser = new Map<string, { grantId: string; email: string | null }>();
+  for (const row of grantRows || []) {
+    if (!byUser.has(row.user_id)) {
+      byUser.set(row.user_id, { grantId: row.grant_id, email: row.email });
+    }
+  }
 
   let generated = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const [userId, rows] of byUser.entries()) {
+  for (const [userId, grant] of byUser.entries()) {
     try {
       // Skip if briefing already exists for today
       const { data: existing } = await admin
@@ -211,18 +192,9 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (existing) { skipped++; continue; }
 
-      // Pull a Gmail token (any account) and a Calendar token if present
-      const gmailRow = rows.find((r) => r.provider === "gmail");
-      const calRow = rows.find((r) => r.provider === "google-calendar");
-
-      const [gmailToken, calToken] = await Promise.all([
-        gmailRow ? refreshIfNeeded(admin, gmailRow) : null,
-        calRow ? refreshIfNeeded(admin, calRow) : null,
-      ]);
-
       const [emails, events] = await Promise.all([
-        gmailToken ? fetchEmailsForUser(gmailToken) : Promise.resolve([]),
-        calToken ? fetchEventsForUser(calToken) : Promise.resolve([]),
+        fetchEmailsForUser(grant.grantId, nylasApiKey),
+        fetchEventsForUser(grant.grantId, nylasApiKey),
       ]);
 
       // Overdue action items for this user
@@ -234,7 +206,7 @@ Deno.serve(async (req) => {
         .lt("due_date", today)
         .limit(5);
 
-      const summary = await generateSummary(LOVABLE_API_KEY, emails, events, overdueItems || []);
+      const summary = await generateSummary(GROQ_API_KEY, emails, events, overdueItems || []);
 
       const urgentCount = (overdueItems?.length || 0) + emails.filter((e: any) =>
         e.subject?.toLowerCase().includes("urgent") || e.subject?.toLowerCase().includes("asap")

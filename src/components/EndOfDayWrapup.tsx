@@ -118,9 +118,9 @@ export const EndOfDayWrapup = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="mb-8 flex items-start justify-between">
+      <div className="mb-8 flex items-start justify-between pr-14">
         <div>
-          <h1 className="font-display text-3xl text-foreground mb-2">End-of-Day Wrap-Up</h1>
+          <h1 className="font-display text-2xl sm:text-3xl text-foreground mb-2">End-of-Day Wrap-Up</h1>
           <p className="text-muted-foreground">
             {agentName} summarizes your day — what got done, what's still open, and what's urgent for tomorrow.
           </p>
@@ -137,7 +137,7 @@ export const EndOfDayWrapup = () => {
 
       {/* Stats grid */}
       {stats && (
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-6">
+        <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3 mb-6">
           {statCards.map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="glass-card rounded-2xl p-3 text-center">
               <Icon className={`w-4 h-4 mx-auto mb-1 ${color}`} />
@@ -232,7 +232,7 @@ export const EndOfDayWrapup = () => {
           </div>
         </div>
       ) : !loading ? (
-        <div className="glass-card rounded-2xl p-12 text-center">
+        <div className="glass-card rounded-2xl p-8 sm:p-12 text-center">
           <Moon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <h2 className="font-display text-xl text-foreground mb-2">Ready to wrap up your day</h2>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
@@ -240,7 +240,7 @@ export const EndOfDayWrapup = () => {
           </p>
         </div>
       ) : (
-        <div className="glass-card rounded-2xl p-12 text-center">
+        <div className="glass-card rounded-2xl p-8 sm:p-12 text-center">
           <Loader2 className="w-12 h-12 animate-spin text-muted-foreground mx-auto mb-4" />
           <h2 className="font-display text-xl text-foreground mb-2">Wrapping up your day…</h2>
           <p className="text-sm text-muted-foreground">Reviewing meetings, emails, agent activity, and tasks</p>
