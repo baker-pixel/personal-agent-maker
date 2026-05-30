@@ -31,7 +31,7 @@ export default function DailyBriefingRunner() {
       });
     } finally {
       setLoading(false);
-      console.log(`Briefing run took ${Date.now() - startedAt}ms`);
+      // timing log removed for production
     }
   };
 

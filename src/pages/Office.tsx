@@ -272,18 +272,8 @@ const officeItems = [
     position: "",
     emoji: "🌙",
   },
-  {
-    id: "sms-log",
-    label: "SMS Log",
-    description: "Text conversation history",
-    icon: Smartphone,
-    color: "from-teal-500/15 to-teal-500/5",
-    borderColor: "border-teal-500/25",
-    iconColor: "text-teal-500",
-    action: "sms",
-    position: "",
-    emoji: "📱",
-  },
+  // SMS Log hidden — feature coming soon
+  // { id: "sms-log", label: "SMS Log", ... },
   {
     id: "steno-pad",
     label: "Steno Pad",

@@ -321,6 +321,9 @@ serve(async (req) => {
           remindersRes,
           briefingRes,
           stenoSessionsRes,
+          triagedEmailsRes,
+          pendingDraftsRes,
+          followUpRes,
         ] = await Promise.all([
           canFetchNylas && nylasGrants.length > 0
             ? Promise.all(nylasGrants.map((g) => fetchRecentEmails(g.grantId, nylasApiKey, 8, g.email)))
@@ -367,6 +370,35 @@ serve(async (req) => {
             .eq("user_id", user.id)
             .order("created_at", { ascending: false })
             .limit(15),
+          // AI-triaged inbox state
+          adminForContacts
+            .from("email_metadata")
+            .select("from_name, from_address, subject, received_at, category, priority_score, ai_summary, ai_reason, replied_at, snoozed_until, is_unread")
+            .eq("user_id", user.id)
+            .gte("received_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
+            .is("replied_at", null)
+            .or(`snoozed_until.is.null,snoozed_until.lte.${now.toISOString()}`)
+            .in("category", ["urgent", "needs_reply"])
+            .order("priority_score", { ascending: false })
+            .limit(20),
+          // Pending draft approvals
+          adminForContacts
+            .from("draft_actions")
+            .select("to_email, to_name, subject, body, created_at")
+            .eq("user_id", user.id)
+            .eq("status", "pending")
+            .order("created_at", { ascending: false })
+            .limit(5),
+          // Follow-up candidates: replied 48h+ ago, may not have gotten a response
+          adminForContacts
+            .from("email_metadata")
+            .select("from_name, from_address, subject, replied_at")
+            .eq("user_id", user.id)
+            .not("replied_at", "is", null)
+            .lt("replied_at", new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString())
+            .gte("replied_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+            .order("replied_at", { ascending: false })
+            .limit(8),
         ]);
 
         // Helper: load the archived transcript .txt from storage
@@ -410,6 +442,21 @@ serve(async (req) => {
         const reminders = remindersRes.data || [];
         const todaysBriefing = briefingRes.data;
         const stenoSessions = stenoSessionsRes.data || [];
+        const triagedEmails: any[] = (triagedEmailsRes as any)?.data || [];
+        const pendingDrafts: any[] = (pendingDraftsRes as any)?.data || [];
+        const followUps: any[] = (followUpRes as any)?.data || [];
+
+        // "Right now" context from calendar events already fetched
+        const nowTs = now.getTime();
+        const currentEvent = events.find((e: any) => {
+          try { return new Date(e.start).getTime() <= nowTs && new Date(e.end).getTime() > nowTs; } catch { return false; }
+        });
+        const nextEvent = events.find((e: any) => {
+          try { return new Date(e.start).getTime() > nowTs; } catch { return false; }
+        });
+        const minsUntilNext = nextEvent
+          ? Math.round((new Date(nextEvent.start).getTime() - nowTs) / 60000)
+          : null;
 
         if (allEmails.length > 0) {
           const accountNote = nylasGrants.length > 1 ? ` (across ${nylasGrants.length} connected accounts)` : "";
@@ -480,6 +527,86 @@ Location: ${e.location || "None"}\n`;
             realDataContext += `• [${a.priority}] ${a.title}${due}${who}${a.description ? ` — ${a.description}` : ""}\n`;
           });
           realDataContext += "--- END ACTION ITEMS ---\n";
+        }
+
+        // ─── RIGHT NOW context ────────────────────────────────────────────────
+        {
+          const todayDate = new Date(now);
+          const todayStr = `${todayDate.getFullYear()}-${String(todayDate.getMonth()+1).padStart(2,"0")}-${String(todayDate.getDate()).padStart(2,"0")}`;
+          const todayEvents = events.filter((e: any) => {
+            try { return e.start?.startsWith(todayStr); } catch { return false; }
+          });
+          const overdueCount = actionItems.filter((a: any) => a.due_date && a.due_date < todayStr).length;
+          const dueTodayCount = actionItems.filter((a: any) => a.due_date === todayStr).length;
+
+          realDataContext += "\n\n--- RIGHT NOW (user's current situation) ---\n";
+          if (currentEvent) {
+            realDataContext += `🟢 CURRENTLY IN MEETING: "${currentEvent.summary}" (ends ${new Date(currentEvent.end).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})\n`;
+          } else if (nextEvent && minsUntilNext !== null) {
+            if (minsUntilNext <= 30) {
+              realDataContext += `🟡 MEETING STARTING SOON: "${nextEvent.summary}" in ${minsUntilNext} minute${minsUntilNext === 1 ? "" : "s"}\n`;
+            } else {
+              realDataContext += `⏰ Next meeting: "${nextEvent.summary}" in ${minsUntilNext} minutes\n`;
+            }
+          } else {
+            realDataContext += `📅 No upcoming meetings today\n`;
+          }
+          if (todayEvents.length > 0) {
+            realDataContext += `📅 Today's meetings: ${todayEvents.length} total\n`;
+          }
+          if (overdueCount > 0) realDataContext += `⚠️ Overdue tasks: ${overdueCount}\n`;
+          if (dueTodayCount > 0) realDataContext += `📋 Tasks due today: ${dueTodayCount}\n`;
+          realDataContext += "--- END RIGHT NOW ---\n";
+        }
+
+        // ─── AI-triaged inbox state ───────────────────────────────────────────
+        if (triagedEmails.length > 0) {
+          const urgent = triagedEmails.filter((e: any) => e.category === "urgent");
+          const needsReply = triagedEmails.filter((e: any) => e.category === "needs_reply");
+
+          realDataContext += "\n\n--- AI-TRIAGED INBOX (categorized emails awaiting action) ---\n";
+          realDataContext += "These emails have been analyzed by AI and categorized. Use these instead of the raw INBOX DATA when answering questions about email priorities.\n";
+
+          if (urgent.length > 0) {
+            realDataContext += `\nURGENT (${urgent.length} requiring immediate action):\n`;
+            urgent.forEach((e: any) => {
+              const score = e.priority_score ? ` [P${e.priority_score}]` : "";
+              const unread = e.is_unread ? " 🔵" : "";
+              realDataContext += `•${score}${unread} From: ${e.from_name || e.from_address} | Subject: "${e.subject || "(no subject)"}" | ${e.ai_summary || ""}\n`;
+              if (e.ai_reason) realDataContext += `  Why urgent: ${e.ai_reason}\n`;
+            });
+          }
+
+          if (needsReply.length > 0) {
+            realDataContext += `\nNEEDS REPLY (${needsReply.length} awaiting your response):\n`;
+            needsReply.slice(0, 8).forEach((e: any) => {
+              const score = e.priority_score ? ` [P${e.priority_score}]` : "";
+              realDataContext += `•${score} From: ${e.from_name || e.from_address} | Subject: "${e.subject || "(no subject)"}" | ${e.ai_summary || ""}\n`;
+            });
+          }
+
+          realDataContext += "\n--- END AI-TRIAGED INBOX ---\n";
+        }
+
+        // ─── Pending draft approvals ──────────────────────────────────────────
+        if (pendingDrafts.length > 0) {
+          realDataContext += "\n\n--- DRAFTS WAITING FOR APPROVAL ---\n";
+          realDataContext += "These AI-generated email drafts are in the user's Approval Inbox, waiting to be sent. Mention them if relevant.\n";
+          pendingDrafts.forEach((d: any) => {
+            realDataContext += `• To: ${d.to_name || d.to_email} | Subject: "${d.subject}" | Created: ${new Date(d.created_at).toLocaleString()}\n`;
+          });
+          realDataContext += "--- END DRAFTS ---\n";
+        }
+
+        // ─── Follow-up tracker ────────────────────────────────────────────────
+        if (followUps.length > 0) {
+          realDataContext += "\n\n--- FOLLOW-UP NEEDED (you replied, no response yet) ---\n";
+          realDataContext += "You replied to these emails 48+ hours ago and haven't heard back. Surface these when the user asks about follow-ups or what needs attention.\n";
+          followUps.forEach((e: any) => {
+            const daysAgo = Math.floor((nowTs - new Date(e.replied_at).getTime()) / 86400000);
+            realDataContext += `• You replied to ${e.from_name || e.from_address} about "${e.subject}" ${daysAgo} day${daysAgo === 1 ? "" : "s"} ago — no response yet\n`;
+          });
+          realDataContext += "--- END FOLLOW-UPS ---\n";
         }
 
         if (reminders.length > 0) {
@@ -828,6 +955,15 @@ Location: ${e.location || "None"}\n`;
 
     const systemPrompt = `You are ${agentName || "Normy"}, an elite AI executive assistant. Today is ${today}. The user's local time right now is ${currentTimeStr} (${tz}) — it is ${timeOfDay}. ALWAYS reason about dates and times relative to this local time, never UTC.
 
+## YOUR LIVE AWARENESS
+You have real-time access to the user's:
+- **AI-triaged inbox**: emails categorized as Urgent / Needs Reply with priority scores and AI summaries — use these when answering "what emails need attention?"
+- **Right now status**: whether they're currently in a meeting or when their next one starts — greet them accordingly ("since you're about to head into a meeting...")
+- **Follow-ups**: emails they sent 48h+ ago with no response — proactively surface these when asked about priorities
+- **Pending drafts**: AI-generated replies waiting for their approval
+- **Action items + tasks**: what's overdue and due today
+Always use this live context to give specific, actionable answers — never say "I don't have access to your data."
+
 ${isVoice ? `
 ## VOICE MODE — CRITICAL
 You are speaking out loud through TTS. Sound like a real human EA on the phone — NOT a memo being read.
@@ -870,7 +1006,7 @@ When you draft email replies, include a structured JSON block so the user can sa
 Keep draft bodies concise and professional. Only show drafts when the user asks you to draft something.
 
 ## CALENDAR EVENT FORMAT
-When the user asks you to create, add, or schedule a calendar event, include a structured JSON block so the event can be created with one tap. Use this exact format:
+When the user asks you to create, add, or schedule a calendar event, include a structured JSON block AND tell them to tap the button to confirm — do NOT say "I've added it" or "I've scheduled it" because the event is NOT created until they tap the button. Use this exact format:
 
 \`\`\`calendar-json
 {"summary": "Event title", "start": "2026-05-29T10:00:00", "end": "2026-05-29T11:00:00", "description": "Optional notes", "location": "Optional location", "allDay": false, "attendees": [{"email": "person@example.com", "name": "Person Name"}]}
@@ -880,10 +1016,24 @@ Rules:
 - \`summary\` and \`start\` are required. \`end\` defaults to 1 hour after start if omitted.
 - \`start\` and \`end\` must be ISO 8601 datetime strings in the user's local timezone (e.g. "2026-05-29T14:00:00"). For all-day events set \`allDay\` to true and use date-only strings like "2026-05-29".
 - Always infer the date from context (today is ${new Date().toISOString().slice(0, 10)}). If the user says "tomorrow at 3pm", compute the correct date.
-- **\`attendees\` is critical**: whenever the user mentions inviting someone or scheduling WITH someone, include them in \`attendees\` with their resolved email from the PEOPLE DIRECTORY. This is what sends the calendar invite to their inbox. If you cannot resolve their email, ask before emitting the block.
+- **\`attendees\` is critical**: whenever the user mentions inviting someone or scheduling WITH someone, include them in \`attendees\` with their resolved email from the PEOPLE DIRECTORY. This is what sends the Google Calendar invite to their inbox. If you cannot resolve their email, ask before emitting the block.
 - \`attendees\` may be an empty array [] if no guests — do NOT omit the field.
 - Only emit a calendar-json block when the user explicitly asks to create/add/schedule an event. Do NOT emit one just because you mention a date.
 - You may emit both a draft-json and a calendar-json in the same response (e.g. send an invite email + add the event to calendar).
+- **ALWAYS end your message with**: "Tap **Add to Calendar** below to create this event on Google Calendar." — never claim it's already created.
+
+## UPDATE EVENT FORMAT
+When the user asks to reschedule, move, rename, or edit a calendar event, emit this block so it can be updated with one tap:
+
+\`\`\`update-event-json
+{"eventId": "nylas_event_id_here", "summary": "Updated Event Title", "start": "2026-05-29T15:00:00", "end": "2026-05-29T16:00:00", "description": "Updated notes", "location": "Updated location", "attendees": [{"email": "person@example.com", "name": "Person Name"}], "notifyAttendees": true}
+\`\`\`
+
+Rules:
+- \`eventId\` MUST come from REAL CALENDAR DATA — never invent an id.
+- Only include fields you are changing. \`summary\` is always required even if unchanged (shown on the button).
+- \`notifyAttendees\` defaults to true — sends update emails. Set false only if user says "quietly" or "don't notify".
+- Tell the user "Tap **Update Event** below to save changes on Google Calendar." — never say it's already updated.
 
 ## CANCEL EVENT FORMAT
 When the user asks to cancel, delete, or remove a calendar event, emit this block so it can be cancelled with one tap (attendees get notified automatically):
@@ -898,6 +1048,7 @@ Rules:
 - \`notifyAttendees\` defaults to true — sends cancellation emails to all attendees. Only set false if the user explicitly says "don't notify" or "quietly remove".
 - If the user says "cancel my 3pm" and you can identify the event from REAL CALENDAR DATA, emit the block immediately. If ambiguous (multiple matches), ask which one before emitting.
 - Do NOT emit cancel-event-json if the event is not found in REAL CALENDAR DATA — tell the user you can't see it.
+- Tell the user "Tap **Cancel Event** below to remove it from Google Calendar." — never say it's already cancelled.
 `}
 
 ## Data Relevance Rule

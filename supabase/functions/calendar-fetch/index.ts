@@ -74,14 +74,17 @@ Deno.serve(async (req) => {
       throw tokenError;
     }
 
-    const now = new Date();
-    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    // Start from beginning of today (UTC midnight) so events earlier today aren't missed.
+    // Fetch 30 days to support month view navigation.
+    const startOfToday = new Date();
+    startOfToday.setUTCHours(0, 0, 0, 0);
+    const thirtyDaysLater = new Date(startOfToday.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     const params = new URLSearchParams({
       calendar_id: "primary",
-      start: String(Math.floor(now.getTime() / 1000)),
-      end: String(Math.floor(nextWeek.getTime() / 1000)),
-      limit: "20",
+      start: String(Math.floor(startOfToday.getTime() / 1000)),
+      end: String(Math.floor(thirtyDaysLater.getTime() / 1000)),
+      limit: "50",
     });
 
     const calRes = await fetch(

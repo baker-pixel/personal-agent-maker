@@ -18,6 +18,7 @@ export interface TriagedEmail {
   ai_reason: string | null;
   processed_at: string | null;
   replied_at: string | null;
+  snoozed_until: string | null;
 }
 
 export interface ByCategory {
@@ -27,26 +28,66 @@ export interface ByCategory {
   newsletter: TriagedEmail[];
 }
 
+function getArchivedIds(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem("normy_archived_emails") || "[]")); } catch { return new Set(); }
+}
+function addArchivedId(nylasMessageId: string) {
+  try {
+    const ids = getArchivedIds();
+    ids.add(nylasMessageId);
+    localStorage.setItem("normy_archived_emails", JSON.stringify(Array.from(ids).slice(-500)));
+  } catch {}
+}
+
 export function useTriagedEmails() {
   const [emails, setEmails] = useState<TriagedEmail[]>([]);
+  const [snoozedEmails, setSnoozedEmails] = useState<TriagedEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const snoozeTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const fetchEmails = useCallback(async () => {
     setLoading(true);
     const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-    const { data, error } = await supabase
-      .from("email_metadata")
-      .select("*")
-      .gte("received_at", cutoff)
-      .order("received_at", { ascending: false })
-      .limit(200);
+    const now = new Date().toISOString();
 
-    if (!error && data) {
-      setEmails(data as TriagedEmail[]);
+    const [activeRes, snoozedRes] = await Promise.all([
+      supabase
+        .from("email_metadata")
+        .select("*")
+        .gte("received_at", cutoff)
+        // exclude emails snoozed into the future
+        .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
+        .order("received_at", { ascending: false })
+        .limit(200),
+      supabase
+        .from("email_metadata")
+        .select("*")
+        .gte("received_at", cutoff)
+        .gt("snoozed_until", now)
+        .order("snoozed_until", { ascending: true }),
+    ]);
+
+    const archivedIds = getArchivedIds();
+    if (!activeRes.error && activeRes.data) {
+      setEmails((activeRes.data as TriagedEmail[]).filter(e => !archivedIds.has(e.nylas_message_id)));
+    }
+    if (!snoozedRes.error && snoozedRes.data) {
+      setSnoozedEmails(snoozedRes.data as TriagedEmail[]);
     }
     setLoading(false);
   }, []);
+
+  // Schedule a wake-up when a snoozed email is due
+  const scheduleWakeUp = useCallback((id: string, until: Date) => {
+    clearTimeout(snoozeTimers.current[id]);
+    const msUntil = until.getTime() - Date.now();
+    if (msUntil <= 0) return;
+    snoozeTimers.current[id] = setTimeout(() => {
+      fetchEmails();
+      delete snoozeTimers.current[id];
+    }, Math.min(msUntil, 2_147_483_647)); // cap at max safe timeout
+  }, [fetchEmails]);
 
   useEffect(() => {
     fetchEmails();
@@ -54,58 +95,121 @@ export function useTriagedEmails() {
     const channelName = `email_metadata_${Math.random().toString(36).slice(2)}`;
     channelRef.current = supabase
       .channel(channelName)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "email_metadata" },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            const row = payload.new as TriagedEmail;
-            setEmails((prev) => {
-              if (prev.some((e) => e.id === row.id)) return prev;
-              return [row, ...prev];
-            });
-          } else if (payload.eventType === "UPDATE") {
-            const row = payload.new as TriagedEmail;
-            setEmails((prev) =>
-              prev.map((e) => (e.id === row.id ? row : e))
-            );
-          } else if (payload.eventType === "DELETE") {
-            setEmails((prev) =>
-              prev.filter((e) => e.id !== (payload.old as TriagedEmail).id)
-            );
+      .on("postgres_changes", { event: "*", schema: "public", table: "email_metadata" }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          const row = payload.new as TriagedEmail;
+          if (getArchivedIds().has(row.nylas_message_id)) return;
+          if (row.snoozed_until && new Date(row.snoozed_until) > new Date()) {
+            setSnoozedEmails(prev => prev.some(e => e.id === row.id) ? prev : [row, ...prev]);
+          } else {
+            setEmails(prev => prev.some(e => e.id === row.id) ? prev : [row, ...prev]);
           }
+        } else if (payload.eventType === "UPDATE") {
+          const row = payload.new as TriagedEmail;
+          const isSnoozed = row.snoozed_until && new Date(row.snoozed_until) > new Date();
+          if (isSnoozed) {
+            setEmails(prev => prev.filter(e => e.id !== row.id));
+            setSnoozedEmails(prev => prev.some(e => e.id === row.id) ? prev.map(e => e.id === row.id ? row : e) : [row, ...prev]);
+          } else {
+            setSnoozedEmails(prev => prev.filter(e => e.id !== row.id));
+            setEmails(prev => prev.some(e => e.id === row.id) ? prev.map(e => e.id === row.id ? row : e) : [row, ...prev]);
+          }
+        } else if (payload.eventType === "DELETE") {
+          const id = (payload.old as TriagedEmail).id;
+          setEmails(prev => prev.filter(e => e.id !== id));
+          setSnoozedEmails(prev => prev.filter(e => e.id !== id));
         }
-      )
+      })
       .subscribe();
 
     return () => {
       if (channelRef.current) supabase.removeChannel(channelRef.current);
+      Object.values(snoozeTimers.current).forEach(clearTimeout);
     };
   }, [fetchEmails]);
 
-  const byCategory: ByCategory = {
-    urgent: emails
-      .filter((e) => e.category === "urgent")
-      .sort((a, b) => (b.priority_score ?? 0) - (a.priority_score ?? 0)),
-    needs_reply: emails
-      .filter((e) => e.category === "needs_reply")
-      .sort((a, b) => (b.priority_score ?? 0) - (a.priority_score ?? 0)),
-    fyi: emails.filter((e) => e.category === "fyi"),
-    newsletter: emails.filter((e) => e.category === "newsletter"),
-  };
+  // ── Category override ────────────────────────────────────────────────────────
 
   const updateEmailCategory = useCallback(async (id: string, newCategory: EmailCategory) => {
-    // Optimistic — move card instantly, no waiting for Realtime
     setEmails(prev => prev.map(e => e.id === id ? { ...e, category: newCategory } : e));
-    const { error } = await supabase
-      .from("email_metadata")
-      .update({ category: newCategory })
-      .eq("id", id);
-    if (error) {
-      // Revert on failure
-      fetchEmails();
-    }
+    const { error } = await supabase.from("email_metadata").update({ category: newCategory }).eq("id", id);
+    if (error) fetchEmails();
   }, [fetchEmails]);
 
-  return { emails, byCategory, loading, refetch: fetchEmails, updateEmailCategory };
+  // ── Mark as read ─────────────────────────────────────────────────────────────
+
+  const markEmailRead = useCallback(async (id: string, nylasMessageId: string) => {
+    setEmails(prev => prev.map(e => e.id === id ? { ...e, is_unread: false } : e));
+    supabase.functions.invoke("email-actions", { body: { action: "mark_read", nylas_message_id: nylasMessageId } });
+  }, []);
+
+  // ── Archive primitives ────────────────────────────────────────────────────────
+
+  const removeEmailOptimistic = useCallback((id: string) => {
+    setEmails(prev => prev.filter(e => e.id !== id));
+  }, []);
+
+  const restoreEmailOptimistic = useCallback((email: TriagedEmail) => {
+    setEmails(prev => {
+      if (prev.some(e => e.id === email.id)) return prev;
+      return [email, ...prev].sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime());
+    });
+  }, []);
+
+  const confirmArchive = useCallback(async (id: string, nylasMessageId: string) => {
+    addArchivedId(nylasMessageId);
+    await supabase.from("email_metadata").delete().eq("id", id);
+  }, []);
+
+  // ── Snooze ────────────────────────────────────────────────────────────────────
+
+  const snoozeEmail = useCallback(async (email: TriagedEmail, until: Date) => {
+    // Optimistic: move out of main list into snoozed list
+    setEmails(prev => prev.filter(e => e.id !== email.id));
+    const snoozed = { ...email, snoozed_until: until.toISOString() };
+    setSnoozedEmails(prev => {
+      const filtered = prev.filter(e => e.id !== email.id);
+      return [...filtered, snoozed].sort((a, b) => new Date(a.snoozed_until!).getTime() - new Date(b.snoozed_until!).getTime());
+    });
+    // Persist to DB
+    await supabase.from("email_metadata").update({ snoozed_until: until.toISOString() }).eq("id", email.id);
+    // Schedule auto-wake
+    scheduleWakeUp(email.id, until);
+  }, [scheduleWakeUp]);
+
+  const unsnoozeEmail = useCallback(async (email: TriagedEmail) => {
+    // Optimistic: restore to main list
+    setSnoozedEmails(prev => prev.filter(e => e.id !== email.id));
+    const restored = { ...email, snoozed_until: null };
+    setEmails(prev => {
+      if (prev.some(e => e.id === email.id)) return prev;
+      return [restored, ...prev].sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime());
+    });
+    clearTimeout(snoozeTimers.current[email.id]);
+    await supabase.from("email_metadata").update({ snoozed_until: null }).eq("id", email.id);
+  }, []);
+
+  // ── Derived ───────────────────────────────────────────────────────────────────
+
+  const byCategory: ByCategory = {
+    urgent: emails.filter(e => e.category === "urgent").sort((a, b) => (b.priority_score ?? 0) - (a.priority_score ?? 0)),
+    needs_reply: emails.filter(e => e.category === "needs_reply").sort((a, b) => (b.priority_score ?? 0) - (a.priority_score ?? 0)),
+    fyi: emails.filter(e => e.category === "fyi"),
+    newsletter: emails.filter(e => e.category === "newsletter"),
+  };
+
+  return {
+    emails,
+    snoozedEmails,
+    byCategory,
+    loading,
+    refetch: fetchEmails,
+    updateEmailCategory,
+    markEmailRead,
+    removeEmailOptimistic,
+    restoreEmailOptimistic,
+    confirmArchive,
+    snoozeEmail,
+    unsnoozeEmail,
+  };
 }

@@ -250,7 +250,7 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
         throw new Error(`Premium TTS failed (${res.status}): ${errText}`);
       }
       const blob = await res.blob();
-      console.log("[ElevenLabs TTS] received", blob.size, "bytes,", blob.type);
+      // TTS debug log removed for production
       const url = URL.createObjectURL(blob);
       if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = url;

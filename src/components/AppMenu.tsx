@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { Menu, Mail, Calendar, LayoutDashboard, Settings, LogOut, Home, Building2, Users, Flame, ListTodo } from "lucide-react";
+import { Menu, Mail, Calendar, Settings, LogOut, Home, Building2, Users, Flame, ListTodo } from "lucide-react";
 import { performSignOut } from "@/lib/signOut";
 import { useAgent } from "@/contexts/AgentContext";
 import {
@@ -16,9 +16,8 @@ export default function AppMenu() {
   const { agentName } = useAgent();
 
   const navItems = [
-    { label: "Home", path: "/mode-select", icon: Home },
+    { label: "Home", path: "/dashboard", icon: Home },
     { label: `${agentName}'s Office`, path: "/office", icon: Building2 },
-    { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { label: "Email", path: "/email", icon: Mail },
     { label: "Calendar", path: "/calendar", icon: Calendar },
     { label: "Leads", path: "/leads", icon: Flame },
@@ -37,17 +36,20 @@ export default function AppMenu() {
           <Menu className="w-5 h-5 text-foreground" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        {navItems.map((item) => (
-          <DropdownMenuItem
-            key={item.path}
-            onClick={() => navigate(item.path)}
-            className={location.pathname === item.path ? "bg-secondary" : ""}
-          >
-            <item.icon className="w-4 h-4 mr-2" />
-            {item.label}
-          </DropdownMenuItem>
-        ))}
+      <DropdownMenuContent align="end" sideOffset={8} className="w-52">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <DropdownMenuItem
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              className={isActive ? "bg-accent/10 text-accent font-medium focus:bg-accent/15 focus:text-accent" : ""}
+            >
+              <item.icon className={`w-4 h-4 mr-2 ${isActive ? "text-accent" : ""}`} />
+              {item.label}
+            </DropdownMenuItem>
+          );
+        })}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigate("/settings")}>
           <Settings className="w-4 h-4 mr-2" />

@@ -1,7 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAgent } from "@/contexts/AgentContext";
-import { Send, Loader2, Zap, Trash2 } from "lucide-react";
+import {
+  Send, Loader2, Zap, Trash2,
+  Mail, Calendar, ListTodo, Users, Inbox, ArrowRight,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 import { CalendarJsonParser } from "@/components/chat/CalendarJsonParser";
@@ -20,7 +24,118 @@ async function persistMessage(conversationId: string, role: string, content: str
     .eq("id", conversationId);
 }
 
+// ─── Context-aware quick actions ─────────────────────────────────────────────
+
+interface ContextAction {
+  label: string;
+  icon: React.ElementType;
+  path: string;
+  color: string;
+}
+
+function detectContextActions(content: string): ContextAction[] {
+  const lower = content.toLowerCase();
+  const actions: ContextAction[] = [];
+
+  if (lower.match(/\bemail|inbox|unread|urgent|reply|draft|triage|message\b/)) {
+    actions.push({ label: "Open inbox", icon: Mail, path: "/email", color: "text-accent" });
+  }
+  if (lower.match(/\bmeeting|calendar|event|schedule|appointment|agenda\b/)) {
+    actions.push({ label: "Open calendar", icon: Calendar, path: "/calendar", color: "text-accent" });
+  }
+  if (lower.match(/\btask|action item|todo|due|overdue|deadline\b/)) {
+    actions.push({ label: "Open tasks", icon: ListTodo, path: "/tasks", color: "text-muted-foreground" });
+  }
+  if (lower.match(/\bapproval inbox|draft saved|waiting for approval|pending draft\b/)) {
+    actions.push({ label: "Approval inbox", icon: Inbox, path: "/email", color: "text-green-600" });
+  }
+  if (lower.match(/\bcontact|person|colleague|client|vendor\b/)) {
+    actions.push({ label: "Open contacts", icon: Users, path: "/contacts", color: "text-muted-foreground" });
+  }
+
+  return actions.slice(0, 3);
+}
+
+// ─── Time-based starter prompts ───────────────────────────────────────────────
+
+interface StarterPrompt {
+  emoji: string;
+  label: string;
+  prompt: string;
+}
+
+function getStarterPrompts(agentName: string): StarterPrompt[] {
+  const h = new Date().getHours();
+
+  if (h < 10) {
+    return [
+      { emoji: "🌅", label: "Morning briefing", prompt: "Give me a morning briefing — what's urgent in my inbox, what meetings do I have today, and what should I focus on first?" },
+      { emoji: "⚡", label: "What's urgent?", prompt: "What needs my immediate attention right now — urgent emails, overdue tasks, or anything time-sensitive?" },
+      { emoji: "📅", label: "Prep for next meeting", prompt: "Look at my upcoming meetings today and prepare a quick brief with context, attendees, and any talking points." },
+      { emoji: "📋", label: "Today's priorities", prompt: "Based on my tasks and emails, what are the 3-5 things I should absolutely get done today?" },
+      { emoji: "✍️", label: "Draft an email", prompt: "Help me draft a professional email. Tell me who it's to and what it's about." },
+      { emoji: "🗓️", label: "Plan my week", prompt: "Help me plan my week based on my calendar, priorities, and any pending tasks." },
+    ];
+  }
+
+  if (h < 14) {
+    return [
+      { emoji: "🔄", label: "Check follow-ups", prompt: "Are there emails I replied to that haven't gotten a response? What might need a follow-up?" },
+      { emoji: "📧", label: "Triage my inbox", prompt: "Go through my inbox and tell me what's urgent, what needs a reply, and what I can safely ignore." },
+      { emoji: "📅", label: "Afternoon meetings", prompt: "What meetings do I have this afternoon? Any prep I should do before them?" },
+      { emoji: "✍️", label: "Draft an email", prompt: "Help me draft a professional email. Tell me who it's to and what it's about." },
+      { emoji: "📋", label: "Task check-in", prompt: "How am I doing on my tasks for today? What's done, what's overdue, what still needs attention?" },
+      { emoji: "🧠", label: "Quick decision", prompt: "I need help thinking through a decision. Let me explain the situation." },
+    ];
+  }
+
+  // Evening
+  return [
+    { emoji: "🌆", label: "End of day wrapup", prompt: "Give me an end-of-day summary — what got done today, what's still pending, and what should I prioritize first thing tomorrow?" },
+    { emoji: "📋", label: "Tomorrow's priorities", prompt: "Based on what's open and unfinished, help me set my top priorities for tomorrow." },
+    { emoji: "📧", label: "Anything urgent?", prompt: "Is there anything urgent in my inbox I should handle before logging off for the day?" },
+    { emoji: "🔄", label: "Pending follow-ups", prompt: "Are there any emails or tasks that I committed to but haven't completed yet?" },
+    { emoji: "✍️", label: "Draft an email", prompt: "Help me draft a professional email before I wrap up." },
+    { emoji: "🗓️", label: "Check tomorrow", prompt: "What's on my calendar for tomorrow? Anything I should prepare for tonight?" },
+  ];
+}
+
+// ─── Smart follow-up chips ────────────────────────────────────────────────────
+
+function getFollowUpChips(messages: Message[]): StarterPrompt[] {
+  if (messages.length === 0) return [];
+  const lastAssistant = [...messages].reverse().find(m => m.role === "assistant");
+  if (!lastAssistant) return [];
+
+  const lower = lastAssistant.content.toLowerCase();
+  const chips: StarterPrompt[] = [];
+
+  if (lower.match(/\burgent|priority|attention/)) {
+    chips.push({ emoji: "📋", label: "Draft a reply", prompt: "Help me draft a reply for the most urgent email you just mentioned." });
+  }
+  if (lower.match(/\bmeeting|agenda|attendee/)) {
+    chips.push({ emoji: "📝", label: "Draft talking points", prompt: "Draft concise talking points I can use in the meeting you just described." });
+  }
+  if (lower.match(/\btask|action item|todo/)) {
+    chips.push({ emoji: "✅", label: "Add these as tasks", prompt: "Turn the action items you mentioned into a structured task list." });
+  }
+  if (lower.match(/\bfollow[- ]up|follow up/)) {
+    chips.push({ emoji: "✉️", label: "Draft follow-up", prompt: "Draft a polite follow-up email for the situation you described." });
+  }
+  if (lower.match(/\bschedule|book|calendar|event/)) {
+    chips.push({ emoji: "📅", label: "Add to calendar", prompt: "Help me create a calendar event for what you just mentioned." });
+  }
+
+  // Always offer "Tell me more"
+  chips.push({ emoji: "🔍", label: "Tell me more", prompt: "Give me more details about the most important item you just mentioned." });
+
+  return chips.slice(0, 4);
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export const AgentChat = () => {
+  const navigate = useNavigate();
   const { agentName } = useAgent();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -236,19 +351,12 @@ export const AgentChat = () => {
             </p>
             <div className="w-full max-w-sm space-y-2 mt-6">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-3">
-                Things {agentName} can handle for you
+                {new Date().getHours() < 10 ? "Start your day" : new Date().getHours() < 17 ? "Quick actions" : "Wrap up your day"}
               </p>
-              {[
-                { emoji: "📧", label: "Triage my inbox", prompt: "Go through my inbox and tell me what's urgent, what needs a reply, and what I can ignore." },
-                { emoji: "📅", label: "Prep me for my next meeting", prompt: "Look at my upcoming meetings and prepare a brief with context, talking points, and anything I should know about the attendees." },
-                { emoji: "✍️", label: "Draft a follow-up email", prompt: "Help me draft a professional follow-up email. I'll give you the context." },
-                { emoji: "📋", label: "Summarize my action items", prompt: "Review my tasks and action items, then give me a prioritized summary of what I should focus on today." },
-                { emoji: "📰", label: "Catch me up on industry news", prompt: "Give me a quick brief on the latest news relevant to my industry and interests." },
-                { emoji: "🗓️", label: "Plan my week", prompt: "Help me plan and organize my upcoming week based on my calendar and priorities." },
-              ].map((item) => (
+              {getStarterPrompts(agentName).map((item) => (
                 <button
                   key={item.label}
-                  onClick={() => { setInput(item.prompt); }}
+                  onClick={() => { setInput(item.prompt); setTimeout(() => inputRef.current?.focus(), 50); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border/40 text-left text-sm text-muted-foreground hover:text-foreground hover:border-accent/30 hover:bg-accent/[0.03] transition-all duration-200"
                 >
                   <span className="text-base">{item.emoji}</span>
@@ -259,33 +367,56 @@ export const AgentChat = () => {
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            style={{ animation: `fade-up 0.3s ease-out both` }}
-          >
-            <div
-              className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                msg.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "glass-card"
-              }`}
-            >
-              {msg.role === "assistant" ? (
-                <>
-                  <div className="prose prose-sm max-w-none text-foreground prose-headings:font-display prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-accent prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
-                    <ReactMarkdown>{msg.content.replace(/```draft-json[\s\S]*?```/g, "").replace(/```calendar-json[\s\S]*?```/g, "").replace(/```cancel-event-json[\s\S]*?```/g, "")}</ReactMarkdown>
-                  </div>
-                  <DraftJsonParser text={msg.content} />
-                  <CalendarJsonParser text={msg.content} />
-                </>
-              ) : (
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+        {messages.map((msg, i) => {
+          const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
+          const contextActions = isLastAssistant ? detectContextActions(msg.content) : [];
+
+          return (
+            <div key={i} style={{ animation: `fade-up 0.3s ease-out both` }}>
+              <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                    msg.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "glass-card"
+                  }`}
+                >
+                  {msg.role === "assistant" ? (
+                    <>
+                      <div className="prose prose-sm max-w-none text-foreground prose-headings:font-display prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-accent prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
+                        <ReactMarkdown>{msg.content.replace(/```draft-json[\s\S]*?```/g, "").replace(/```calendar-json[\s\S]*?```/g, "").replace(/```cancel-event-json[\s\S]*?```/g, "")}</ReactMarkdown>
+                      </div>
+                      <DraftJsonParser text={msg.content} />
+                      <CalendarJsonParser text={msg.content} />
+                    </>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Context-aware action buttons after last assistant message */}
+              {isLastAssistant && contextActions.length > 0 && (
+                <div className="flex gap-2 mt-2 ml-1 flex-wrap">
+                  {contextActions.map(action => {
+                    const Icon = action.icon;
+                    return (
+                      <button
+                        key={action.path + action.label}
+                        onClick={() => navigate(action.path)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card border border-border/40 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-accent/40 hover:bg-accent/5 transition-all"
+                      >
+                        <Icon className={`w-3.5 h-3.5 ${action.color}`} />
+                        {action.label}
+                        <ArrowRight className="w-3 h-3 opacity-40" />
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
           <div className="flex justify-start">
@@ -302,17 +433,10 @@ export const AgentChat = () => {
       <div className="border-t border-border pt-3">
         {!isLoading && (
           <div className="flex gap-2 overflow-x-auto scrollbar-none pb-2 px-1">
-            {[
-              { emoji: "📧", label: "Triage inbox", prompt: "Go through my inbox and tell me what's urgent, what needs a reply, and what I can ignore." },
-              { emoji: "📅", label: "Meeting prep", prompt: "Look at my upcoming meetings and prepare a brief with context, talking points, and anything I should know about the attendees." },
-              { emoji: "✍️", label: "Draft email", prompt: "Help me draft a professional follow-up email. I'll give you the context." },
-              { emoji: "📋", label: "Action items", prompt: "Review my tasks and action items, then give me a prioritized summary of what I should focus on today." },
-              { emoji: "📰", label: "Industry news", prompt: "Give me a quick brief on the latest news relevant to my industry and interests." },
-              { emoji: "🗓️", label: "Plan my week", prompt: "Help me plan and organize my upcoming week based on my calendar and priorities." },
-            ].map((item) => (
+            {(messages.length > 0 ? getFollowUpChips(messages) : getStarterPrompts(agentName)).map((item) => (
               <button
                 key={item.label}
-                onClick={() => setInput(item.prompt)}
+                onClick={() => { setInput(item.prompt); setTimeout(() => inputRef.current?.focus(), 50); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border/40 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-accent/30 hover:bg-accent/[0.03] transition-all duration-200 whitespace-nowrap shrink-0"
               >
                 <span>{item.emoji}</span>

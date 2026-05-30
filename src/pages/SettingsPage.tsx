@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, MessageSquare, Mail, Eye, EyeOff, Check, Building2 } from "lucide-react";
+import { ArrowLeft, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, Mail, Eye, EyeOff, Check, Building2, BellRing } from "lucide-react";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import EmailTriageSettings from "@/components/EmailTriageSettings";
 import { VoicePersonalizationSection } from "@/components/VoicePersonalizationSection";
@@ -8,7 +9,7 @@ import DailyBriefingRunner from "@/components/DailyBriefingRunner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
+// Checkbox removed — SMS feature not yet launched
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,44 +29,61 @@ import { reloadAfterIntegrationChange } from "@/lib/integrationReload";
 
 interface AgentSettings {
   agentName: string;
-  phoneNumber: string;
-  smsConsent: boolean;
   tone: string;
   emailLength: string;
   priorityVisibility: string;
   decisionStyle: string;
-  notifySms: boolean;
   notifyEmail: boolean;
   notifyPush: boolean;
 }
 
 const defaults: AgentSettings = {
   agentName: "Annie",
-  phoneNumber: "",
-  smsConsent: false,
   tone: "friendly",
   emailLength: "balanced",
   priorityVisibility: "important",
   decisionStyle: "careful",
-  notifySms: true,
   notifyEmail: true,
   notifyPush: false,
 };
+
+type SettingsTab = "home" | "profile" | "integrations" | "email" | "notifications" | "account";
+
+interface TabConfig {
+  id: SettingsTab;
+  label: string;
+  description: string;
+  icon: React.ElementType;
+  iconBg: string;
+  iconColor: string;
+}
+
+const TABS: TabConfig[] = [
+  { id: "profile",       label: "Agent Profile",    description: "Name, tone & communication style",   icon: Sparkles,  iconBg: "bg-accent/15",        iconColor: "text-accent"         },
+  { id: "integrations",  label: "Integrations",     description: "Gmail, Calendar & departments",        icon: Plug,      iconBg: "bg-blue-500/15",      iconColor: "text-blue-500"       },
+  { id: "email",         label: "Email Settings",   description: "Triage rules, VIP senders & filters", icon: Mail,      iconBg: "bg-orange-500/15",    iconColor: "text-orange-500"     },
+  { id: "notifications", label: "Notifications",    description: "Push alerts & background jobs",         icon: Bell,      iconBg: "bg-purple-500/15",    iconColor: "text-purple-500"     },
+  { id: "account",       label: "Account",          description: "Email, password & privacy",            icon: User,      iconBg: "bg-green-500/15",     iconColor: "text-green-600"      },
+];
 
 export default function Settings() {
   const navigate = useNavigate();
   const location = useLocation();
   const { agentName, setAgentName } = useAgent();
   const [settings, setSettings] = useState<AgentSettings>({ ...defaults, agentName });
+  const [activeTab, setActiveTab] = useState<SettingsTab>("home");
+  const { permission: pushPermission, requestPermission: requestPushPermission } = usePushNotifications();
+  const tabBarRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to hash section (e.g. #departments)
+  // Support hash navigation → jump to correct tab
   useEffect(() => {
-    if (location.hash) {
-      setTimeout(() => {
-        document.querySelector(location.hash)?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
+    const hash = location.hash.replace("#", "");
+    if (hash === "departments") setActiveTab("integrations");
+    else if (["profile","integrations","email","notifications","account"].includes(hash)) {
+      setActiveTab(hash as SettingsTab);
     }
   }, [location.hash]);
+
   const [saved, setSaved] = useState(false);
   const { connecting, connect } = useGoogleOAuthPopup();
   const { isConnected, integrations, removeAccount, refreshConnections } = useIntegrations();
@@ -122,14 +140,13 @@ export default function Settings() {
       if (user) {
         const { data } = await supabase
           .from("user_preferences")
-          .select("agent_name, phone_number, tone, email_length, priority_visibility, decision_style")
+          .select("agent_name, tone, email_length, priority_visibility, decision_style")
           .eq("user_id", user.id)
           .maybeSingle();
         if (data) {
           setSettings((prev) => ({
             ...prev,
             agentName: data.agent_name ?? prev.agentName,
-            phoneNumber: data.phone_number ?? prev.phoneNumber,
             tone: data.tone ?? prev.tone,
             emailLength: data.email_length ?? prev.emailLength,
             priorityVisibility: data.priority_visibility ?? prev.priorityVisibility,
@@ -183,17 +200,12 @@ export default function Settings() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const normalizedPhone = settings.phoneNumber.trim()
-          ? settings.phoneNumber.replace(/[^+\d]/g, "")
-          : null;
-
         await supabase
           .from("user_preferences")
           .upsert(
             {
               user_id: user.id,
               agent_name: settings.agentName,
-              phone_number: normalizedPhone,
               tone: settings.tone,
               email_length: settings.emailLength,
               priority_visibility: settings.priorityVisibility,
@@ -202,15 +214,6 @@ export default function Settings() {
             },
             { onConflict: "user_id" }
           );
-
-        if (settings.phoneNumber && settings.smsConsent) {
-          await supabase
-            .from("sms_conversations" as any)
-            .upsert(
-              { user_id: user.id, phone_number: normalizedPhone, messages: [] },
-              { onConflict: "phone_number" }
-            );
-        }
       }
     } catch (err) {
       console.error("Settings save error:", err);
@@ -249,20 +252,83 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-background pt-[var(--header-h)]">
+      {/* Sticky header — just Back + title + contextual action */}
       <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
         <div className="container flex items-center justify-between h-14 px-4">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+          <button
+            onClick={() => activeTab === "home" ? navigate(-1) : setActiveTab("home")}
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+          >
             <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm font-medium">Back</span>
+            <span className="text-sm font-medium">{activeTab === "home" ? "Back" : "Settings"}</span>
           </button>
-          <h1 className="font-display font-semibold">Settings</h1>
-          <div className="w-8" />
+          <h1 className="font-display font-semibold">
+            {activeTab === "home" ? "Settings" : TABS.find(t => t.id === activeTab)?.label ?? "Settings"}
+          </h1>
+          {(activeTab === "profile" || activeTab === "account") ? (
+            <button
+              onClick={save}
+              className="text-sm font-semibold text-accent hover:text-accent/80 transition-colors"
+            >
+              {saved ? "Saved ✓" : "Save"}
+            </button>
+          ) : (
+            <div className="w-8" />
+          )}
         </div>
       </nav>
 
-      <div className="container py-6 sm:py-8 max-w-lg space-y-8 px-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
-        {/* Account / Login Info */}
-        <section className="space-y-3">
+      <div className="container py-6 max-w-lg space-y-5 px-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
+
+        {/* ── Home — settings card grid ─────────────────────────────────── */}
+        {activeTab === "home" && (
+          <div style={{ animation: "fade-up 0.25s ease-out both" }}>
+            {/* Agent summary card */}
+            <div className="glass-card rounded-2xl p-5 mb-6 flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-accent flex items-center justify-center text-2xl font-bold text-accent-foreground shrink-0">
+                {(settings.agentName || agentName || "A").charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-display font-bold text-lg text-foreground">{settings.agentName || agentName}</p>
+                <p className="text-sm text-muted-foreground">Your AI executive assistant</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent/10 text-accent capitalize">
+                    {settings.tone} tone
+                  </span>
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground capitalize">
+                    {settings.emailLength} emails
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Settings sections grid */}
+            <div className="space-y-2">
+              {TABS.map(tab => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl bg-card border border-border/40 hover:border-accent/30 hover:bg-accent/[0.02] transition-all group text-left"
+                  >
+                    <div className={`w-11 h-11 rounded-xl ${tab.iconBg} flex items-center justify-center shrink-0`}>
+                      <Icon className={`w-5 h-5 ${tab.iconColor}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{tab.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{tab.description}</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-accent group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Account ──────────────────────────────────────────────────── */}
+        {activeTab === "account" && <section className="space-y-3">
           <div className="flex items-center gap-2">
             <Mail className="w-5 h-5 text-accent" />
             <h2 className="font-display font-semibold">Account</h2>
@@ -291,39 +357,11 @@ export default function Settings() {
               </Button>
             </div>
           </div>
-        </section>
+        </section>}
 
-        <section className="space-y-3">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-accent" />
-            <h2 className="font-display font-semibold">SMS Access</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Text {settings.agentName} at <span className="font-mono font-semibold text-foreground">+1 (844) 392-6449</span> from this number. {settings.agentName} will recognize you and respond with AI-powered assistance.
-          </p>
-          <div className="flex items-start gap-2 mt-1">
-            <Checkbox
-              id="sms-consent"
-              checked={settings.smsConsent}
-              onCheckedChange={(checked) => update("smsConsent", checked === true)}
-              className="mt-0.5"
-            />
-            <label htmlFor="sms-consent" className="text-sm text-muted-foreground cursor-pointer leading-snug">
-              I consent to receive SMS messages from {settings.agentName} at the number I provide. Standard messaging rates may apply. You can revoke consent at any time by unchecking this box.
-            </label>
-          </div>
-          <div className="flex gap-2">
-            <Input type="tel" value={settings.phoneNumber} onChange={(e) => update("phoneNumber", e.target.value)} placeholder="+1 (555) 123-4567" className="rounded-xl flex-1" disabled={!settings.smsConsent} />
-            <Button onClick={save} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl" disabled={!settings.smsConsent || !settings.phoneNumber}>
-              {saved ? "Saved ✓" : "Save"}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Enter your mobile number in E.164 format (e.g. +15551234567) and save to activate SMS.
-          </p>
-        </section>
+        {/* SMS Access removed — feature not yet launched */}
 
-        <section className="space-y-3">
+        {activeTab === "profile" && <section className="space-y-3">
           <div className="flex items-center gap-2">
             <User className="w-5 h-5 text-accent" />
             <h2 className="font-display font-semibold">Agent Profile</h2>
@@ -374,9 +412,9 @@ export default function Settings() {
             <p className="text-sm text-muted-foreground leading-relaxed">Retake the Bintly assessment to update {settings.agentName}'s behavioral profile.</p>
             <Button className="w-full bg-accent text-accent-foreground hover:bg-accent/90">Retake Assessment <ArrowRight className="w-4 h-4 ml-1" /></Button>
           </div>
-        </section>
+        </section>}
 
-        <section className="space-y-3">
+        {activeTab === "integrations" && <section className="space-y-3">
           <div className="flex items-center gap-2">
             <Plug className="w-5 h-5 text-accent" />
             <h2 className="font-display font-semibold">Connected Accounts</h2>
@@ -457,9 +495,9 @@ export default function Settings() {
               </Button>
             </div>
           </div>
-        </section>
+        </section>}
 
-        <section id="departments" className="space-y-3">
+        {activeTab === "integrations" && <section id="departments" className="space-y-3">
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-accent" />
             <h2 className="font-display font-semibold">Departments</h2>
@@ -490,47 +528,78 @@ export default function Settings() {
               </div>
             ))}
           </div>
-        </section>
+        </section>}
 
-        <EmailTriageSettings />
+        {/* ── Email ────────────────────────────────────────────────────── */}
+        {activeTab === "email" && <>
+          <EmailTriageSettings />
+          <VoicePersonalizationSection />
+        </>}
 
-        <VoicePersonalizationSection />
-
-        <section className="space-y-3">
+        {/* ── Notifications ────────────────────────────────────────────── */}
+        {activeTab === "notifications" && <section className="space-y-3">
           <div className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-accent" />
             <h2 className="font-display font-semibold">Notifications</h2>
           </div>
           <div className="space-y-2">
+            {/* Push notifications — now actually works */}
+            <div className="border rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-sm">Push notifications</p>
+                  <p className="text-xs text-muted-foreground">
+                    {pushPermission === "granted"
+                      ? "Enabled — alerts for meetings, urgent emails & overdue tasks"
+                      : pushPermission === "denied"
+                      ? "Blocked — enable in browser site settings"
+                      : "Get alerted for meetings, urgent emails & overdue tasks"}
+                  </p>
+                </div>
+                {pushPermission === "granted" ? (
+                  <span className="text-xs font-semibold text-green-600 bg-green-500/10 px-2 py-1 rounded-full">Enabled</span>
+                ) : pushPermission === "denied" ? (
+                  <span className="text-xs font-semibold text-destructive bg-destructive/10 px-2 py-1 rounded-full">Blocked</span>
+                ) : (
+                  <Button size="sm" onClick={requestPushPermission} className="bg-accent text-accent-foreground text-xs h-8 rounded-lg flex items-center gap-1.5">
+                    <BellRing className="w-3.5 h-3.5" />
+                    Enable
+                  </Button>
+                )}
+              </div>
+            </div>
+
             {[
-              { key: "notifySms" as const, label: "SMS notifications", desc: "Get texts when action is needed" },
               { key: "notifyEmail" as const, label: "Email digests", desc: "Daily summary from your agent" },
-              { key: "notifyPush" as const, label: "Push notifications", desc: "Browser notifications (coming soon)" },
             ].map((n) => (
               <div key={n.key} className="flex items-center justify-between border rounded-xl p-4">
                 <div>
                   <p className="font-medium text-sm">{n.label}</p>
                   <p className="text-xs text-muted-foreground">{n.desc}</p>
                 </div>
-                <Switch checked={settings[n.key]} onCheckedChange={(v) => update(n.key, v)} disabled={n.key === "notifyPush"} />
+                <Switch checked={settings[n.key]} onCheckedChange={(v) => update(n.key, v)} />
               </div>
             ))}
           </div>
-        </section>
 
-        <section className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-accent" />
-            <h2 className="font-display font-semibold">Background Jobs</h2>
+          <div className="border rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-accent" />
+              <h2 className="font-display font-semibold">Background Jobs</h2>
+            </div>
+            <DailyBriefingRunner />
           </div>
-          <DailyBriefingRunner />
-        </section>
+        </section>}
 
-        <Button onClick={save} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-          {saved ? "Saved ✓" : "Save Changes"}
-        </Button>
+        {/* Save button — profile & account sections (also in header) */}
+        {(activeTab === "profile" || activeTab === "account") && (
+          <Button onClick={save} className="w-full bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl h-11">
+            {saved ? <><Check className="w-4 h-4 mr-1.5" />Changes saved</> : "Save changes"}
+          </Button>
+        )}
 
-        <div className="mt-10 pt-6 border-t space-y-4 text-xs text-muted-foreground">
+        {/* Privacy policy — account tab only */}
+        {activeTab === "account" && <div className="mt-6 pt-6 border-t space-y-4 text-xs text-muted-foreground">
           <h3 className="text-sm font-semibold text-foreground">Privacy Policy</h3>
           <p className="leading-relaxed"><strong className="text-foreground">Last updated:</strong> April 8, 2026</p>
 
@@ -540,7 +609,7 @@ export default function Settings() {
           <ul className="list-disc pl-5 space-y-1">
             <li><strong className="text-foreground">Account info:</strong> Email address and password when you create an account.</li>
             <li><strong className="text-foreground">Google account data:</strong> When you connect Gmail or Google Calendar, we access your emails and calendar events to provide triage and scheduling features. We store OAuth tokens securely.</li>
-            <li><strong className="text-foreground">Phone number:</strong> If you opt in to SMS, we store your mobile number to enable text-based communication with your agent.</li>
+            <li><strong className="text-foreground">Usage data:</strong> We log feature usage to improve the product experience.</li>
           </ul>
 
           <h4 className="text-xs font-semibold text-foreground pt-2">2. How We Use Your Information</h4>
@@ -548,7 +617,7 @@ export default function Settings() {
             <li>To read and categorize your emails for inbox triage</li>
             <li>To read your calendar events for scheduling optimization</li>
             <li>To draft email replies for your review and approval</li>
-            <li>To send and receive SMS messages on your behalf (with consent)</li>
+            <li>To generate AI-powered responses, summaries, and action items</li>
           </ul>
           <p>We <strong className="text-foreground">never</strong> send emails, modify calendar events, or send texts without your explicit approval.</p>
 
@@ -556,7 +625,7 @@ export default function Settings() {
           <p>Your OAuth tokens are stored securely in an encrypted database. We do not store the full content of your emails or calendar events — we access them in real time and do not retain copies.</p>
 
           <h4 className="text-xs font-semibold text-foreground pt-2">4. Third-Party Services</h4>
-          <p>We use Google APIs to access Gmail and Google Calendar. Our use complies with the <a href="https://developers.google.com/terms/api-services-user-data-policy" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>, including Limited Use requirements. SMS is powered by Twilio.</p>
+          <p>We use Google APIs to access Gmail and Google Calendar. Our use complies with the <a href="https://developers.google.com/terms/api-services-user-data-policy" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>, including Limited Use requirements.</p>
 
           <h4 className="text-xs font-semibold text-foreground pt-2">5. Data Sharing</h4>
           <p>We do not sell, trade, or share your personal data with third parties. Your data is only used to provide the Normy Agent service.</p>
@@ -566,12 +635,12 @@ export default function Settings() {
             <li>Disconnect your Google account at any time from Integrations</li>
             <li>Delete your account and all associated data at any time</li>
             <li>Revoke access from your <a href="https://myaccount.google.com/permissions" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">Google Account permissions</a></li>
-            <li>Opt out of SMS at any time by unchecking consent above</li>
+            <li>Contact us to delete your account and all associated data</li>
           </ul>
 
           <h4 className="text-xs font-semibold text-foreground pt-2">7. Contact</h4>
           <p>Questions about this policy? Reach out through the app or email us at support@normyagent.com.</p>
-        </div>
+        </div>}
       </div>
 
       <AlertDialog open={!!pendingRemoval} onOpenChange={(open) => { if (!open && !removing) setPendingRemoval(null); }}>

@@ -396,7 +396,29 @@ export default function CalendarView() {
 
       <div className="border-b bg-card">
         <div className="container flex items-center justify-between py-3">
-          <span className="font-display font-semibold">{currentMonth}</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { view === "week" ? setWeekOffset(o => o - 1) : setMonthOffset(o => o - 1); setSelectedDate(null); }}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="font-display font-semibold min-w-[140px] text-center">{currentMonth}</span>
+            <button
+              onClick={() => { view === "week" ? setWeekOffset(o => o + 1) : setMonthOffset(o => o + 1); setSelectedDate(null); }}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            {(weekOffset !== 0 || monthOffset !== 0) && (
+              <button
+                onClick={() => { setWeekOffset(0); setMonthOffset(0); setSelectedDate(null); }}
+                className="text-xs text-accent hover:underline"
+              >
+                Today
+              </button>
+            )}
+          </div>
           <div className="flex gap-1 bg-muted rounded-lg p-0.5">
             {(["day", "week", "month"] as const).map((v) => (
               <button
@@ -458,7 +480,7 @@ export default function CalendarView() {
               <div className="grid grid-cols-7 gap-1 mb-4">
                 {weekDays.map((day, i) => {
                   const d = weekDates[i];
-                  const dateStr = d.toISOString().slice(0, 10);
+                  const dateStr = toLocalDateStr(d);
                   const isToday = dateStr === today;
                   const isSelected = selectedDate === dateStr;
                   const dayHasEvents = events.some((e) => getDateKey(e.start) === dateStr);
@@ -491,7 +513,7 @@ export default function CalendarView() {
                   </h2>
                   <div className="space-y-2">
                     {(() => {
-                      const dayEvents = events.filter((e) => getDateKey(e.start) === selectedDate);
+                      const dayEvents = eventsByDate[selectedDate] || [];
                       if (dayEvents.length === 0) {
                         return <p className="text-sm text-muted-foreground py-6 text-center">No events on this day.</p>;
                       }
@@ -544,19 +566,19 @@ export default function CalendarView() {
               <div className="grid grid-cols-7 gap-1">
                 {/* Previous month padding */}
                 {(() => {
-                  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+                  const firstDay = new Date(displayMonth.getFullYear(), displayMonth.getMonth(), 1).getDay();
                   const padding = firstDay === 0 ? 6 : firstDay - 1;
-                  const prevMonthDays = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+                  const prevMonthDays = new Date(displayMonth.getFullYear(), displayMonth.getMonth(), 0).getDate();
                   return Array.from({ length: padding }, (_, i) => (
                     <div key={`prev-${i}`} className="aspect-square rounded-lg p-1 text-muted-foreground/40">
                       <span className="text-xs">{prevMonthDays - padding + 1 + i}</span>
                     </div>
                   ));
                 })()}
-                {/* Current month */}
-                {Array.from({ length: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map((d) => {
-                  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                  const dayEvents = events.filter((e) => getDateKey(e.start) === dateStr);
+                {/* Current month days */}
+                {Array.from({ length: new Date(displayMonth.getFullYear(), displayMonth.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map((d) => {
+                  const dateStr = `${displayMonth.getFullYear()}-${String(displayMonth.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                  const dayEvents = eventsByDate[dateStr] || [];
                   const isToday = dateStr === today;
                   const isSelected = selectedDate === dateStr;
                   return (
@@ -587,7 +609,7 @@ export default function CalendarView() {
                   </h2>
                   <div className="space-y-2">
                     {(() => {
-                      const dayEvents = events.filter((e) => getDateKey(e.start) === selectedDate);
+                      const dayEvents = eventsByDate[selectedDate] || [];
                       if (dayEvents.length === 0) {
                         return <p className="text-sm text-muted-foreground py-6 text-center">No events on this day.</p>;
                       }

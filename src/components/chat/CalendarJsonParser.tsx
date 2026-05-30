@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { CalendarPlus, CalendarX, Check, ExternalLink, Loader2 } from "lucide-react";
+import { CalendarPlus, CalendarX, CalendarClock, Check, ExternalLink, Loader2 } from "lucide-react";
 
 interface Attendee {
   email: string;
@@ -16,6 +16,18 @@ interface CalendarEventData {
   location?: string;
   allDay?: boolean;
   attendees?: Attendee[];
+}
+
+interface UpdateEventData {
+  eventId: string;
+  summary: string;
+  start?: string;
+  end?: string;
+  description?: string;
+  location?: string;
+  allDay?: boolean;
+  attendees?: Attendee[];
+  notifyAttendees?: boolean;
 }
 
 interface CancelEventData {
@@ -69,17 +81,20 @@ function parseBlocks<T>(text: string, tag: string, validate: (p: any) => boolean
 
 export function CalendarJsonParser({ text }: { text: string }) {
   const [addedIndices, setAddedIndices] = useState<Set<number>>(new Set());
+  const [updatedIndices, setUpdatedIndices] = useState<Set<number>>(new Set());
   const [cancelledIndices, setCancelledIndices] = useState<Set<number>>(new Set());
   const [loadingAdd, setLoadingAdd] = useState<Set<number>>(new Set());
+  const [loadingUpdate, setLoadingUpdate] = useState<Set<number>>(new Set());
   const [loadingCancel, setLoadingCancel] = useState<Set<number>>(new Set());
-  const [eventLinks, setEventLinks] = useState<Record<number, string>>({});
+  const [eventLinks, setEventLinks] = useState<Record<string, string>>({});
 
-  const { creates, cancels } = useMemo(() => ({
+  const { creates, updates, cancels } = useMemo(() => ({
     creates: parseBlocks<CalendarEventData>(text, "calendar-json", (p) => !!(p.summary && p.start)),
+    updates: parseBlocks<UpdateEventData>(text, "update-event-json", (p) => !!(p.eventId && p.summary)),
     cancels: parseBlocks<CancelEventData>(text, "cancel-event-json", (p) => !!(p.eventId && p.summary)),
   }), [text]);
 
-  if (creates.length === 0 && cancels.length === 0) return null;
+  if (creates.length === 0 && updates.length === 0 && cancels.length === 0) return null;
 
   const handleAdd = async (event: CalendarEventData, index: number) => {
     setLoadingAdd((prev) => new Set(prev).add(index));
@@ -97,13 +112,13 @@ export function CalendarJsonParser({ text }: { text: string }) {
       });
       if (error) throw error;
       const link: string | undefined = data?.event?.htmlLink;
-      const invited: Attendee[] = data?.event?.attendees ?? [];
+      const invited: Attendee[] = event.attendees ?? [];
       setAddedIndices((prev) => new Set(prev).add(index));
-      if (link) setEventLinks((prev) => ({ ...prev, [index]: link }));
+      if (link) setEventLinks((prev) => ({ ...prev, [`create-${index}`]: link }));
       const inviteNote = invited.length > 0
         ? ` · invite sent to ${invited.map((a) => a.name || a.email).join(", ")}`
         : "";
-      toast.success(`"${event.summary}" added to calendar${inviteNote}`, {
+      toast.success(`"${event.summary}" added to Google Calendar${inviteNote}`, {
         action: link ? { label: "Open", onClick: () => window.open(link, "_blank") } : undefined,
       });
     } catch (e: any) {
@@ -111,10 +126,47 @@ export function CalendarJsonParser({ text }: { text: string }) {
       if (msg.includes("NOT_CONNECTED") || msg.includes("RECONNECT") || msg.includes("expired")) {
         toast.error("Calendar not connected — reconnect via Integrations.");
       } else {
-        toast.error(msg);
+        toast.error(`Failed to create event: ${msg}`);
       }
     } finally {
       setLoadingAdd((prev) => { const s = new Set(prev); s.delete(index); return s; });
+    }
+  };
+
+  const handleUpdate = async (event: UpdateEventData, index: number) => {
+    setLoadingUpdate((prev) => new Set(prev).add(index));
+    try {
+      const { data, error } = await supabase.functions.invoke("calendar-event-update", {
+        body: {
+          eventId: event.eventId,
+          summary: event.summary,
+          start: event.start ? (event.allDay ? event.start : withLocalTz(event.start)) : undefined,
+          end: event.end ? (event.allDay ? event.end : withLocalTz(event.end)) : undefined,
+          description: event.description,
+          location: event.location,
+          allDay: event.allDay,
+          attendees: event.attendees,
+          notifyAttendees: event.notifyAttendees ?? true,
+        },
+      });
+      if (error) throw error;
+      const link: string | undefined = data?.event?.htmlLink;
+      setUpdatedIndices((prev) => new Set(prev).add(index));
+      if (link) setEventLinks((prev) => ({ ...prev, [`update-${index}`]: link }));
+      toast.success(`"${event.summary}" updated on Google Calendar`, {
+        action: link ? { label: "Open", onClick: () => window.open(link, "_blank") } : undefined,
+      });
+    } catch (e: any) {
+      const msg = await extractErrMsg(e);
+      if (msg.includes("NOT_CONNECTED") || msg.includes("RECONNECT") || msg.includes("expired")) {
+        toast.error("Calendar not connected — reconnect via Integrations.");
+      } else if (msg.toLowerCase().includes("not found") || msg.includes("404")) {
+        toast.error("Event not found — it may have been deleted.");
+      } else {
+        toast.error(`Failed to update event: ${msg}`);
+      }
+    } finally {
+      setLoadingUpdate((prev) => { const s = new Set(prev); s.delete(index); return s; });
     }
   };
 
@@ -129,7 +181,7 @@ export function CalendarJsonParser({ text }: { text: string }) {
       });
       if (error) throw error;
       setCancelledIndices((prev) => new Set(prev).add(index));
-      toast.success(`"${event.summary}" cancelled${event.notifyAttendees !== false ? " · attendees notified" : ""}`);
+      toast.success(`"${event.summary}" cancelled on Google Calendar${event.notifyAttendees !== false ? " · attendees notified" : ""}`);
     } catch (e: any) {
       const msg = await extractErrMsg(e);
       if (msg.includes("NOT_CONNECTED") || msg.includes("RECONNECT") || msg.includes("expired")) {
@@ -137,7 +189,7 @@ export function CalendarJsonParser({ text }: { text: string }) {
       } else if (msg.toLowerCase().includes("not found") || msg.includes("404") || msg.includes("already")) {
         toast.error("Event not found — it may already be deleted.");
       } else {
-        toast.error(msg);
+        toast.error(`Failed to cancel event: ${msg}`);
       }
     } finally {
       setLoadingCancel((prev) => { const s = new Set(prev); s.delete(index); return s; });
@@ -154,21 +206,49 @@ export function CalendarJsonParser({ text }: { text: string }) {
             className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50 disabled:cursor-default"
           >
             {loadingAdd.has(i) ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding…</>
+              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding to Google Calendar…</>
             ) : addedIndices.has(i) ? (
-              <><Check className="w-3.5 h-3.5" /> Added to Calendar</>
+              <><Check className="w-3.5 h-3.5" /> Added to Google Calendar</>
             ) : (
               <><CalendarPlus className="w-3.5 h-3.5" /> Add to Calendar: {event.summary}</>
             )}
           </button>
-          {eventLinks[i] && (
+          {eventLinks[`create-${i}`] && (
             <a
-              href={eventLinks[i]}
+              href={eventLinks[`create-${i}`]}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-xs text-blue-500 hover:underline"
             >
-              <ExternalLink className="w-3 h-3" /> Open
+              <ExternalLink className="w-3 h-3" /> Open in Google Calendar
+            </a>
+          )}
+        </div>
+      ))}
+
+      {updates.map((event, i) => (
+        <div key={`update-${i}`} className="flex items-center gap-2">
+          <button
+            onClick={() => handleUpdate(event, i)}
+            disabled={updatedIndices.has(i) || loadingUpdate.has(i)}
+            className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-default"
+          >
+            {loadingUpdate.has(i) ? (
+              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Updating…</>
+            ) : updatedIndices.has(i) ? (
+              <><Check className="w-3.5 h-3.5" /> Updated on Google Calendar</>
+            ) : (
+              <><CalendarClock className="w-3.5 h-3.5" /> Update Event: {event.summary}</>
+            )}
+          </button>
+          {eventLinks[`update-${i}`] && (
+            <a
+              href={eventLinks[`update-${i}`]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs text-amber-500 hover:underline"
+            >
+              <ExternalLink className="w-3 h-3" /> Open in Google Calendar
             </a>
           )}
         </div>
@@ -182,9 +262,9 @@ export function CalendarJsonParser({ text }: { text: string }) {
           className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50 disabled:cursor-default"
         >
           {loadingCancel.has(i) ? (
-            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Cancelling…</>
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Cancelling on Google Calendar…</>
           ) : cancelledIndices.has(i) ? (
-            <><Check className="w-3.5 h-3.5" /> Cancelled</>
+            <><Check className="w-3.5 h-3.5" /> Cancelled on Google Calendar</>
           ) : (
             <><CalendarX className="w-3.5 h-3.5" /> Cancel Event: {event.summary}</>
           )}

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ type Contact = {
 };
 
 export default function Contacts() {
+  const { agentName } = useAgent();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -165,7 +167,7 @@ export default function Contacts() {
               <Users className="w-7 h-7 text-accent" /> Contacts
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              People Normy remembers from your email & calendar
+              People {agentName} remembers from your email & calendar
             </p>
           </div>
           <Button onClick={handleSync} disabled={syncing} size="sm">
@@ -317,7 +319,7 @@ export default function Contacts() {
                   <Input type="number" placeholder="days" value={editing.stay_in_touch_days || ""} onChange={(e) => setEditing({ ...editing, stay_in_touch_days: e.target.value ? parseInt(e.target.value) : null })} />
                 </div>
               </div>
-              <div><Label>Notes</Label><Textarea rows={3} value={editing.notes || ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} placeholder="Anything Normy should remember about this person..." /></div>
+              <div><Label>Notes</Label><Textarea rows={3} value={editing.notes || ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} placeholder={`Anything ${agentName} should remember about this person...`} /></div>
               <p className="text-xs text-muted-foreground">{editing.interaction_count} interactions tracked</p>
             </div>
           )}

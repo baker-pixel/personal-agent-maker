@@ -105,6 +105,18 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
   }
+
+  /* Mobile UX — eliminate 300ms tap delay and highlight flash */
+  button, a, [role="button"], input, textarea, select {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent text selection during swipe gestures */
+  .swipeable {
+    user-select: none;
+    -webkit-user-select: none;
+  }
 }
 
 @layer utilities {

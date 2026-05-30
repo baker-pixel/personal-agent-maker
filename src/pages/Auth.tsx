@@ -24,7 +24,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (!error) { navigate("/mode-select"); return; }
+    if (!error) { navigate("/dashboard"); return; }
     if (error.message.toLowerCase().includes("email not confirmed")) {
       toast({ title: "Email not confirmed", description: "Check your inbox and click the confirmation link we sent you.", variant: "destructive" });
     } else {
@@ -43,7 +43,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
     const { error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { emailRedirectTo: `${window.location.origin}/auth` },
+      options: { emailRedirectTo: `${window.location.origin}/onboarding` },
     });
     setLoading(false);
     if (error) {

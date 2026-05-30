@@ -3,34 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useAgent } from "@/contexts/AgentContext";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
 import { toast } from "@/hooks/use-toast";
 import {
-  ArrowRight,
-  ArrowLeft,
-  Mail,
-  Calendar,
-  Users,
-  BarChart3,
-  BookOpen,
-  CheckCircle2,
-  Sparkles,
-  Shield,
-  MessageSquare,
-  Phone,
-  Check,
-  Loader2,
+  ArrowRight, ArrowLeft, Mail, Calendar,
+  CheckCircle2, Sparkles, Shield, MessageSquare,
+  Check, Loader2, Zap,
 } from "lucide-react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface OnboardingState {
   agentName: string;
-  phoneNumber: string;
-  email: boolean;
-  calendar: boolean;
   tone: string;
   emailLength: string;
   priorityVisibility: string;
@@ -39,9 +26,6 @@ interface OnboardingState {
 
 const defaults: OnboardingState = {
   agentName: "",
-  phoneNumber: "",
-  email: true,
-  calendar: true,
   tone: "friendly",
   emailLength: "balanced",
   priorityVisibility: "important",
@@ -49,19 +33,19 @@ const defaults: OnboardingState = {
 };
 
 const slideVariants = {
-  enter: (dir: number) => ({ x: dir > 0 ? 300 : -300, opacity: 0 }),
+  enter: (dir: number) => ({ x: dir > 0 ? 60 : -60, opacity: 0 }),
   center: { x: 0, opacity: 1 },
-  exit: (dir: number) => ({ x: dir > 0 ? -300 : 300, opacity: 0 }),
+  exit: (dir: number) => ({ x: dir > 0 ? -60 : 60, opacity: 0 }),
 };
 
-interface Props {
-  onComplete?: () => void;
-}
+interface Props { onComplete?: () => void; }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Onboarding({ onComplete }: Props) {
   const navigate = useNavigate();
   const { setAgentName } = useAgent();
-  const { integrations } = useIntegrations();
+  const { integrations, integrationsLoading } = useIntegrations();
   const { connecting, connect } = useGoogleOAuthPopup();
 
   const [step, setStep] = useState(0);
@@ -69,77 +53,126 @@ export default function Onboarding({ onComplete }: Props) {
   const [state, setState] = useState<OnboardingState>(defaults);
   const [saving, setSaving] = useState(false);
 
-  const totalSteps = 6;
-  const progress = ((step + 1) / totalSteps) * 100;
+  const TOTAL_STEPS = 4;
 
-  const gmailConnected = integrations.find((i) => i.id === "gmail")?.connected;
-  const calendarConnected = integrations.find((i) => i.id === "google-calendar")?.connected;
+  // Wait for IntegrationsContext to finish loading before reading connection state.
+  // Without this, step 1 would flash "not connected" even for already-connected accounts.
+  const gmailConnected = !integrationsLoading && integrations.find(i => i.id === "gmail")?.connected;
+  const calendarConnected = !integrationsLoading && integrations.find(i => i.id === "google-calendar")?.connected;
+  const anyConnected = gmailConnected || calendarConnected;
 
-  const next = () => { setDir(1); setStep((s) => Math.min(s + 1, totalSteps - 1)); };
-  const prev = () => { setDir(-1); setStep((s) => Math.max(s - 1, 0)); };
+  const update = <K extends keyof OnboardingState>(key: K, val: OnboardingState[K]) =>
+    setState(s => ({ ...s, [key]: val }));
+
+  const next = () => {
+    // Step 0: if no name entered, use default but show brief confirmation
+    if (step === 0 && !state.agentName.trim()) {
+      setState(s => ({ ...s, agentName: "Normy Agent" }));
+    }
+    setDir(1);
+    setStep(s => Math.min(s + 1, TOTAL_STEPS - 1));
+  };
+  const prev = () => { setDir(-1); setStep(s => Math.max(s - 1, 0)); };
 
   const finish = async () => {
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No session");
+      if (!user) {
+        toast({ title: "Session expired", description: "Please sign in again.", variant: "destructive" });
+        navigate("/auth");
+        return;
+      }
 
       const agentName = state.agentName.trim() || "Normy Agent";
 
       const { error } = await supabase
         .from("user_preferences")
-        .upsert(
-          {
-            user_id: user.id,
-            agent_name: agentName,
-            phone_number: state.phoneNumber.trim() || null,
-            onboarding_completed: true,
-            tone: state.tone,
-            email_length: state.emailLength,
-            priority_visibility: state.priorityVisibility,
-            decision_style: state.decisionStyle,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" }
-        );
+        .upsert({
+          user_id: user.id,
+          agent_name: agentName,
+          onboarding_completed: true,
+          tone: state.tone,
+          email_length: state.emailLength,
+          priority_visibility: state.priorityVisibility,
+          decision_style: state.decisionStyle,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
 
       if (error) throw error;
 
-      // Update AgentContext state + localStorage (DB already written above)
+      // Update agent name in context immediately
       setAgentName(agentName);
+
+      // Signal parent (App.tsx) that onboarding is done — this sets isOnboarded = true
+      // so ProtectedRoute stops redirecting to /onboarding before we navigate.
       onComplete?.();
-      navigate("/mode-select");
-    } catch (err) {
+
+      // Navigate after onComplete has been called so the route guard sees
+      // isOnboarded = true on the next render cycle.
+      navigate("/dashboard", { replace: true });
+    } catch (err: any) {
       console.error("[Onboarding] finish error", err);
-      toast({ title: "Something went wrong", description: "Couldn't save your preferences. Please try again.", variant: "destructive" });
+      toast({
+        title: "Couldn't save your setup",
+        description: err?.message || "Please check your connection and try again.",
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
   };
 
-  const update = <K extends keyof OnboardingState>(key: K, val: OnboardingState[K]) =>
-    setState((s) => ({ ...s, [key]: val }));
-
   const OptionBtn = ({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) => (
     <button
       onClick={onClick}
-      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
-        selected ? "bg-accent text-accent-foreground border-accent shadow-sm" : "bg-background text-foreground border-border hover:border-accent/50"
+      className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
+        selected
+          ? "bg-accent text-accent-foreground border-accent shadow-sm"
+          : "bg-background text-foreground border-border hover:border-accent/50 hover:bg-accent/5"
       }`}
     >
       {children}
     </button>
   );
 
-  const agentDisplay = state.agentName.trim() || "Normy Agent";
+  const agentDisplay = state.agentName.trim() || "your agent";
+
+  const getContinueLabel = () => {
+    if (step === 1) return anyConnected ? "Continue" : "Skip for now";
+    if (step === TOTAL_STEPS - 1) return saving ? "Setting up…" : "Go to my dashboard";
+    return "Continue";
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <div className="w-full bg-muted h-1">
-        <motion.div className="h-full bg-accent" animate={{ width: `${progress}%` }} transition={{ duration: 0.4 }} />
+      {/* Progress bar */}
+      <div className="w-full bg-muted h-1 shrink-0">
+        <motion.div
+          className="h-full bg-accent"
+          animate={{ width: `${((step + 1) / TOTAL_STEPS) * 100}%` }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+        />
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-6">
+      {/* Step dots */}
+      <div className="flex items-center justify-center gap-2 pt-6 pb-2 shrink-0">
+        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+          <div
+            key={i}
+            className={`rounded-full transition-all duration-300 ${
+              i === step
+                ? "w-6 h-2 bg-accent"
+                : i < step
+                ? "w-2 h-2 bg-accent/40"
+                : "w-2 h-2 bg-muted"
+            }`}
+          />
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 flex items-center justify-center p-6 pt-4">
         <div className="w-full max-w-lg">
           <AnimatePresence mode="wait" custom={dir}>
             <motion.div
@@ -149,148 +182,89 @@ export default function Onboarding({ onComplete }: Props) {
               initial="enter"
               animate="center"
               exit="exit"
-              transition={{ duration: 0.35, ease: "easeInOut" }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
             >
-              {/* Step 0: Name agent */}
+              {/* ── Step 0: Name ─────────────────────────────────────────── */}
               {step === 0 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-6">
                       <Sparkles className="w-8 h-8 text-accent" />
                     </div>
-                    <h1 className="font-display text-3xl font-bold mb-2">Name your Normy Agent</h1>
-                    <p className="text-muted-foreground">Give your agent a name. This is how they'll introduce themselves.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Input
-                      value={state.agentName}
-                      onChange={(e) => update("agentName", e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && next()}
-                      placeholder="e.g. Normy Agent, Annie, Nova…"
-                      className="text-center text-2xl font-display font-semibold h-16 rounded-xl"
-                      autoFocus
-                    />
-                    <p className="text-sm text-muted-foreground text-center">You can always change this in Settings.</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 1: What to handle */}
-              {step === 1 && (
-                <div className="space-y-8">
-                  <div className="text-center">
-                    <h1 className="font-display text-3xl font-bold mb-2">What should {agentDisplay} handle?</h1>
-                    <p className="text-muted-foreground">Choose what your agent manages for you.</p>
+                    <h1 className="font-display text-3xl font-bold mb-2">Meet your AI assistant</h1>
+                    <p className="text-muted-foreground leading-relaxed">
+                      Give your agent a name — they'll use it when they introduce themselves in emails and messages.
+                    </p>
                   </div>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between bg-background border rounded-xl p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                          <Mail className="w-5 h-5 text-accent" />
-                        </div>
-                        <div>
-                          <p className="font-medium">Email</p>
-                          <p className="text-sm text-muted-foreground">Read, prioritize, and draft replies</p>
-                        </div>
-                      </div>
-                      <Switch checked={state.email} onCheckedChange={(v) => update("email", v)} />
-                    </div>
-                    <div className="flex items-center justify-between bg-background border rounded-xl p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                          <Calendar className="w-5 h-5 text-accent" />
-                        </div>
-                        <div>
-                          <p className="font-medium">Calendar</p>
-                          <p className="text-sm text-muted-foreground">Manage events and scheduling</p>
-                        </div>
-                      </div>
-                      <Switch checked={state.calendar} onCheckedChange={(v) => update("calendar", v)} />
-                    </div>
-                    {[
-                      { name: "HR", icon: Users },
-                      { name: "Marketing", icon: BarChart3 },
-                      { name: "Bookkeeping", icon: BookOpen },
-                    ].map((dept) => (
-                      <div key={dept.name} className="flex items-center justify-between bg-muted/50 border border-transparent rounded-xl p-4 opacity-50">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                            <dept.icon className="w-5 h-5 text-muted-foreground" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-muted-foreground">{dept.name}</p>
-                            <p className="text-sm text-muted-foreground">Coming soon</p>
-                          </div>
-                        </div>
-                        <Switch disabled checked={false} />
-                      </div>
+                    <Input
+                      value={state.agentName}
+                      onChange={e => update("agentName", e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && next()}
+                      placeholder="e.g. Annie, Nova, Aria…"
+                      className="text-center text-2xl font-display font-semibold h-16 rounded-2xl"
+                      autoFocus
+                    />
+                    <p className="text-sm text-muted-foreground text-center">
+                      You can change this anytime in Settings.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {["Annie", "Nova", "Aria"].map(name => (
+                      <button
+                        key={name}
+                        onClick={() => update("agentName", name)}
+                        className={`py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                          state.agentName === name
+                            ? "border-accent bg-accent/10 text-accent"
+                            : "border-border text-muted-foreground hover:border-accent/40"
+                        }`}
+                      >
+                        {name}
+                      </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Step 2: Phone number */}
-              {step === 2 && (
-                <div className="space-y-8">
-                  <div className="text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-6">
-                      <Phone className="w-8 h-8 text-accent" />
-                    </div>
-                    <h1 className="font-display text-3xl font-bold mb-2">Add your phone number</h1>
-                    <p className="text-muted-foreground">
-                      Save your number now so {agentDisplay} is ready to reach you when SMS launches.
-                    </p>
-                  </div>
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
-                    <span className="text-amber-500 mt-0.5 text-base leading-none">⏳</span>
-                    <div>
-                      <p className="text-sm font-semibold text-amber-800">SMS is coming soon</p>
-                      <p className="text-sm text-amber-700 leading-relaxed">Texting {agentDisplay} isn't available yet. Add your number now and you'll be set the moment it goes live — no action needed later.</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Input
-                      type="tel"
-                      value={state.phoneNumber}
-                      onChange={(e) => update("phoneNumber", e.target.value)}
-                      placeholder="+1 (555) 123-4567"
-                      className="text-center text-xl font-medium h-14 rounded-xl"
-                    />
-                    <p className="text-sm text-muted-foreground text-center">Optional — you can add or change this later in Settings.</p>
-                  </div>
-                  <div className="bg-card border rounded-xl p-5 space-y-2 opacity-60">
-                    <div className="flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5 text-accent" />
-                      <p className="text-sm font-semibold">Text {agentDisplay} anytime <span className="text-xs font-normal text-muted-foreground ml-1">(coming soon)</span></p>
-                    </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      You'll be able to text {agentDisplay} instructions, approvals, or questions — just like messaging a real assistant.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 3: Connect accounts (real OAuth) */}
-              {step === 3 && (
+              {/* ── Step 1: Connect accounts ──────────────────────────────── */}
+              {step === 1 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <h1 className="font-display text-3xl font-bold mb-2">Connect your accounts</h1>
-                    <p className="text-muted-foreground">{agentDisplay} needs access to get to work.</p>
+                    <p className="text-muted-foreground">
+                      {agentDisplay.charAt(0).toUpperCase() + agentDisplay.slice(1)} needs access to your email and calendar to get to work.
+                    </p>
                   </div>
+
                   <div className="space-y-3">
-                    {[
-                      {
+                    {/* Show skeleton while IntegrationsContext is loading */}
+                    {integrationsLoading ? (
+                      <>
+                        {[0, 1].map(i => (
+                          <div key={i} className="flex items-center gap-4 rounded-2xl px-5 py-4 border bg-card animate-pulse">
+                            <div className="w-11 h-11 rounded-xl bg-muted shrink-0" />
+                            <div className="flex-1 space-y-2">
+                              <div className="h-3.5 bg-muted rounded w-1/3" />
+                              <div className="h-2.5 bg-muted rounded w-2/3" />
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : null}
+
+                    {!integrationsLoading && [{
                         service: "gmail",
                         connected: gmailConnected,
                         label: "Gmail",
-                        desc: "Read, triage, and draft email replies",
+                        desc: "Triage, prioritize, and draft email replies automatically",
                         Icon: Mail,
                       },
                       {
                         service: "google-calendar",
                         connected: calendarConnected,
                         label: "Google Calendar",
-                        desc: "Prep meetings and manage your schedule",
+                        desc: "Prep meetings, get briefed before each call, manage your schedule",
                         Icon: Calendar,
                       },
                     ].map(({ service, connected, label, desc, Icon }) => (
@@ -298,118 +272,193 @@ export default function Onboarding({ onComplete }: Props) {
                         key={service}
                         onClick={() => { if (!connected) connect(service).catch(() => {}); }}
                         disabled={!!connected || connecting === service}
-                        className={`w-full flex items-center gap-4 rounded-xl px-5 py-4 border transition-all text-left ${
+                        className={`w-full flex items-center gap-4 rounded-2xl px-5 py-4 border transition-all text-left ${
                           connected
-                            ? "bg-success/5 border-success/20 cursor-default"
+                            ? "bg-green-500/5 border-green-500/20 cursor-default"
                             : connecting === service
                             ? "bg-card border-accent/30 opacity-80 cursor-wait"
-                            : "bg-card border-border hover:border-accent/50 cursor-pointer"
+                            : "bg-card border-border hover:border-accent/50 hover:bg-accent/[0.02] cursor-pointer active:scale-[0.99]"
                         }`}
                       >
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${connected ? "bg-success/10" : "bg-muted/50"}`}>
-                          {connected ? (
-                            <Check className="w-5 h-5 text-success" />
-                          ) : connecting === service ? (
-                            <Loader2 className="w-5 h-5 text-accent animate-spin" />
-                          ) : (
-                            <Icon className="w-5 h-5 text-muted-foreground" />
-                          )}
+                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                          connected ? "bg-green-500/10" : "bg-muted/60"
+                        }`}>
+                          {connected
+                            ? <Check className="w-5 h-5 text-green-600" />
+                            : connecting === service
+                            ? <Loader2 className="w-5 h-5 text-accent animate-spin" />
+                            : <Icon className="w-5 h-5 text-muted-foreground" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-foreground">
                             {connected ? `${label} connected` : connecting === service ? "Connecting…" : `Connect ${label}`}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{desc}</p>
                         </div>
-                        {connected && <CheckCircle2 className="w-5 h-5 text-success shrink-0" />}
+                        {connected
+                          ? <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                          : <ArrowRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />}
                       </button>
                     ))}
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground/50">
-                    <Shield className="w-4 h-4 shrink-0" />
-                    <p className="text-xs">Secure OAuth — your passwords are never shared with us</p>
+
+                  <div className="flex items-center gap-2.5 text-muted-foreground/60 px-1">
+                    <Shield className="w-3.5 h-3.5 shrink-0" />
+                    <p className="text-xs">Secure OAuth — your passwords are never shared or stored</p>
                   </div>
                 </div>
               )}
 
-              {/* Step 4: Communication preferences */}
-              {step === 4 && (
+              {/* ── Step 2: Preferences ───────────────────────────────────── */}
+              {step === 2 && (
                 <div className="space-y-6">
                   <div className="text-center">
-                    <h1 className="font-display text-3xl font-bold mb-2">How should {agentDisplay} communicate?</h1>
-                    <p className="text-muted-foreground">Let {agentDisplay} know how you like to operate.</p>
+                    <h1 className="font-display text-3xl font-bold mb-2">How should {agentDisplay} work?</h1>
+                    <p className="text-muted-foreground">Fine-tune how your agent communicates and prioritizes.</p>
                   </div>
+
                   <div className="space-y-5">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Tone</label>
-                      <div className="flex gap-2 flex-wrap">
-                        {["direct", "friendly", "formal"].map((t) => (
-                          <OptionBtn key={t} selected={state.tone === t} onClick={() => update("tone", t)}>
-                            {t.charAt(0).toUpperCase() + t.slice(1)}
-                          </OptionBtn>
-                        ))}
+                    <div className="bg-card border rounded-2xl p-5 space-y-4">
+                      <div>
+                        <label className="text-sm font-semibold mb-1.5 block">Tone when drafting</label>
+                        <p className="text-xs text-muted-foreground mb-2">How should your agent write emails on your behalf?</p>
+                        <div className="flex gap-2 flex-wrap">
+                          {[
+                            { key: "direct", label: "Direct", sub: "Clear, no fluff" },
+                            { key: "friendly", label: "Friendly", sub: "Warm and approachable" },
+                            { key: "formal", label: "Formal", sub: "Professional and structured" },
+                          ].map(t => (
+                            <button
+                              key={t.key}
+                              onClick={() => update("tone", t.key)}
+                              className={`flex-1 min-w-[80px] py-3 px-3 rounded-xl border text-center transition-all ${
+                                state.tone === t.key
+                                  ? "bg-accent text-accent-foreground border-accent"
+                                  : "bg-background border-border hover:border-accent/40"
+                              }`}
+                            >
+                              <p className="text-sm font-semibold">{t.label}</p>
+                              <p className={`text-[10px] mt-0.5 ${state.tone === t.key ? "text-accent-foreground/70" : "text-muted-foreground"}`}>{t.sub}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-semibold mb-1.5 block">Email length</label>
+                        <div className="flex gap-2 flex-wrap">
+                          {["short", "balanced", "detailed"].map(t => (
+                            <OptionBtn key={t} selected={state.emailLength === t} onClick={() => update("emailLength", t)}>
+                              {t.charAt(0).toUpperCase() + t.slice(1)}
+                            </OptionBtn>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Email length</label>
-                      <div className="flex gap-2 flex-wrap">
-                        {["short", "balanced", "detailed"].map((t) => (
-                          <OptionBtn key={t} selected={state.emailLength === t} onClick={() => update("emailLength", t)}>
-                            {t.charAt(0).toUpperCase() + t.slice(1)}
-                          </OptionBtn>
-                        ))}
+
+                    <div className="bg-card border rounded-2xl p-5 space-y-4">
+                      <div>
+                        <label className="text-sm font-semibold mb-1.5 block">Show me emails that are…</label>
+                        <div className="flex gap-2 flex-wrap">
+                          {[
+                            { key: "urgent", label: "Only urgent" },
+                            { key: "important", label: "Important" },
+                            { key: "all", label: "Everything" },
+                          ].map(t => (
+                            <OptionBtn key={t.key} selected={state.priorityVisibility === t.key} onClick={() => update("priorityVisibility", t.key)}>
+                              {t.label}
+                            </OptionBtn>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Show me priorities that are…</label>
-                      <div className="flex gap-2 flex-wrap">
-                        {["urgent", "important", "all"].map((t) => (
-                          <OptionBtn key={t} selected={state.priorityVisibility === t} onClick={() => update("priorityVisibility", t)}>
-                            {t === "urgent" ? "Only urgent" : t.charAt(0).toUpperCase() + t.slice(1)}
-                          </OptionBtn>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Decision style</label>
-                      <div className="flex gap-2 flex-wrap">
-                        {["fast", "careful"].map((t) => (
-                          <OptionBtn key={t} selected={state.decisionStyle === t} onClick={() => update("decisionStyle", t)}>
-                            {t.charAt(0).toUpperCase() + t.slice(1)}
-                          </OptionBtn>
-                        ))}
+
+                      <div>
+                        <label className="text-sm font-semibold mb-1.5 block">Decision style</label>
+                        <div className="flex gap-2 flex-wrap">
+                          {[
+                            { key: "fast", label: "Move fast", sub: "Bias toward action" },
+                            { key: "careful", label: "Be careful", sub: "Verify before acting" },
+                          ].map(t => (
+                            <button
+                              key={t.key}
+                              onClick={() => update("decisionStyle", t.key)}
+                              className={`flex-1 py-3 px-3 rounded-xl border text-center transition-all ${
+                                state.decisionStyle === t.key
+                                  ? "bg-accent text-accent-foreground border-accent"
+                                  : "bg-background border-border hover:border-accent/40"
+                              }`}
+                            >
+                              <p className="text-sm font-semibold">{t.label}</p>
+                              <p className={`text-[10px] mt-0.5 ${state.decisionStyle === t.key ? "text-accent-foreground/70" : "text-muted-foreground"}`}>{t.sub}</p>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Step 5: Done */}
-              {step === 5 && (
-                <div className="space-y-10">
+              {/* ── Step 3: Done ──────────────────────────────────────────── */}
+              {step === 3 && (
+                <div className="space-y-8">
                   <div className="text-center">
-                    <h1 className="font-display text-3xl font-bold mb-2">You're all set!</h1>
-                    <p className="text-muted-foreground">Here's how {agentDisplay} works.</p>
+                    <motion.div
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", damping: 16, stiffness: 200, delay: 0.1 }}
+                      className="w-20 h-20 rounded-3xl bg-accent flex items-center justify-center mx-auto mb-6 shadow-lg shadow-accent/30"
+                    >
+                      <Zap className="w-10 h-10 text-accent-foreground" />
+                    </motion.div>
+                    <h1 className="font-display text-3xl font-bold mb-2">
+                      {agentDisplay.charAt(0).toUpperCase() + agentDisplay.slice(1)} is ready
+                    </h1>
+                    <p className="text-muted-foreground">
+                      Your AI assistant is set up and watching your back.
+                    </p>
                   </div>
-                  <div className="space-y-6">
+
+                  <div className="space-y-3">
                     {[
-                      { icon: Mail, title: `${agentDisplay} reviews everything`, desc: "Every email and event is read, classified, and organized." },
-                      { icon: Shield, title: "You stay in control", desc: "Nothing is sent without your approval. You always have the final say." },
-                      { icon: MessageSquare, title: `Just tell ${agentDisplay} what to do`, desc: "Type, text, or speak to your agent anytime. It's like texting your assistant." },
+                      {
+                        icon: Mail,
+                        title: `${agentDisplay.charAt(0).toUpperCase() + agentDisplay.slice(1)} reads and triages everything`,
+                        desc: "Urgent emails surface at the top. Newsletter clutter stays out of your way.",
+                        delay: 0.1,
+                      },
+                      {
+                        icon: Calendar,
+                        title: "Meeting prep on autopilot",
+                        desc: "Get briefed before every call — attendees, context, and talking points.",
+                        delay: 0.2,
+                      },
+                      {
+                        icon: Shield,
+                        title: "You stay in control",
+                        desc: "Nothing is sent without your approval. Every action goes through you first.",
+                        delay: 0.3,
+                      },
+                      {
+                        icon: MessageSquare,
+                        title: "Chat anytime",
+                        desc: `Ask ${agentDisplay} to draft emails, plan your day, or handle anything else — right in the chat.`,
+                        delay: 0.4,
+                      },
                     ].map((item, i) => (
                       <motion.div
                         key={item.title}
-                        initial={{ opacity: 0, y: 16 }}
+                        initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.15, duration: 0.5 }}
-                        className="flex items-start gap-4 bg-card border rounded-xl p-5"
+                        transition={{ delay: item.delay, duration: 0.4, ease: "easeOut" }}
+                        className="flex items-start gap-4 bg-card border rounded-2xl p-4"
                       >
-                        <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
-                          <item.icon className="w-5 h-5 text-accent" />
+                        <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+                          <item.icon className="w-4.5 h-4.5 text-accent" style={{ width: "1.125rem", height: "1.125rem" }} />
                         </div>
                         <div>
-                          <h3 className="font-display font-semibold mb-1">{item.title}</h3>
-                          <p className="text-sm text-muted-foreground">{item.desc}</p>
+                          <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{item.desc}</p>
                         </div>
                       </motion.div>
                     ))}
@@ -419,26 +468,34 @@ export default function Onboarding({ onComplete }: Props) {
             </motion.div>
           </AnimatePresence>
 
-          <div className="flex items-center justify-between mt-10">
+          {/* Navigation */}
+          <div className="flex items-center justify-between mt-8">
             {step > 0 ? (
-              <Button variant="ghost" onClick={prev} size="sm" disabled={saving}>
-                <ArrowLeft className="w-4 h-4 mr-1" /> Back
+              <Button variant="ghost" onClick={prev} size="sm" disabled={saving} className="text-muted-foreground">
+                <ArrowLeft className="w-4 h-4 mr-1" />
+                Back
               </Button>
             ) : (
               <div />
             )}
-            {step < totalSteps - 1 ? (
-              <Button onClick={next} className="bg-accent text-accent-foreground hover:bg-accent/90">
-                {step === 3 && !gmailConnected && !calendarConnected ? "Skip for now" : "Continue"}
+
+            {step < TOTAL_STEPS - 1 ? (
+              <Button
+                onClick={next}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-6"
+              >
+                {getContinueLabel()}
                 <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (
-              <Button onClick={finish} disabled={saving} className="bg-accent text-accent-foreground hover:bg-accent/90">
-                {saving ? (
-                  <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Saving…</>
-                ) : (
-                  <>Go to my desk <ArrowRight className="w-4 h-4 ml-1" /></>
-                )}
+              <Button
+                onClick={finish}
+                disabled={saving}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-6 shadow-lg shadow-accent/25"
+              >
+                {saving
+                  ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />Setting up…</>
+                  : <>Go to my dashboard <ArrowRight className="w-4 h-4 ml-1" /></>}
               </Button>
             )}
           </div>

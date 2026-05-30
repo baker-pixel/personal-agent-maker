@@ -7,8 +7,11 @@ import {
   ArrowLeft, Sparkles, Check, X, Edit2, Send, Mic, MicOff,
   Loader2, RefreshCw, Mail, AlertTriangle, MessageSquareReply,
   Eye, Newspaper, Clock, PenLine, Copy, Inbox, CheckCheck, ChevronDown, ChevronUp,
-  FileText, Zap, CalendarClock, ListChecks,
+  FileText, Zap, CalendarClock, ListChecks, Search, Archive, Moon, SquarePen,
 } from "lucide-react";
+import { format, addHours, addDays, nextMonday, nextSaturday, setHours, setMinutes, setSeconds, setMilliseconds } from "date-fns";
+import { ToastAction } from "@/components/ui/toast";
+import { ComposeModal } from "@/components/ComposeModal";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
 import { Input } from "@/components/ui/input";
 import { useAgent } from "@/contexts/AgentContext";
@@ -20,6 +23,16 @@ import { useAnnieChat } from "@/hooks/useAnnieChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { toast } from "@/hooks/use-toast";
 import { useTriagedEmails, type TriagedEmail, type EmailCategory } from "@/hooks/useTriagedEmails";
+import { SenderContactCard } from "@/components/SenderContactCard";
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const CATEGORY_LABELS: Record<string, string> = {
+  urgent: "Urgent",
+  needs_reply: "Needs Reply",
+  fyi: "FYI",
+  newsletter: "Newsletter",
+};
 
 // ─── Tab config ──────────────────────────────────────────────────────────────
 
@@ -134,21 +147,71 @@ export default function EmailView() {
 
   const gmailConnected = isConnected("gmail");
   const { integrationsLoading } = useIntegrations();
-  const { byCategory, loading: dbLoading, refetch, updateEmailCategory } = useTriagedEmails();
+  const {
+    emails: allEmails,
+    byCategory,
+    loading: dbLoading,
+    refetch,
+    updateEmailCategory,
+    markEmailRead,
+    removeEmailOptimistic,
+    restoreEmailOptimistic,
+    confirmArchive,
+    snoozeEmail,
+  } = useTriagedEmails();
 
+  const [snoozeTarget, setSnoozeTarget] = useState<TriagedEmail | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<EmailCategory>("urgent");
   const [triaging, setTriaging] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
   const [reconnectRequired, setReconnectRequired] = useState(false);
-
-  // Selected email + full body
   const [selectedEmail, setSelectedEmail] = useState<TriagedEmail | null>(null);
   const [emailBody, setEmailBody] = useState("");
   const [loadingBody, setLoadingBody] = useState(false);
-
-  // Summarize state
   const [emailSummary, setEmailSummary] = useState<{ tldr: string; action_needed: string; deadline: string; key_points: string[]; tone: string } | null>(null);
   const [summarizing, setSummarizing] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const archiveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const handleArchive = useCallback((email: TriagedEmail) => {
+    if (selectedEmail?.id === email.id) setSelectedEmail(null);
+    removeEmailOptimistic(email.id);
+    toast({
+      title: "Email archived",
+      description: email.subject || email.from_name || "Removed from inbox",
+      action: (
+        <ToastAction
+          altText="Undo"
+          onClick={() => {
+            clearTimeout(archiveTimers.current[email.id]);
+            delete archiveTimers.current[email.id];
+            restoreEmailOptimistic(email);
+          }}
+        >
+          Undo
+        </ToastAction>
+      ),
+      duration: 5000,
+    });
+    archiveTimers.current[email.id] = setTimeout(() => {
+      confirmArchive(email.id, email.nylas_message_id);
+      delete archiveTimers.current[email.id];
+    }, 5000);
+  }, [selectedEmail, removeEmailOptimistic, restoreEmailOptimistic, confirmArchive]);
+
+  const searchResults = searchQuery.trim().length > 1
+    ? allEmails.filter(e => {
+        const q = searchQuery.toLowerCase();
+        return (
+          e.subject?.toLowerCase().includes(q) ||
+          e.from_name?.toLowerCase().includes(q) ||
+          e.from_address?.toLowerCase().includes(q) ||
+          e.ai_summary?.toLowerCase().includes(q)
+        );
+      })
+    : [];
 
   const handleSummarize = useCallback(async () => {
     if (!selectedEmail || summarizing) return;
@@ -218,9 +281,14 @@ export default function EmailView() {
     }
   }, [refetch]);
 
+  // Only auto-triage on first load if inbox is genuinely empty (no cached data)
+  // — avoids unnecessary Nylas + Groq calls on every page visit
   useEffect(() => {
-    if (gmailConnected) runTriage();
-  }, [gmailConnected]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!gmailConnected || dbLoading) return;
+    const totalCached = Object.values(byCategory).reduce((s, arr) => s + arr.length, 0);
+    if (totalCached === 0) runTriage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gmailConnected, dbLoading]);
 
   // ── Open email — fetch full body from Nylas ──────────────────────────────
 
@@ -229,6 +297,8 @@ export default function EmailView() {
     setEmailBody("");
     setLoadingBody(true);
     setEmailSummary(null);
+    // Mark as read when user opens the email
+    if (email.is_unread) markEmailRead(email.id, email.nylas_message_id);
     setDraftPanelOpen(false);
     setDraftInstructions("");
     setGeneratedDraftBody(null);
@@ -397,10 +467,17 @@ export default function EmailView() {
           </div>
 
           <button
+            onClick={() => setComposeOpen(true)}
+            className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            title="Compose new email"
+          >
+            <SquarePen className="w-4 h-4" />
+          </button>
+          <button
             onClick={runTriage}
             disabled={triaging}
             className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-40"
-            title="Run triage"
+            title={lastSyncAt ? `Last synced ${timeAgo(lastSyncAt.toISOString())} · tap to re-triage` : "Run triage"}
           >
             <RefreshCw className={`w-4 h-4 ${triaging ? "animate-spin" : ""}`} />
           </button>
@@ -415,7 +492,55 @@ export default function EmailView() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 container px-4 py-4 max-w-2xl mx-auto w-full">
+      <div className="flex-1 container px-4 py-3 max-w-2xl mx-auto w-full space-y-3">
+
+        {/* Search bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search emails…"
+            className="w-full pl-9 pr-9 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/30 placeholder:text-muted-foreground/50 transition-all"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Search results */}
+        {searchQuery.trim().length > 1 && (
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">
+              {searchResults.length === 0 ? "No results" : `${searchResults.length} result${searchResults.length > 1 ? "s" : ""}`}
+            </p>
+            <div className="space-y-2">
+              {searchResults.map(email => (
+                <button
+                  key={email.id}
+                  onClick={() => openEmail(email)}
+                  className="w-full text-left glass-card rounded-xl p-4 hover:bg-muted/30 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        {email.is_unread && <span className="w-2 h-2 rounded-full bg-accent shrink-0" />}
+                        <span className="text-sm font-semibold text-foreground truncate">{email.from_name || email.from_address}</span>
+                        <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-muted text-muted-foreground ml-auto shrink-0">
+                          {email.category.replace("_", " ")}
+                        </span>
+                      </div>
+                      <p className="text-sm text-foreground truncate mb-1">{email.subject || "(no subject)"}</p>
+                      {email.ai_summary && <p className="text-xs text-muted-foreground line-clamp-1">{email.ai_summary}</p>}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Initial triage loading */}
         {(triaging && totalEmails === 0) || (dbLoading && totalEmails === 0) ? (
@@ -525,6 +650,14 @@ export default function EmailView() {
                       <p className="text-xs text-muted-foreground">{selectedEmail.ai_reason}</p>
                     </div>
                   )}
+                  {/* Sender contact card */}
+                  <div className="mt-3">
+                    <SenderContactCard
+                      fromAddress={selectedEmail.from_address}
+                      fromName={selectedEmail.from_name}
+                    />
+                  </div>
+
                   {/* Move to category */}
                   {!selectedEmail.replied_at && (
                     <div className="flex items-center gap-1.5 flex-wrap mt-2">
@@ -532,7 +665,7 @@ export default function EmailView() {
                       {(["urgent", "needs_reply", "fyi", "newsletter"] as const)
                         .filter(c => c !== selectedEmail.category)
                         .map(c => {
-                          const labels: Record<string, string> = { urgent: "Urgent", needs_reply: "Needs Reply", fyi: "FYI", newsletter: "Newsletter" };
+                          const labels = CATEGORY_LABELS;
                           return (
                             <button
                               key={c}
@@ -618,6 +751,26 @@ export default function EmailView() {
                 )}
 
                 {/* Draft on demand */}
+                {/* Snooze + Archive */}
+                {!selectedEmail.replied_at && (
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setSnoozeTarget(selectedEmail)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border/40 text-muted-foreground hover:text-accent hover:border-accent/30 hover:bg-accent/5 transition-colors"
+                    >
+                      <Moon className="w-3.5 h-3.5" />
+                      Snooze
+                    </button>
+                    <button
+                      onClick={() => handleArchive(selectedEmail)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border/40 text-muted-foreground hover:text-destructive hover:border-destructive/30 hover:bg-destructive/5 transition-colors"
+                    >
+                      <Archive className="w-3.5 h-3.5" />
+                      Archive
+                    </button>
+                  </div>
+                )}
+
                 <div className="border-t pt-4 space-y-3">
                   {!draftPanelOpen && !generatedDraftBody && (
                     <Button
@@ -786,6 +939,45 @@ export default function EmailView() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Snooze sheet (inline — reuses same logic as EmailTriage) */}
+      {snoozeTarget && (() => {
+        function midnight(d: Date): Date { return setMilliseconds(setSeconds(setMinutes(setHours(new Date(d), 0), 0), 0), 0); }
+        function at9am(d: Date): Date { return setMilliseconds(setSeconds(setMinutes(setHours(new Date(d), 9), 0), 0), 0); }
+        function at5pm(d: Date): Date { return setMilliseconds(setSeconds(setMinutes(setHours(new Date(d), 17), 0), 0), 0); }
+        const now = new Date();
+        const opts: { label: string; sub: string; date: Date }[] = [
+          { label: "In 1 hour", sub: format(addHours(now, 1), "h:mm a"), date: addHours(now, 1) },
+          ...(now.getHours() < 15 ? [{ label: "Later today", sub: format(at5pm(now), "h:mm a"), date: at5pm(now) }] : []),
+          { label: "Tomorrow morning", sub: format(at9am(addDays(midnight(now), 1)), "EEE, h:mm a"), date: at9am(addDays(midnight(now), 1)) },
+          ...(now.getDay() !== 6 && now.getDay() !== 0 ? [{ label: "This weekend", sub: format(at9am(nextSaturday(now)), "EEE, MMM d"), date: at9am(nextSaturday(now)) }] : []),
+          { label: "Next week", sub: format(at9am(now.getDay() === 1 ? addDays(now, 7) : nextMonday(now)), "EEE, MMM d"), date: at9am(now.getDay() === 1 ? addDays(now, 7) : nextMonday(now)) },
+        ];
+        return (
+          <AnimatePresence>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-foreground/40 flex items-end sm:items-center justify-center" onClick={() => setSnoozeTarget(null)}>
+              <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }} transition={{ type: "spring", damping: 26, stiffness: 320 }} className="bg-background w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2"><Moon className="w-4 h-4 text-accent" /><h3 className="font-display text-sm font-semibold">Snooze until…</h3></div>
+                  <button onClick={() => setSnoozeTarget(null)}><X className="w-4 h-4 text-muted-foreground" /></button>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3 truncate">{snoozeTarget.subject || snoozeTarget.from_name}</p>
+                <div className="space-y-1">
+                  {opts.map(opt => (
+                    <button key={opt.label} onClick={() => { snoozeEmail(snoozeTarget, opt.date); setSnoozeTarget(null); toast({ title: "Email snoozed", description: `Wakes up ${opt.sub}`, duration: 3000 }); }} className="w-full flex items-center justify-between px-3 py-3 rounded-xl hover:bg-muted/50 transition-colors text-left">
+                      <div className="flex items-center gap-3"><Clock className="w-4 h-4 text-muted-foreground shrink-0" /><span className="text-sm font-medium text-foreground">{opt.label}</span></div>
+                      <span className="text-xs text-muted-foreground">{opt.sub}</span>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
+        );
+      })()}
+
+      {/* Compose modal */}
+      {composeOpen && <ComposeModal onClose={() => setComposeOpen(false)} />}
 
       {/* Floating agent button */}
       {!selectedEmail && !agentSheetOpen && (

@@ -33,6 +33,7 @@ import Leads from "./pages/Leads";
 import Tasks from "./pages/Tasks";
 import AppHeader from "./components/AppHeader";
 import InstallBanner from "./components/InstallBanner";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import NotFound from "./pages/NotFound";
 import Pricing from "./pages/Pricing";
 import Investors from "./pages/Investors";
@@ -52,11 +53,12 @@ const ProtectedRoute = ({
   children: React.ReactNode;
 }) => {
   if (!session) return <Navigate to="/auth" replace />;
-  if (!isOnboarded) return <Navigate to="/onboarding" replace />;
+  // Explicit false check — null means "still loading", don't redirect yet
+  if (isOnboarded === false) return <Navigate to="/onboarding" replace />;
   return (
     <>
       <AppHeader />
-      {children}
+      <ErrorBoundary variant="page">{children}</ErrorBoundary>
     </>
   );
 };
@@ -71,12 +73,29 @@ const App = () => {
   const [isOnboarded, setIsOnboarded] = useState<boolean | null>(null);
 
   const fetchOnboardingState = useCallback(async (userId: string) => {
-    const { data } = await supabase
-      .from("user_preferences")
-      .select("onboarding_completed")
-      .eq("user_id", userId)
-      .maybeSingle();
-    setIsOnboarded(data?.onboarding_completed ?? false);
+    try {
+      const { data, error } = await supabase
+        .from("user_preferences")
+        .select("onboarding_completed")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        // DB error (network blip, etc.) — don't treat as "not onboarded".
+        // Default to true if we can't confirm either way, to avoid redirect loop.
+        // The worst case is a returning user sees the app; the onboarding guard
+        // only matters for genuinely new accounts.
+        console.warn("[App] fetchOnboardingState error:", error.message);
+        setIsOnboarded(true); // fail open — don't trap users in onboarding
+        return;
+      }
+
+      // No row in user_preferences → genuinely new user → needs onboarding
+      setIsOnboarded(data?.onboarding_completed ?? false);
+    } catch (err) {
+      console.warn("[App] fetchOnboardingState threw:", err);
+      setIsOnboarded(true); // fail open
+    }
   }, []);
 
   useEffect(() => {
@@ -127,6 +146,7 @@ const App = () => {
   }
 
   return (
+    <ErrorBoundary variant="page">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <IntegrationsProvider>
@@ -135,8 +155,8 @@ const App = () => {
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={isRecovery ? <Navigate to="/reset-password" replace /> : session ? <Navigate to="/mode-select" replace /> : <Landing />} />
-              <Route path="/auth" element={!session ? <Auth /> : isRecovery ? <Navigate to="/reset-password" replace /> : <Navigate to="/mode-select" replace />} />
+              <Route path="/" element={isRecovery ? <Navigate to="/reset-password" replace /> : session ? <Navigate to="/dashboard" replace /> : <Landing />} />
+              <Route path="/auth" element={!session ? <Auth /> : isRecovery ? <Navigate to="/reset-password" replace /> : <Navigate to="/dashboard" replace />} />
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/pricing" element={<Pricing />} />
@@ -146,7 +166,7 @@ const App = () => {
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/onboarding" element={
                 !session ? <Navigate to="/auth" replace /> :
-                isOnboarded ? <Navigate to="/mode-select" replace /> :
+                isOnboarded ? <Navigate to="/dashboard" replace /> :
                 <Onboarding onComplete={() => setIsOnboarded(true)} />
               } />
               <Route path="/mode-select" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><ModeSelect /></ProtectedRoute>} />
@@ -174,6 +194,7 @@ const App = () => {
         </IntegrationsProvider>
       </TooltipProvider>
     </QueryClientProvider>
+    </ErrorBoundary>
   );
 };
 
