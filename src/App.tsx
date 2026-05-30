@@ -31,6 +31,7 @@ import Contacts from "./pages/Contacts";
 import Files from "./pages/Files";
 import Leads from "./pages/Leads";
 import Tasks from "./pages/Tasks";
+import BetaCrm from "./pages/BetaCrm";
 import AppHeader from "./components/AppHeader";
 import InstallBanner from "./components/InstallBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
