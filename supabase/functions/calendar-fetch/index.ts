@@ -74,17 +74,35 @@ Deno.serve(async (req) => {
       throw tokenError;
     }
 
-    // Start from beginning of today (UTC midnight) so events earlier today aren't missed.
-    // Fetch 30 days to support month view navigation.
-    const startOfToday = new Date();
-    startOfToday.setUTCHours(0, 0, 0, 0);
-    const thirtyDaysLater = new Date(startOfToday.getTime() + 30 * 24 * 60 * 60 * 1000);
+    // Parse caller's IANA timezone so we anchor on local midnight, not UTC midnight.
+    // Without this, IST users (UTC+5:30) miss the first 5.5 hours of each day.
+    let timezone = "UTC";
+    try {
+      const body = await req.json();
+      if (typeof body?.timezone === "string") timezone = body.timezone;
+    } catch { /* no body is fine */ }
+
+    // Local midnight = current UTC time minus elapsed seconds since local midnight.
+    function startOfLocalDayUnix(tz: string): number {
+      const now = new Date();
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        hour12: false,
+      }).formatToParts(now);
+      const get = (t: string) => parseInt(parts.find((p) => p.type === t)!.value);
+      const elapsed = (get("hour") % 24) * 3600 + get("minute") * 60 + get("second");
+      return Math.floor((now.getTime() - elapsed * 1000) / 1000);
+    }
+
+    const startUnix = startOfLocalDayUnix(timezone);
+    const endUnix = startUnix + 60 * 24 * 60 * 60; // 60 days covers 2 calendar months
 
     const params = new URLSearchParams({
       calendar_id: "primary",
-      start: String(Math.floor(startOfToday.getTime() / 1000)),
-      end: String(Math.floor(thirtyDaysLater.getTime() / 1000)),
-      limit: "50",
+      start: String(startUnix),
+      end: String(endUnix),
+      limit: "100",
     });
 
     const calRes = await fetch(

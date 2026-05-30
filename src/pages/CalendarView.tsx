@@ -108,7 +108,7 @@ export default function CalendarView() {
   const [cancelMessage, setCancelMessage] = useState("");
   const [createForm, setCreateForm] = useState({
     summary: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: toLocalDateStr(new Date()),
     startTime: "09:00",
     endTime: "10:00",
     location: "",
@@ -134,7 +134,9 @@ export default function CalendarView() {
     setError(null);
     setNeedsReconnect(false);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("calendar-fetch");
+      const { data, error: fnError } = await supabase.functions.invoke("calendar-fetch", {
+        body: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+      });
 
       // Try to parse the response body even when supabase-js flags a non-2xx status
       let payload: any = data;
@@ -169,12 +171,14 @@ export default function CalendarView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
+      // Parse as local time (no tz suffix = browser local), then send as UTC ISO.
+      // Without this, Deno (UTC) would misinterpret "09:00" as UTC instead of IST.
       const start = createForm.allDay
         ? createForm.date
-        : `${createForm.date}T${createForm.startTime}:00`;
+        : new Date(`${createForm.date}T${createForm.startTime}:00`).toISOString();
       const end = createForm.allDay
         ? undefined
-        : `${createForm.date}T${createForm.endTime}:00`;
+        : new Date(`${createForm.date}T${createForm.endTime}:00`).toISOString();
 
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-event-create`,
@@ -197,7 +201,7 @@ export default function CalendarView() {
       if (!resp.ok) throw new Error(result.error || "Failed to create event");
 
       setCreateSheetOpen(false);
-      setCreateForm({ summary: "", date: new Date().toISOString().slice(0, 10), startTime: "09:00", endTime: "10:00", location: "", allDay: false });
+      setCreateForm({ summary: "", date: toLocalDateStr(new Date()), startTime: "09:00", endTime: "10:00", location: "", allDay: false });
       fetchEvents();
     } catch (err: any) {
       console.error("Create event error:", err);
