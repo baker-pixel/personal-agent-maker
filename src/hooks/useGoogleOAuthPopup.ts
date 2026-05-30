@@ -75,15 +75,13 @@ export const useGoogleOAuthPopup = () => {
       );
       popupRef.current = popup;
 
-      // If the browser blocked the popup, exit cleanly — never sit in a loader.
+      // If the browser blocked the popup (common on mobile), fall back to a
+      // full-page redirect so the flow still completes without popups.
       if (!popup) {
         inFlightRef.current = null;
         setConnecting(null);
-        toast({
-          title: "Popup blocked",
-          description: "Please allow popups for this site and try again.",
-          variant: "destructive",
-        });
+        sessionStorage.setItem("oauth-return-to", window.location.pathname + window.location.search);
+        window.location.href = url;
         return;
       }
 

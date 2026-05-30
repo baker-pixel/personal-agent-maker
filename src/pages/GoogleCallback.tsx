@@ -86,7 +86,9 @@ const GoogleCallback = () => {
         if (isPopup) {
           setTimeout(() => window.close(), 1200);
         } else {
-          setTimeout(() => navigate("/dashboard"), 1500);
+          const returnTo = sessionStorage.getItem("oauth-return-to") || "/dashboard";
+          sessionStorage.removeItem("oauth-return-to");
+          setTimeout(() => navigate(returnTo), 1500);
         }
       } catch (err) {
         console.error("GoogleCallback error:", err);
