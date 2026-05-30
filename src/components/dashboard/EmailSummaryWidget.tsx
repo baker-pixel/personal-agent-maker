@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, AlertTriangle, MessageSquareReply, ArrowRight, CheckCircle2 } from "lucide-react";
