@@ -373,7 +373,7 @@ export default function Office() {
   const particles = useParticles();
 
   return (
-    <div className="min-h-screen bg-background overflow-hidden relative">
+    <div className="min-h-screen bg-background overflow-hidden relative pt-[var(--header-h)]">
       {/* Ambient background blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div
@@ -411,7 +411,7 @@ export default function Office() {
       </div>
 
       {/* Top bar — pr-14 clears the fixed AppMenu button (w-8 + p-3 = ~44px from right) */}
-      <header className="relative z-10 flex items-center justify-between pl-4 sm:pl-6 pr-14 py-3 sm:py-4 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+      <header className="relative z-10 flex items-center justify-between pl-4 sm:pl-6 pr-14 py-3 sm:py-4">
         <button
           onClick={() => navigate("/mode-select")}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"

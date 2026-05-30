@@ -14,7 +14,7 @@ import { NotificationCenter } from "@/components/NotificationCenter";
 import SignOutDialog from "@/components/SignOutDialog";
 import { useConversations } from "@/hooks/useConversations";
 import { useDraftActions } from "@/hooks/useDraftActions";
-import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft, ListTodo, Gift, Newspaper } from "lucide-react";
+import { Home, MessageSquare, Inbox, Plug, Settings, LogOut, ArrowLeft, ListTodo, Gift, Newspaper, PanelLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type Tab = "home" | "chat" | "inbox" | "tasks" | "reminders" | "news" | "integrations" | "settings";
@@ -88,7 +88,7 @@ const Index = () => {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background">
       {/* Conversation sidebar (only visible on chat tab) */}
       {activeTab === "chat" && (
         <ConversationSidebar
@@ -113,7 +113,7 @@ const Index = () => {
                 className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200 lg:hidden"
                 title="Conversations"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <PanelLeft className="w-4 h-4" />
               </button>
             ) : activeTab !== "home" ? (
               <button
@@ -170,7 +170,7 @@ const Index = () => {
         </header>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden min-h-0">
           {activeTab === "home" && (
             <Dashboard
               onNavigateToChat={handleNavigateToChat}

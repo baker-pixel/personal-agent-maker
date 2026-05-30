@@ -1,4 +1,4 @@
-import { MessageSquare, Plus, Trash2, Sparkles } from "lucide-react";
+import { MessageSquare, Plus, Trash2, Sparkles, X } from "lucide-react";
 import type { Conversation } from "@/hooks/useConversations";
 
 interface ConversationSidebarProps {
@@ -34,12 +34,21 @@ export const ConversationSidebar = ({
       }`}
     >
       {/* Brand header */}
-      <div className="p-5 pb-4">
-        <div className="flex items-center gap-2.5 mb-5">
-          <div className="w-8 h-8 rounded-xl bg-sidebar-primary/15 flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-sidebar-primary" />
+      <div className="p-5 pb-4 safe-area-top">
+        <div className="flex items-center justify-between gap-2.5 mb-5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-sidebar-primary/15 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-sidebar-primary" />
+            </div>
+            <span className="font-display text-base text-sidebar-foreground tracking-tight">Normy</span>
           </div>
-          <span className="font-display text-base text-sidebar-foreground tracking-tight">Normy</span>
+          <button
+            onClick={onClose}
+            className="lg:hidden p-1.5 rounded-lg text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-all"
+            title="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
         <button
           onClick={onNew}

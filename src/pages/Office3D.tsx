@@ -85,7 +85,7 @@ export default function Office3D() {
   const handleNavigate = useCallback((route: string) => navigate(route), [navigate]);
 
   return (
-    <div className="h-screen w-screen bg-[#141A26] relative overflow-hidden">
+    <div className="h-screen w-screen bg-[#141A26] relative overflow-hidden pt-[var(--header-h)]">
       <Suspense
         fallback={
           <div className="h-full flex items-center justify-center">
