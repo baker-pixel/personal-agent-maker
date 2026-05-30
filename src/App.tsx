@@ -187,6 +187,7 @@ const App = () => {
               <Route path="/files" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Files /></ProtectedRoute>} />
               <Route path="/leads" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Leads /></ProtectedRoute>} />
               <Route path="/tasks" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Tasks /></ProtectedRoute>} />
+              <Route path="/beta-crm" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><BetaCrm /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             {session && isOnboarded && <InstallBanner />}
