@@ -73,6 +73,66 @@ export type Database = {
           },
         ]
       }
+      beta_users: {
+        Row: {
+          activated_at: string | null
+          company: string | null
+          created_at: string
+          created_by: string | null
+          email: string
+          id: string
+          invited_at: string | null
+          last_contacted_at: string | null
+          name: string
+          notes: string | null
+          phone: string | null
+          role: string | null
+          signed_up_at: string | null
+          source: string | null
+          status: Database["public"]["Enums"]["beta_user_status"]
+          tier: Database["public"]["Enums"]["beta_user_tier"]
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          email: string
+          id?: string
+          invited_at?: string | null
+          last_contacted_at?: string | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          signed_up_at?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["beta_user_status"]
+          tier?: Database["public"]["Enums"]["beta_user_tier"]
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          id?: string
+          invited_at?: string | null
+          last_contacted_at?: string | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          signed_up_at?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["beta_user_status"]
+          tier?: Database["public"]["Enums"]["beta_user_tier"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chat_conversations: {
         Row: {
           created_at: string
@@ -294,12 +354,10 @@ export type Database = {
         Row: {
           body: string | null
           created_at: string
-          email_metadata_id: string | null
           gmail_message_id: string | null
           id: string
           in_reply_to: string | null
           metadata: Json | null
-          nylas_message_id: string | null
           status: string
           subject: string | null
           thread_id: string | null
@@ -312,12 +370,10 @@ export type Database = {
         Insert: {
           body?: string | null
           created_at?: string
-          email_metadata_id?: string | null
           gmail_message_id?: string | null
           id?: string
           in_reply_to?: string | null
           metadata?: Json | null
-          nylas_message_id?: string | null
           status?: string
           subject?: string | null
           thread_id?: string | null
@@ -330,12 +386,10 @@ export type Database = {
         Update: {
           body?: string | null
           created_at?: string
-          email_metadata_id?: string | null
           gmail_message_id?: string | null
           id?: string
           in_reply_to?: string | null
           metadata?: Json | null
-          nylas_message_id?: string | null
           status?: string
           subject?: string | null
           thread_id?: string | null
@@ -345,15 +399,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "draft_actions_email_metadata_id_fkey"
-            columns: ["email_metadata_id"]
-            isOneToOne: false
-            referencedRelation: "email_metadata"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
       email_reminders: {
         Row: {
@@ -399,93 +445,48 @@ export type Database = {
           },
         ]
       }
-      email_metadata: {
+      email_snoozes: {
         Row: {
-          ai_reason: string | null
-          ai_summary: string | null
-          category: string | null
           created_at: string
-          from_address: string
-          from_name: string | null
           id: string
-          is_unread: boolean
-          nylas_message_id: string
-          nylas_thread_id: string | null
-          priority_score: number | null
-          processed_at: string | null
-          received_at: string
-          replied_at: string | null
-          subject: string | null
-          user_id: string
-        }
-        Insert: {
-          ai_reason?: string | null
-          ai_summary?: string | null
-          category?: string | null
-          created_at?: string
-          from_address: string
-          from_name?: string | null
-          id?: string
-          is_unread?: boolean
-          nylas_message_id: string
-          nylas_thread_id?: string | null
-          priority_score?: number | null
-          processed_at?: string | null
-          received_at: string
-          replied_at?: string | null
-          subject?: string | null
-          user_id: string
-        }
-        Update: {
-          ai_reason?: string | null
-          ai_summary?: string | null
-          category?: string | null
-          created_at?: string
-          from_address?: string
-          from_name?: string | null
-          id?: string
-          is_unread?: boolean
-          nylas_message_id?: string
-          nylas_thread_id?: string | null
-          priority_score?: number | null
-          processed_at?: string | null
-          received_at?: string
-          replied_at?: string | null
-          subject?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      email_processing_queue: {
-        Row: {
-          attempts: number
-          created_at: string
-          error_message: string | null
-          grant_id: string
-          id: string
-          nylas_message_id: string
+          message_id: string
+          sender: string | null
+          snippet: string | null
           status: string
+          subject: string | null
+          thread_id: string | null
+          until_at: string
+          updated_at: string
           user_id: string
+          woken_at: string | null
         }
         Insert: {
-          attempts?: number
           created_at?: string
-          error_message?: string | null
-          grant_id: string
           id?: string
-          nylas_message_id: string
+          message_id: string
+          sender?: string | null
+          snippet?: string | null
           status?: string
+          subject?: string | null
+          thread_id?: string | null
+          until_at: string
+          updated_at?: string
           user_id: string
+          woken_at?: string | null
         }
         Update: {
-          attempts?: number
           created_at?: string
-          error_message?: string | null
-          grant_id?: string
           id?: string
-          nylas_message_id?: string
+          message_id?: string
+          sender?: string | null
+          snippet?: string | null
           status?: string
+          subject?: string | null
+          thread_id?: string | null
+          until_at?: string
+          updated_at?: string
           user_id?: string
+          woken_at?: string | null
         }
         Relationships: []
       }
@@ -528,33 +529,54 @@ export type Database = {
         }
         Relationships: []
       }
-      nylas_grants: {
+      expenses: {
         Row: {
-          id: string
-          user_id: string
-          grant_id: string
-          email: string | null
-          provider: string
+          amount_cents: number
+          category: string | null
           created_at: string
+          currency: string
+          expense_date: string
+          gmail_message_id: string | null
+          id: string
+          merchant: string | null
+          notes: string | null
+          receipt_url: string | null
+          source: string
+          status: string
           updated_at: string
+          user_id: string
         }
         Insert: {
-          id?: string
-          user_id: string
-          grant_id: string
-          email?: string | null
-          provider?: string
+          amount_cents?: number
+          category?: string | null
           created_at?: string
+          currency?: string
+          expense_date?: string
+          gmail_message_id?: string | null
+          id?: string
+          merchant?: string | null
+          notes?: string | null
+          receipt_url?: string | null
+          source?: string
+          status?: string
           updated_at?: string
+          user_id: string
         }
         Update: {
-          id?: string
-          user_id?: string
-          grant_id?: string
-          email?: string | null
-          provider?: string
+          amount_cents?: number
+          category?: string | null
           created_at?: string
+          currency?: string
+          expense_date?: string
+          gmail_message_id?: string | null
+          id?: string
+          merchant?: string | null
+          notes?: string | null
+          receipt_url?: string | null
+          source?: string
+          status?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -696,6 +718,315 @@ export type Database = {
         }
         Relationships: []
       }
+      life_bills: {
+        Row: {
+          amount_cents: number | null
+          autopay: boolean
+          cadence: string | null
+          created_at: string
+          currency: string
+          id: string
+          name: string
+          next_due: string | null
+          notes: string | null
+          source: string | null
+          updated_at: string
+          user_id: string
+          vendor: string | null
+        }
+        Insert: {
+          amount_cents?: number | null
+          autopay?: boolean
+          cadence?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          name: string
+          next_due?: string | null
+          notes?: string | null
+          source?: string | null
+          updated_at?: string
+          user_id: string
+          vendor?: string | null
+        }
+        Update: {
+          amount_cents?: number | null
+          autopay?: boolean
+          cadence?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          name?: string
+          next_due?: string | null
+          notes?: string | null
+          source?: string | null
+          updated_at?: string
+          user_id?: string
+          vendor?: string | null
+        }
+        Relationships: []
+      }
+      life_rituals: {
+        Row: {
+          active: boolean
+          cadence: string | null
+          created_at: string
+          id: string
+          next_at: string | null
+          notes: string | null
+          source: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          cadence?: string | null
+          created_at?: string
+          id?: string
+          next_at?: string | null
+          notes?: string | null
+          source?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          cadence?: string | null
+          created_at?: string
+          id?: string
+          next_at?: string | null
+          notes?: string | null
+          source?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      life_suggestions: {
+        Row: {
+          confidence: number
+          created_at: string
+          id: string
+          kind: string
+          payload: Json
+          source: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          id?: string
+          kind: string
+          payload?: Json
+          source?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          id?: string
+          kind?: string
+          payload?: Json
+          source?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      referral_codes: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          referrer_name: string | null
+          user_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          referrer_name?: string | null
+          user_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          referrer_name?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      referral_reward_events: {
+        Row: {
+          code: string
+          created_at: string
+          cumulative_months: number
+          id: string
+          metadata: Json
+          months_awarded: number
+          referee_user_id: string | null
+          referral_id: string | null
+          referrer_user_id: string
+          source: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          cumulative_months: number
+          id?: string
+          metadata?: Json
+          months_awarded?: number
+          referee_user_id?: string | null
+          referral_id?: string | null
+          referrer_user_id: string
+          source?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          cumulative_months?: number
+          id?: string
+          metadata?: Json
+          months_awarded?: number
+          referee_user_id?: string | null
+          referral_id?: string | null
+          referrer_user_id?: string
+          source?: string
+        }
+        Relationships: []
+      }
+      referral_share_events: {
+        Row: {
+          channel: string
+          code: string
+          created_at: string
+          id: string
+          metadata: Json
+          user_id: string
+        }
+        Insert: {
+          channel: string
+          code: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          user_id: string
+        }
+        Update: {
+          channel?: string
+          code?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      referrals: {
+        Row: {
+          activated_at: string | null
+          clicked_at: string | null
+          code: string
+          created_at: string
+          id: string
+          referee_email: string | null
+          referee_user_id: string | null
+          referrer_user_id: string
+          rewarded_at: string | null
+          signed_up_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          clicked_at?: string | null
+          code: string
+          created_at?: string
+          id?: string
+          referee_email?: string | null
+          referee_user_id?: string | null
+          referrer_user_id: string
+          rewarded_at?: string | null
+          signed_up_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          clicked_at?: string | null
+          code?: string
+          created_at?: string
+          id?: string
+          referee_email?: string | null
+          referee_user_id?: string | null
+          referrer_user_id?: string
+          rewarded_at?: string | null
+          signed_up_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      scheduled_emails: {
+        Row: {
+          bcc: string | null
+          body: string
+          cc: string | null
+          created_at: string
+          error: string | null
+          gmail_message_id: string | null
+          id: string
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+          subject: string
+          to_email: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bcc?: string | null
+          body: string
+          cc?: string | null
+          created_at?: string
+          error?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          scheduled_at: string
+          sent_at?: string | null
+          status?: string
+          subject: string
+          to_email: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bcc?: string | null
+          body?: string
+          cc?: string | null
+          created_at?: string
+          error?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          to_email?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       scheduling_preferences: {
         Row: {
           block_lunch: boolean
@@ -823,21 +1154,26 @@ export type Database = {
         Row: {
           agent_name: string
           created_at: string
-          decision_style: string
-          email_length: string
+          dashboard_mode: string
+          digest_mode: boolean
           id: string
           lead_escalate_drafted_minutes: number
           lead_escalate_to_slack: boolean
           lead_escalate_to_sms: boolean
           lead_nudge_enabled: boolean
           lead_nudge_minutes: number
-          onboarding_completed: boolean
           phone_number: string | null
-          priority_visibility: string
+          quiet_hours_enabled: boolean
+          quiet_hours_end: string
+          quiet_hours_start: string
+          referral_credits_months: number
+          referred_by_code: string | null
           slack_notification_channel_id: string | null
           slack_notification_channel_name: string | null
           stt_language: string | null
-          tone: string
+          travel_mode_active: boolean
+          travel_mode_message: string | null
+          travel_mode_until: string | null
           tts_elevenlabs_model_id: string | null
           tts_elevenlabs_voice_id: string | null
           tts_enabled: boolean | null
@@ -849,26 +1185,34 @@ export type Database = {
           tts_voice_uri: string | null
           updated_at: string
           user_id: string
+          vip_override_quiet: boolean
           voice_conversation_enabled: boolean | null
+          weekly_review_enabled: boolean
+          weekly_review_last_sent_date: string | null
         }
         Insert: {
           agent_name?: string
           created_at?: string
-          decision_style?: string
-          email_length?: string
+          dashboard_mode?: string
+          digest_mode?: boolean
           id?: string
           lead_escalate_drafted_minutes?: number
           lead_escalate_to_slack?: boolean
           lead_escalate_to_sms?: boolean
           lead_nudge_enabled?: boolean
           lead_nudge_minutes?: number
-          onboarding_completed?: boolean
           phone_number?: string | null
-          priority_visibility?: string
+          quiet_hours_enabled?: boolean
+          quiet_hours_end?: string
+          quiet_hours_start?: string
+          referral_credits_months?: number
+          referred_by_code?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
           stt_language?: string | null
-          tone?: string
+          travel_mode_active?: boolean
+          travel_mode_message?: string | null
+          travel_mode_until?: string | null
           tts_elevenlabs_model_id?: string | null
           tts_elevenlabs_voice_id?: string | null
           tts_enabled?: boolean | null
@@ -880,26 +1224,34 @@ export type Database = {
           tts_voice_uri?: string | null
           updated_at?: string
           user_id: string
+          vip_override_quiet?: boolean
           voice_conversation_enabled?: boolean | null
+          weekly_review_enabled?: boolean
+          weekly_review_last_sent_date?: string | null
         }
         Update: {
           agent_name?: string
           created_at?: string
-          decision_style?: string
-          email_length?: string
+          dashboard_mode?: string
+          digest_mode?: boolean
           id?: string
           lead_escalate_drafted_minutes?: number
           lead_escalate_to_slack?: boolean
           lead_escalate_to_sms?: boolean
           lead_nudge_enabled?: boolean
           lead_nudge_minutes?: number
-          onboarding_completed?: boolean
           phone_number?: string | null
-          priority_visibility?: string
+          quiet_hours_enabled?: boolean
+          quiet_hours_end?: string
+          quiet_hours_start?: string
+          referral_credits_months?: number
+          referred_by_code?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
           stt_language?: string | null
-          tone?: string
+          travel_mode_active?: boolean
+          travel_mode_message?: string | null
+          travel_mode_until?: string | null
           tts_elevenlabs_model_id?: string | null
           tts_elevenlabs_voice_id?: string | null
           tts_enabled?: boolean | null
@@ -911,7 +1263,31 @@ export type Database = {
           tts_voice_uri?: string | null
           updated_at?: string
           user_id?: string
+          vip_override_quiet?: boolean
           voice_conversation_enabled?: boolean | null
+          weekly_review_enabled?: boolean
+          weekly_review_last_sent_date?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
         }
         Relationships: []
       }
@@ -949,9 +1325,23 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "admin" | "user"
+      beta_user_status:
+        | "invited"
+        | "signed_up"
+        | "active"
+        | "churned"
+        | "declined"
+      beta_user_tier: "vip" | "standard" | "waitlist"
       lead_rule_type: "sender_domain" | "subject_keyword" | "recipient_inbox"
       lead_status:
         | "new"
@@ -1087,6 +1477,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "user"],
+      beta_user_status: [
+        "invited",
+        "signed_up",
+        "active",
+        "churned",
+        "declined",
+      ],
+      beta_user_tier: ["vip", "standard", "waitlist"],
       lead_rule_type: ["sender_domain", "subject_keyword", "recipient_inbox"],
       lead_status: [
         "new",
