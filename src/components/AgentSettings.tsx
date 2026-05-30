@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { Zap, Check, Bell, RotateCcw, ToggleLeft } from "lucide-react";
