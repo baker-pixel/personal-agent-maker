@@ -291,7 +291,10 @@ export default function CalendarView() {
 
   // Month navigation
   const displayMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
-  const currentMonth = displayMonth.toLocaleDateString([], { month: "long", year: "numeric" });
+
+  // Navigation header label tracks the actual visible date range per view
+  const navAnchor = view === "month" ? displayMonth : view === "week" ? startOfWeek : now;
+  const currentMonth = navAnchor.toLocaleDateString([], { month: "long", year: "numeric" });
 
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const weekDates = Array.from({ length: 7 }, (_, i) => {
@@ -399,36 +402,44 @@ export default function CalendarView() {
       {!loading && !error && !needsReconnect && events.length > 0 && <PriorityLegend />}
 
       <div className="border-b bg-card">
-        <div className="container flex items-center justify-between py-3">
-          <div className="flex items-center gap-2">
+        <div className="container px-4 flex items-center gap-2 py-3">
+          {/* Month/week navigation — takes remaining space, won't overflow */}
+          <div className="flex items-center gap-1 flex-1 min-w-0">
             <button
               onClick={() => { view === "week" ? setWeekOffset(o => o - 1) : setMonthOffset(o => o - 1); setSelectedDate(null); }}
-              className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
+              className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted shrink-0"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="font-display font-semibold min-w-[140px] text-center">{currentMonth}</span>
+            <span className="font-display font-semibold text-sm sm:text-base text-center flex-1 truncate">
+              {currentMonth}
+            </span>
             <button
-              onClick={() => { view === "week" ? setWeekOffset(o => o + 1) : setMonthOffset(o => o + 1); setSelectedDate(null); }}
-              className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
+              onClick={() => {
+                if (view === "week" && weekOffset < 8) { setWeekOffset(o => o + 1); setSelectedDate(null); }
+                else if (view === "month" && monthOffset < 2) { setMonthOffset(o => o + 1); setSelectedDate(null); }
+              }}
+              className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted shrink-0 disabled:opacity-30"
+              disabled={(view === "week" && weekOffset >= 8) || (view === "month" && monthOffset >= 2)}
             >
               <ChevronRight className="w-4 h-4" />
             </button>
             {(weekOffset !== 0 || monthOffset !== 0) && (
               <button
                 onClick={() => { setWeekOffset(0); setMonthOffset(0); setSelectedDate(null); }}
-                className="text-xs text-accent hover:underline"
+                className="text-xs text-accent hover:underline shrink-0 px-1"
               >
                 Today
               </button>
             )}
           </div>
-          <div className="flex gap-1 bg-muted rounded-lg p-0.5">
+          {/* View switcher — fixed width, never shrinks */}
+          <div className="flex gap-0.5 bg-muted rounded-lg p-0.5 shrink-0">
             {(["day", "week", "month"] as const).map((v) => (
               <button
                 key={v}
-                onClick={() => setView(v)}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                onClick={() => { setView(v); setSelectedDate(null); }}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
                   view === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
                 }`}
               >
@@ -589,18 +600,23 @@ export default function CalendarView() {
                     <button
                       key={d}
                       onClick={() => setSelectedDate(isSelected ? null : dateStr)}
-                      className={`aspect-square rounded-lg p-1 border transition-colors hover:border-accent/30 text-left ${
+                      className={`aspect-square rounded-lg p-1 border transition-colors hover:border-accent/30 text-left overflow-hidden ${
                         isSelected ? "bg-foreground/10 border-foreground/40" :
                         isToday ? "bg-accent/10 border-accent/30" :
                         "border-transparent"
                       }`}
                     >
-                      <span className={`text-xs font-medium ${isToday ? "text-accent" : ""}`}>{d}</span>
-                      <div className="flex flex-wrap gap-0.5 mt-0.5">
-                        {dayEvents.map((e, i) => (
-                          <div key={e.id} className={`w-1.5 h-1.5 rounded-full ${getColorForEvent(i)}`} />
-                        ))}
-                      </div>
+                      <span className={`text-xs font-medium leading-none ${isToday ? "text-accent" : ""}`}>{d}</span>
+                      {dayEvents.length > 0 && (
+                        <div className="flex gap-0.5 mt-0.5 overflow-hidden">
+                          {dayEvents.slice(0, 3).map((e, i) => (
+                            <div key={e.id} className={`w-1.5 h-1.5 rounded-full shrink-0 ${getColorForEvent(i)}`} />
+                          ))}
+                          {dayEvents.length > 3 && (
+                            <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-muted-foreground/40" />
+                          )}
+                        </div>
+                      )}
                     </button>
                   );
                 })}

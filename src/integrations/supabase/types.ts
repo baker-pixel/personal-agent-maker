@@ -20,6 +20,7 @@ export type Database = {
           created_at: string
           description: string | null
           due_date: string | null
+          email_metadata_id: string | null
           id: string
           meeting_date: string | null
           meeting_summary: string | null
@@ -36,6 +37,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           due_date?: string | null
+          email_metadata_id?: string | null
           id?: string
           meeting_date?: string | null
           meeting_summary?: string | null
@@ -52,6 +54,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           due_date?: string | null
+          email_metadata_id?: string | null
           id?: string
           meeting_date?: string | null
           meeting_summary?: string | null
@@ -64,6 +67,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "action_items_email_metadata_fk"
+            columns: ["email_metadata_id"]
+            isOneToOne: false
+            referencedRelation: "email_metadata"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "action_items_steno_session_id_fkey"
             columns: ["steno_session_id"]

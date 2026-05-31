@@ -46,6 +46,12 @@ if (isPreviewHost || isInIframe) {
   navigator.serviceWorker?.getRegistrations().then((registrations) => {
     registrations.forEach((r) => r.unregister());
   });
+} else if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) =>
+      console.warn('SW registration failed:', err)
+    );
+  });
 }
 
 preparePasswordRecoveryUrlForManualHandling();

@@ -7,7 +7,10 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useTodayData } from "@/hooks/useTodayData";
 
 export function NotificationManager() {
-  const { permission, notify } = usePushNotifications();
+  const { permission, notify, ensureSubscribed } = usePushNotifications();
+
+  // On mount: if already granted, refresh/save the push subscription to DB
+  useEffect(() => { ensureSubscribed(); }, [ensureSubscribed]);
   const { todayEvents, urgentEmailCount, overdueTaskCount } = useTodayData();
   const [tick, setTick] = useState(0);
 

@@ -110,20 +110,22 @@ Deno.serve(async (req) => {
       { headers: { Authorization: `Bearer ${nylasApiKey}` } }
     );
 
-    if (calRes.status === 401) {
-      return new Response(
-        JSON.stringify({
-          error: "Your Google Calendar session has expired. Please reconnect your account.",
-          code: "RECONNECT_REQUIRED",
-        }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     if (!calRes.ok) {
       const errorText = await calRes.text();
       console.error("Calendar fetch failed:", calRes.status, errorText);
 
+      // 401 / 400 — token expired or revoked; user must reconnect
+      if (calRes.status === 401 || calRes.status === 400) {
+        return new Response(
+          JSON.stringify({
+            error: "Your Google Calendar session has expired. Please reconnect your account.",
+            code: "RECONNECT_REQUIRED",
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // 403 — permission denied (calendar scope not granted)
       if (calRes.status === 403) {
         let parsed: any = null;
         try { parsed = JSON.parse(errorText); } catch { /* ignore */ }
@@ -137,9 +139,22 @@ Deno.serve(async (req) => {
         );
       }
 
+      // 429 — Nylas rate limit
+      if (calRes.status === 429) {
+        return new Response(
+          JSON.stringify({ error: "Calendar API rate limit reached. Please try again in a moment.", code: "RATE_LIMITED" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Everything else — log detail, return generic
       return new Response(
-        JSON.stringify({ error: "Failed to fetch Calendar events", code: "CALENDAR_API_ERROR" }),
-        { status: calRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: "Could not load calendar events. Please try again.",
+          code: "CALENDAR_API_ERROR",
+          status: calRes.status,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

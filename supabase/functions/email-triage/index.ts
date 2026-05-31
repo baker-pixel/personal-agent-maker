@@ -337,6 +337,7 @@ ${personalizedRules ? `\n## USER PERSONALIZATION\n${personalizedRules}` : ""}
 - "fyi": Informational — status updates, shared docs, CC'd threads, read-only notifications.
 - "newsletter": Automated emails, marketing, subscriptions, system notifications, social media alerts.
 
+
 `;
 
     const aiResponse = await fetch(
@@ -366,7 +367,7 @@ Use the suggest_triage tool to return your analysis.`
               type: "function",
               function: {
                 name: "suggest_triage",
-                description: "Categorize emails, provide draft responses, and extract action items",
+                description: "Categorize emails and extract action items from urgent and needs_reply emails",
                 parameters: {
                   type: "object",
                   properties: {
@@ -400,7 +401,7 @@ Use the suggest_triage tool to return your analysis.`
                         required: ["title", "from_email_index", "priority"],
                         additionalProperties: false
                       }
-                    }
+                    },
                   },
                   required: ["categorized_emails", "action_items"],
                   additionalProperties: false
@@ -505,17 +506,19 @@ Use the suggest_triage tool to return your analysis.`
       if (metaErr) console.error("email-triage metadata upsert error:", metaErr.message);
     }
 
-    // Fetch replied_at for all processed messages
+    // Fetch replied_at and DB UUIDs for all processed messages in one query
     const messageIds = metadataRows.map((r: any) => r.nylas_message_id);
     const repliedMap: Record<string, string | null> = {};
+    const metaIdByMsgId: Record<string, string> = {};
     if (messageIds.length > 0) {
       const { data: repliedRows } = await adminClient
         .from("email_metadata")
-        .select("nylas_message_id, replied_at")
+        .select("id, nylas_message_id, replied_at")
         .eq("user_id", user.id)
         .in("nylas_message_id", messageIds);
       for (const row of repliedRows || []) {
         repliedMap[row.nylas_message_id] = row.replied_at;
+        metaIdByMsgId[row.nylas_message_id] = row.id;
       }
     }
 
@@ -526,23 +529,25 @@ Use the suggest_triage tool to return your analysis.`
       }));
     }
 
-    // Deduplicated action items
+    // Deduplicated action items — key-based dedup shared with task-extract
+    // meeting_summary format: "email:{nylas_message_id}" so both systems cross-check
     let actionItemsCreated = 0;
     if (extractedActions.length > 0) {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { data: existingTitles } = await adminClient
+      const { data: existingKeys } = await adminClient
         .from("action_items")
-        .select("title")
+        .select("meeting_summary")
         .eq("user_id", user.id)
-        .eq("source", "email_triage")
-        .gte("created_at", sevenDaysAgo);
-      const seenTitles = new Set(
-        (existingTitles || []).map((r: any) => r.title.toLowerCase().trim())
+        .not("meeting_summary", "is", null);
+      const seenKeys = new Set(
+        (existingKeys || []).map((r: any) => r.meeting_summary)
       );
 
       const rows = extractedActions
         .map((ai: any) => {
           const sourceEmail = emailsToTriage[ai.from_email_index];
+          if (!sourceEmail) return null;
+          const key = `email:${sourceEmail.id}`;
+          if (seenKeys.has(key)) return null;
           return {
             user_id: user.id,
             title: ai.title,
@@ -550,17 +555,41 @@ Use the suggest_triage tool to return your analysis.`
             due_date: ai.due_date || null,
             status: "suggested",
             source: "email_triage",
-            meeting_summary: sourceEmail
-              ? `Email from ${sourceEmail.from}: ${sourceEmail.subject}`
-              : null,
+            meeting_summary: key,
+            email_metadata_id: metaIdByMsgId[sourceEmail.id] || null,
           };
         })
-        .filter((r: any) => !seenTitles.has(r.title.toLowerCase().trim()));
+        .filter(Boolean);
 
       if (rows.length > 0) {
         const { error: insertError } = await adminClient.from("action_items").insert(rows);
         if (!insertError) actionItemsCreated = rows.length;
       }
+    }
+
+    // Fire-and-forget push notification for newly triaged urgent emails
+    const newUrgentCount = categories.urgent.length;
+    if (newUrgentCount > 0) {
+      const pushPayload = {
+        user_id: user.id,
+        title: `${newUrgentCount} urgent email${newUrgentCount > 1 ? "s" : ""} need attention`,
+        body: newUrgentCount === 1
+          ? `From: ${categories.urgent[0].from}`
+          : `${categories.urgent.slice(0, 2).map((e: any) => e.from.split("<")[0].trim() || e.from).join(", ")}${newUrgentCount > 2 ? ` +${newUrgentCount - 2} more` : ""}`,
+        url: "/email",
+        tag: "urgent-emails",
+      };
+      fetch(
+        `${Deno.env.get("SUPABASE_URL")}/functions/v1/web-push`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify(pushPayload),
+        }
+      ).catch((e) => console.warn("web-push fire-and-forget failed:", e));
     }
 
     return new Response(

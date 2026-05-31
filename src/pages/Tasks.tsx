@@ -11,6 +11,12 @@ import { ToastAction } from "@/components/ui/toast";
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+const SCAN_COOLDOWN_MS = 5 * 60 * 1000;
+
+function lastScanKey(userId: string) {
+  return `task_extract_last_run_${userId}`;
+}
+
 export default function Tasks() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -18,22 +24,46 @@ export default function Tasks() {
   const [lastScannedAt, setLastScannedAt] = useState<Date | null>(null);
   const [suggestionRefresh, setSuggestionRefresh] = useState(0);
 
-  const scanInboxForTasks = async () => {
+  // silent=true suppresses the "no new tasks" toast (used for auto-scan on mount)
+  const scanInboxForTasks = async (silent = false) => {
     setScanning(true);
     const { data, error } = await supabase.functions.invoke("task-extract", { body: {} });
     if (error || data?.error) {
-      toast({ title: "Scan failed", description: data?.error || error?.message || "Couldn't scan inbox", variant: "destructive" });
+      if (!silent) {
+        toast({ title: "Scan failed", description: data?.error || error?.message || "Couldn't scan inbox", variant: "destructive" });
+      }
     } else {
       const count = data?.suggested ?? 0;
-      setLastScannedAt(new Date());
-      toast({
-        title: count > 0 ? `${count} task${count === 1 ? "" : "s"} found` : "No new tasks found",
-        description: count > 0 ? "Review the suggestions below." : "Your inbox is clear of action items.",
-      });
+      const now = new Date();
+      setLastScannedAt(now);
+      if (!silent || count > 0) {
+        toast({
+          title: count > 0 ? `${count} task${count === 1 ? "" : "s"} found` : "No new tasks found",
+          description: count > 0 ? "Review the suggestions below." : "Your inbox is clear of action items.",
+        });
+      }
       setSuggestionRefresh(n => n + 1);
     }
     setScanning(false);
   };
+
+  // Auto-scan on mount if never run or cooldown elapsed
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const key = lastScanKey(session.user.id);
+      const lastRaw = localStorage.getItem(key);
+      if (lastRaw) {
+        const lastMs = parseInt(lastRaw, 10);
+        setLastScannedAt(new Date(lastMs));
+        if (Date.now() - lastMs < SCAN_COOLDOWN_MS) return;
+      }
+      localStorage.setItem(key, String(Date.now()));
+      scanInboxForTasks(true);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-background pt-[var(--header-h)]">
@@ -59,7 +89,11 @@ export default function Tasks() {
             </p>
           </div>
           <button
-            onClick={scanInboxForTasks}
+            onClick={async () => {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session) localStorage.setItem(lastScanKey(session.user.id), String(Date.now()));
+              scanInboxForTasks();
+            }}
             disabled={scanning}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
           >
@@ -134,14 +168,13 @@ function SuggestedTasks({ onAccepted }: { onAccepted?: () => void }) {
   const dismiss = async (id: string) => {
     const item = items.find(i => i.id === id);
     setItems(prev => prev.filter(i => i.id !== id));
-    const timer = setTimeout(async () => {
-      await supabase.from("action_items").delete().eq("id", id);
-    }, 4000);
+    // Soft-delete preserves the signal for AI dedup — dismissed tasks won't be re-suggested
+    await supabase.from("action_items").update({ status: "dismissed" } as any).eq("id", id);
     toast({
       title: "Suggestion dismissed",
       action: (
-        <ToastAction altText="Undo" onClick={() => {
-          clearTimeout(timer);
+        <ToastAction altText="Undo" onClick={async () => {
+          await supabase.from("action_items").update({ status: "suggested" } as any).eq("id", id);
           if (item) setItems(prev => [item, ...prev].sort((a, b) => (PRIORITY_SORT[a.priority] ?? 1) - (PRIORITY_SORT[b.priority] ?? 1)));
         }}>
           Undo
@@ -161,17 +194,19 @@ function SuggestedTasks({ onAccepted }: { onAccepted?: () => void }) {
     setAcceptingAll(false);
   };
 
-  const dismissAll = () => {
+  const dismissAll = async () => {
     const backup = [...items];
     const ids = items.map(i => i.id);
     setItems([]);
-    const timer = setTimeout(async () => {
-      await supabase.from("action_items").delete().in("id", ids);
-    }, 5000);
+    // Soft-delete all — preserves signals for AI dedup
+    await supabase.from("action_items").update({ status: "dismissed" } as any).in("id", ids);
     toast({
       title: `${ids.length} suggestions dismissed`,
       action: (
-        <ToastAction altText="Undo" onClick={() => { clearTimeout(timer); setItems(backup); }}>
+        <ToastAction altText="Undo" onClick={async () => {
+          await supabase.from("action_items").update({ status: "suggested" } as any).in("id", ids);
+          setItems(backup);
+        }}>
           Undo
         </ToastAction>
       ),

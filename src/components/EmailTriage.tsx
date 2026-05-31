@@ -371,6 +371,8 @@ const EmailCard = ({ email, dimmed = false, onCategoryChange, onArchive, onMarkR
   const [generatedDraft, setGeneratedDraft] = useState<string | null>(null);
   const [draftSaved, setDraftSaved] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Prevents re-querying draft_actions on every expand/collapse cycle
+  const checkedForDraftRef = useRef(false);
 
   const displayName = email.from_name || email.from_address;
 
@@ -434,6 +436,27 @@ const EmailCard = ({ email, dimmed = false, onCategoryChange, onArchive, onMarkR
         // fall through — will show ai_summary instead
       } finally {
         setLoadingBody(false);
+      }
+    }
+
+    // Load any existing pending draft so user doesn't accidentally generate a duplicate
+    if (!checkedForDraftRef.current && !generatedDraft && canDraft) {
+      checkedForDraftRef.current = true;
+      try {
+        const { data: pendingDraft } = await supabase
+          .from("draft_actions")
+          .select("id, body")
+          .eq("nylas_message_id", email.nylas_message_id)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (pendingDraft?.body) {
+          setGeneratedDraft(pendingDraft.body);
+          setDraftSaved(true);
+        }
+      } catch {
+        // non-critical — user can still generate a new draft
       }
     }
 
@@ -1082,7 +1105,7 @@ export const EmailTriage = () => {
     setTriaging(true);
     setNeedsReconnect(false);
     try {
-      const { data, error } = await supabase.functions.invoke("email-triage", { body: { force: true } });
+      const { data, error } = await supabase.functions.invoke("email-triage", { body: {} });
       if (error) throw error;
       if (data?.error) {
         if (data?.code === "RECONNECT_REQUIRED") {
@@ -1099,6 +1122,10 @@ export const EmailTriage = () => {
           description: `${agentName} extracted tasks from your emails`,
         });
       }
+      // Fire calendar task-extract in background
+      supabase.functions.invoke("task-extract", { body: {} }).catch(e =>
+        console.warn("background task-extract after triage failed:", e)
+      );
     } catch (err: any) {
       const msg = err?.message || "";
       if (msg.includes("expired") || msg.includes("reconnect") || msg.includes("Re-authentication")) {
@@ -1270,8 +1297,11 @@ export const EmailTriage = () => {
       {/* Hide tabs + list when searching */}
       {searchQuery.trim().length > 1 ? null : <>
 
-      {/* Category Tabs — counts show only pending (un-replied) */}
-      <div className="grid grid-cols-4 gap-2 mb-6" style={{ animation: "fade-up 0.3s ease-out 0.05s both" }}>
+      {/* Category Tabs — horizontal scrollable strip so labels are always readable */}
+      <div
+        className="flex gap-2 mb-6 overflow-x-auto pb-1 scrollbar-none"
+        style={{ animation: "fade-up 0.3s ease-out 0.05s both", scrollbarWidth: "none" }}
+      >
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const count = stats[tab.id as keyof typeof stats] || 0;
@@ -1280,15 +1310,21 @@ export const EmailTriage = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`glass-card rounded-xl p-3 text-center transition-all duration-200 ${
+              className={`glass-card flex items-center gap-2 px-3 py-2.5 rounded-xl shrink-0 transition-all duration-200 ${
                 isActive ? `ring-2 ${tab.ring} ${tab.bg}` : "hover:bg-muted/50"
               }`}
             >
-              <Icon className={`w-5 h-5 mx-auto mb-1 ${tab.color}`} />
-              <p className="text-xl font-bold text-foreground">{count}</p>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <Icon className={`w-4 h-4 shrink-0 ${tab.color}`} />
+              <span className={`text-sm font-semibold whitespace-nowrap ${
+                isActive ? "text-foreground" : "text-muted-foreground"
+              }`}>
                 {tab.label}
-              </p>
+              </span>
+              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center transition-colors ${
+                isActive ? `${tab.bg} ${tab.color}` : "bg-muted text-muted-foreground"
+              }`}>
+                {count}
+              </span>
             </button>
           );
         })}

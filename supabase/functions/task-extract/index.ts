@@ -1,6 +1,7 @@
-// Smart task extraction from email_metadata (already AI-triaged) + upcoming
-// calendar events. Reads from DB — no extra Nylas email API calls.
-// Inserts rows with status='suggested' for user review in the Tasks page.
+// Calendar task extraction with a 15-minute cache.
+// Email tasks are generated inside email-triage (unified pipeline) — this
+// function handles upcoming calendar events only, so it can run frequently
+// without hammering either Groq or the Nylas API.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -12,6 +13,7 @@ const corsHeaders = {
 };
 
 const NYLAS_BASE = "https://api.us.nylas.com";
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 async function getNylasGrant(admin: any, userId: string): Promise<{ grantId: string } | null> {
   const { data } = await admin
@@ -94,76 +96,94 @@ serve(async (req) => {
     const nylasApiKey = Deno.env.get("NYLAS_API_KEY")!;
     const groqApiKey = Deno.env.get("GROQ_API_KEY")!;
 
-    // ── 1. Pull already-triaged urgent/needs_reply emails from DB (last 7 days) ──
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: emailRows } = await admin
-      .from("email_metadata")
-      .select("nylas_message_id, from_address, from_name, subject, ai_summary, ai_reason, category, priority_score, received_at")
+    // ── 1. Calendar events — cache-first (15-min TTL) ────────────────────────────
+    const cacheThreshold = new Date(Date.now() - CACHE_TTL_MS).toISOString();
+    const { data: cachedRows } = await admin
+      .from("calendar_events")
+      .select("event_id, title, start_time, attendees, description")
       .eq("user_id", user.id)
-      .in("category", ["urgent", "needs_reply"])
-      .gte("received_at", sevenDaysAgo)
-      .order("priority_score", { ascending: false })
-      .limit(20);
+      .gte("fetched_at", cacheThreshold);
 
-    // ── 2. Fetch upcoming calendar events ────────────────────────────────────────
-    const grant = await getNylasGrant(admin, user.id);
-    const calendarEvents = grant
-      ? await fetchUpcomingEvents(grant.grantId, nylasApiKey)
-      : [];
+    let calendarEvents: any[];
+    const fromCache = !!(cachedRows && cachedRows.length > 0);
 
-    // ── 3. Dedup — skip anything already suggested/created ────────────────────────
+    if (fromCache) {
+      calendarEvents = cachedRows!.map((r: any) => ({
+        id: r.event_id,
+        title: r.title,
+        start: r.start_time || "",
+        attendees: r.attendees || "",
+        description: r.description || "",
+      }));
+    } else {
+      // Cache miss — fetch fresh from Nylas then write cache
+      const grant = await getNylasGrant(admin, user.id);
+      calendarEvents = grant
+        ? await fetchUpcomingEvents(grant.grantId, nylasApiKey)
+        : [];
+
+      if (calendarEvents.length > 0) {
+        // Replace all stale rows for this user atomically-ish
+        // (delete-then-insert: acceptable because cache is ephemeral)
+        await admin.from("calendar_events").delete().eq("user_id", user.id);
+        await admin.from("calendar_events").insert(
+          calendarEvents.map((e: any) => ({
+            user_id: user.id,
+            event_id: e.id,
+            title: e.title,
+            start_time: e.start || null,
+            attendees: e.attendees || null,
+            description: e.description || null,
+          }))
+        );
+      }
+    }
+
+    // ── 2. Dedup — skip events already in action_items ───────────────────────────
     const { data: existing } = await admin
       .from("action_items")
       .select("meeting_summary")
       .eq("user_id", user.id)
-      .in("source", ["email_metadata", "calendar_event", "ai_email_extract"]);
+      .not("meeting_summary", "is", null);
     const seenKeys = new Set((existing || []).map((r: any) => r.meeting_summary));
 
-    const newEmails = (emailRows || []).filter(
-      (e: any) => !seenKeys.has(`email:${e.nylas_message_id}`)
-    );
     const newEvents = calendarEvents.filter(
       (e: any) => !seenKeys.has(`calendar:${e.id}`)
     );
 
-    if (!newEmails.length && !newEvents.length) {
-      return new Response(JSON.stringify({ suggested: 0 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!newEvents.length) {
+      return new Response(
+        JSON.stringify({ suggested: 0, fromCache }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // ── 4. Build AI prompt ────────────────────────────────────────────────────────
+    // ── 3. Build AI prompt (calendar only) ───────────────────────────────────────
     const today = new Date().toISOString().slice(0, 10);
+    const calendarBlock = newEvents.map((e: any, i: number) => {
+      const when = e.start
+        ? new Date(e.start).toLocaleString("en-US", {
+            weekday: "short", month: "short", day: "numeric",
+            hour: "2-digit", minute: "2-digit",
+          })
+        : "TBD";
+      return `[C${i}] "${e.title}" on ${when}${e.attendees ? ` with ${e.attendees}` : ""}`;
+    }).join("\n");
 
-    const emailBlock = newEmails.length > 0
-      ? `## EMAILS REQUIRING ACTION\n${newEmails.map((e: any, i: number) => {
-          const from = e.from_name ? `${e.from_name} <${e.from_address}>` : e.from_address;
-          return `[E${i}] From: ${from} | Subject: ${e.subject}\nSummary: ${e.ai_summary || e.ai_reason || "(no summary)"}`;
-        }).join("\n\n")}`
-      : "";
-
-    const calendarBlock = newEvents.length > 0
-      ? `## UPCOMING CALENDAR EVENTS\n${newEvents.map((e: any, i: number) => {
-          const when = e.start ? new Date(e.start).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
-          return `[C${i}] "${e.title}" on ${when}${e.attendees ? ` with ${e.attendees}` : ""}`;
-        }).join("\n")}`
-      : "";
-
-    const prompt = `Today is ${today}. Extract concrete, actionable tasks the user needs to do from the following data.
-
-${emailBlock}
+    const prompt = `Today is ${today}. Extract concrete, actionable tasks from these upcoming calendar events.
 
 ${calendarBlock}
 
 RULES:
-- From emails: extract EXPLICIT tasks the user must act on (reply, review, send, sign, approve, decide, schedule). Skip FYI-only or newsletters.
-- From calendar events: generate a PREP task if the meeting needs preparation (e.g. "Prepare slides for Product Review on Wed"), and a FOLLOW-UP task if it likely produces follow-up work (e.g. "Send meeting notes after Team Standup on Mon"). Only generate these if they make sense — skip one-on-ones with no context, blocked-time events, personal appointments.
-- Be specific and actionable. Write titles in imperative form: "Send Q3 report to Sarah", "Prepare demo for investor call".
-- Set due_date if there's a clear deadline or the event has a date.
-- Skip tasks already obvious from the summary (don't duplicate).
+- Generate a PREP task only if the meeting clearly needs preparation (e.g. "Prepare slides for Product Review on Wed").
+- Generate a FOLLOW-UP task only if the meeting typically produces follow-up work (e.g. "Send notes after Team Standup on Mon").
+- Skip one-on-ones with no context, blocked-time events, and personal appointments.
+- Write titles in imperative form: "Prepare demo for investor call".
+- For prep tasks, set due_date to the event date. For follow-up tasks, set to the day after.
+- If a meeting generates neither a useful prep nor follow-up, omit it entirely.
 
 Return ONLY a JSON array, no markdown:
-[{"source_type": "email"|"calendar", "source_index": number, "title": "...", "due_date": "YYYY-MM-DD or null", "priority": "high|medium|low"}]`;
+[{"source_index": number, "title": "...", "due_date": "YYYY-MM-DD or null", "priority": "high|medium|low", "task_type": "prep|followup"}]`;
 
     const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -184,7 +204,11 @@ Return ONLY a JSON array, no markdown:
 
     const aiData = await aiRes.json();
     const raw = aiData.choices?.[0]?.message?.content || "[]";
-    const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+    const cleaned = raw
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```$/i, "")
+      .trim();
     let tasks: any[] = [];
     try {
       tasks = JSON.parse(cleaned);
@@ -194,58 +218,46 @@ Return ONLY a JSON array, no markdown:
     }
 
     if (!tasks.length) {
-      return new Response(JSON.stringify({ suggested: 0 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ suggested: 0 }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // ── 5. Build DB rows ──────────────────────────────────────────────────────────
+    // ── 4. Build and insert DB rows ───────────────────────────────────────────────
     const rows = tasks
-      .filter((t: any) => t.title && (t.source_type === "email" || t.source_type === "calendar"))
-      .map((t: any): any | null => {
-        const isEmail = t.source_type === "email";
-        const idx = Number(t.source_index);
-
-        if (isEmail) {
-          const e = newEmails[idx];
-          if (!e) return null;
-          const from = e.from_name ? `${e.from_name} <${e.from_address}>` : e.from_address;
-          return {
-            user_id: user.id,
-            title: String(t.title).slice(0, 200),
-            description: `From email: "${e.subject}"`,
-            due_date: t.due_date && /^\d{4}-\d{2}-\d{2}$/.test(t.due_date) ? t.due_date : null,
-            priority: ["high","medium","low"].includes(t.priority) ? t.priority : "medium",
-            status: "suggested",
-            source: "email_metadata",
-            meeting_summary: `email:${e.nylas_message_id}`,
-            meeting_date: null,
-          };
-        } else {
-          const e = newEvents[idx];
-          if (!e) return null;
-          const eventDate = e.start ? e.start.slice(0, 10) : null;
-          return {
-            user_id: user.id,
-            title: String(t.title).slice(0, 200),
-            description: `Meeting: "${e.title}"${e.attendees ? ` with ${e.attendees}` : ""}`,
-            due_date: t.due_date && /^\d{4}-\d{2}-\d{2}$/.test(t.due_date)
-              ? t.due_date
-              : eventDate,
-            priority: ["high","medium","low"].includes(t.priority) ? t.priority : "medium",
-            status: "suggested",
-            source: "calendar_event",
-            meeting_summary: `calendar:${e.id}`,
-            meeting_date: e.start ? e.start : null,
-          };
+      .filter((t: any) => t.title && typeof t.source_index === "number")
+      .map((t: any) => {
+        const e = newEvents[t.source_index];
+        if (!e) return null;
+        const eventDate = e.start ? e.start.slice(0, 10) : null;
+        let dueDate: string | null = t.due_date && /^\d{4}-\d{2}-\d{2}$/.test(t.due_date)
+          ? t.due_date
+          : eventDate;
+        if (t.task_type === "followup" && eventDate && !t.due_date) {
+          const d = new Date(eventDate);
+          d.setDate(d.getDate() + 1);
+          dueDate = d.toISOString().slice(0, 10);
         }
+        return {
+          user_id: user.id,
+          title: String(t.title).slice(0, 200),
+          description: `Meeting: "${e.title}"${e.attendees ? ` with ${e.attendees}` : ""}`,
+          due_date: dueDate,
+          priority: ["high", "medium", "low"].includes(t.priority) ? t.priority : "medium",
+          status: "suggested",
+          source: "calendar_event",
+          meeting_summary: `calendar:${e.id}`,
+          meeting_date: e.start || null,
+        };
       })
       .filter(Boolean);
 
     if (!rows.length) {
-      return new Response(JSON.stringify({ suggested: 0 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ suggested: 0 }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const { error: insErr } = await admin.from("action_items").insert(rows);
@@ -256,9 +268,10 @@ Return ONLY a JSON array, no markdown:
       });
     }
 
-    return new Response(JSON.stringify({ suggested: rows.length }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ suggested: rows.length, fromCache }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
 
   } catch (e: any) {
     console.error("task-extract error:", e);

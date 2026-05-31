@@ -1,35 +1,54 @@
 import { useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
-const STORE_KEY = "normy_push_sent";
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY ?? "";
 
-function getSentStore(): Record<string, number> {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch { return {}; }
-}
-
-function saveSentStore(store: Record<string, number>) {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch {}
-}
-
-function isAlreadySent(key: string): boolean {
-  return !!getSentStore()[key];
-}
-
-function markSent(key: string) {
-  const store = getSentStore();
-  store[key] = Date.now();
-  // Prune entries older than 7 days
-  const cutoff = Date.now() - 7 * 86_400_000;
-  for (const k of Object.keys(store)) {
-    if (store[k] < cutoff) delete store[k];
-  }
-  saveSentStore(store);
+function urlBase64ToUint8Array(b64: string): Uint8Array {
+  const padding = "=".repeat((4 - (b64.length % 4)) % 4);
+  const base64 = (b64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
 export type PushPermission = "granted" | "denied" | "default" | "unsupported";
 
-export function usePushNotifications() {
-  const supported = typeof Notification !== "undefined";
+const supported =
+  typeof Notification !== "undefined" &&
+  "serviceWorker" in navigator &&
+  "PushManager" in window;
 
+async function saveSubscription(sub: PushSubscription): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+  const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
+  await supabase.from("push_subscriptions").upsert(
+    {
+      user_id: session.user.id,
+      endpoint: json.endpoint,
+      p256dh: json.keys.p256dh,
+      auth: json.keys.auth,
+    },
+    { onConflict: "user_id,endpoint" }
+  );
+}
+
+async function getOrCreateSubscription(): Promise<PushSubscription | null> {
+  if (!supported || !VAPID_PUBLIC_KEY) return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) return existing;
+    return await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+  } catch (e) {
+    console.warn("PushManager.subscribe failed:", e);
+    return null;
+  }
+}
+
+export function usePushNotifications() {
   const [permission, setPermission] = useState<PushPermission>(() => {
     if (!supported) return "unsupported";
     return Notification.permission as PushPermission;
@@ -38,38 +57,43 @@ export function usePushNotifications() {
   const requestPermission = useCallback(async (): Promise<PushPermission> => {
     if (!supported) return "unsupported";
     try {
-      const result = await Notification.requestPermission();
-      setPermission(result as PushPermission);
-      return result as PushPermission;
+      const result = (await Notification.requestPermission()) as PushPermission;
+      setPermission(result);
+      if (result === "granted") {
+        const sub = await getOrCreateSubscription();
+        if (sub) await saveSubscription(sub);
+      }
+      return result;
     } catch {
       return "denied";
     }
-  }, [supported]);
+  }, []);
 
-  const notify = useCallback((
-    title: string,
-    body: string,
-    key: string,
-    options?: { icon?: string; tag?: string }
-  ) => {
+  // Auto-subscribe if permission already granted (e.g. returning user)
+  const ensureSubscribed = useCallback(async (): Promise<void> => {
     if (!supported || Notification.permission !== "granted") return;
-    if (isAlreadySent(key)) return;
-    markSent(key);
+    const sub = await getOrCreateSubscription();
+    if (sub) await saveSubscription(sub);
+  }, []);
 
-    try {
-      const n = new Notification(title, {
-        body,
-        icon: "/favicon.ico",
-        badge: "/favicon.ico",
-        tag: options?.tag || key,
-        requireInteraction: false,
-        ...options,
-      });
-      n.onclick = () => { window.focus(); n.close(); };
-    } catch (e) {
-      console.warn("Push notification failed:", e);
-    }
-  }, [supported]);
+  // Fallback: direct browser notification while tab is open
+  const notify = useCallback(
+    (title: string, body: string, _key: string, opts?: { tag?: string }) => {
+      if (!supported || Notification.permission !== "granted") return;
+      try {
+        const n = new Notification(title, {
+          body,
+          icon: "/icon-192.png",
+          badge: "/favicon.png",
+          tag: opts?.tag,
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+      } catch (e) {
+        console.warn("Notification failed:", e);
+      }
+    },
+    []
+  );
 
-  return { permission, supported, requestPermission, notify };
+  return { permission, supported, requestPermission, ensureSubscribed, notify };
 }
