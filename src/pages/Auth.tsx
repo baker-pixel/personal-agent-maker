@@ -40,7 +40,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: { emailRedirectTo: `${window.location.origin}/onboarding` },
@@ -48,6 +48,8 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
     setLoading(false);
     if (error) {
       toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
+    } else if (data.user?.identities?.length === 0) {
+      toast({ title: "Account already exists", description: "An account with this email already exists. Try signing in instead.", variant: "destructive" });
     } else {
       setEmailSent("confirm");
     }

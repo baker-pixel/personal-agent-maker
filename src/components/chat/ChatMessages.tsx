@@ -1,6 +1,7 @@
 import { Loader2, Sparkles, Inbox, Check, Sun, MailSearch, Clock, CalendarClock, FileText, PenLine, CalendarSearch, FileBarChart, ChevronRight, RefreshCw, Pencil } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useState, useCallback, useMemo } from "react";
+import { stripAgentBlocks } from "@/lib/stripAgentBlocks";
 import { useDraftActions } from "@/hooks/useDraftActions";
 import { toast } from "@/hooks/use-toast";
 import type { Message } from "../OrchestratorChat";
@@ -16,21 +17,41 @@ interface DraftBlock {
 
 function extractDrafts(content: string): DraftBlock[] {
   const drafts: DraftBlock[] = [];
-  const regex = /```draft-json\s*\n([\s\S]*?)\n```/g;
+
+  const normalize = (p: any): DraftBlock | null => {
+    const to_email = (p.to_email || p.to || "").trim();
+    if (!to_email || !to_email.includes("@")) return null;
+    return { to_email, to_name: p.to_name, subject: p.subject || "", body: p.body || "", thread_id: p.thread_id, in_reply_to: p.in_reply_to };
+  };
+
+  // Fenced blocks
+  const fencedRegex = /```draft-json\s*\n([\s\S]*?)\n```/g;
   let match;
-  while ((match = regex.exec(content)) !== null) {
-    try {
-      const parsed = JSON.parse(match[1].trim());
-      if (parsed.to_email && parsed.subject && parsed.body) {
-        drafts.push(parsed);
+  while ((match = fencedRegex.exec(content)) !== null) {
+    try { const n = normalize(JSON.parse(match[1].trim())); if (n) drafts.push(n); } catch {}
+  }
+
+  // Bare JSON fallback
+  if (drafts.length === 0) {
+    let depth = 0, start = -1, buf = "";
+    for (let i = 0; i < content.length; i++) {
+      const c = content[i];
+      if (c === "{") { if (depth === 0) { start = i; buf = ""; } depth++; }
+      if (depth > 0) buf += c;
+      if (c === "}") {
+        depth--;
+        if (depth === 0 && start !== -1) {
+          try { const p = JSON.parse(buf); const n = normalize(p); if (n) drafts.push(n); } catch {}
+          start = -1; buf = "";
+        }
       }
-    } catch {}
+    }
   }
   return drafts;
 }
 
 function stripDraftBlocks(content: string): string {
-  return content.replace(/```draft-json\s*\n[\s\S]*?\n```/g, "").trim();
+  return stripAgentBlocks(content);
 }
 
 interface NextStepItem {

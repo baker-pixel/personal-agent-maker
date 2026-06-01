@@ -8,6 +8,7 @@ import { DelegateSidebar } from "@/components/chat/DelegateSidebar";
 import ReactMarkdown from "react-markdown";
 import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 import { CalendarJsonParser } from "@/components/chat/CalendarJsonParser";
+import { stripAgentBlocks } from "@/lib/stripAgentBlocks";
 import { useAgent } from "@/contexts/AgentContext";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { NotConnectedState } from "@/components/NotConnectedState";
@@ -117,7 +118,7 @@ export default function DecisionText() {
                   {msg.role === "agent" ? (
                     <>
                       <div className="prose prose-sm max-w-none">
-                        <ReactMarkdown>{msg.text.replace(/```draft-json[\s\S]*?```/g, "").replace(/```calendar-json[\s\S]*?```/g, "").replace(/```cancel-event-json[\s\S]*?```/g, "")}</ReactMarkdown>
+                        <ReactMarkdown>{stripAgentBlocks(msg.text)}</ReactMarkdown>
                       </div>
                       <DraftJsonParser text={msg.text} />
                       <CalendarJsonParser text={msg.text} />

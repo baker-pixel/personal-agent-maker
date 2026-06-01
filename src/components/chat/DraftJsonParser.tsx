@@ -22,18 +22,56 @@ export function DraftJsonParser({ text }: { text: string }) {
 
   const drafts = useMemo(() => {
     const results: DraftData[] = [];
-    const regex = /```draft-json\s*\n([\s\S]*?)\n```/g;
+
+    // Normalize: accept "to" as alias for "to_email", allow empty subject/body
+    const normalize = (p: any): DraftData | null => {
+      const to_email = (p.to_email || p.to || "").trim();
+      if (!to_email || !to_email.includes("@")) return null;
+      return {
+        to_email,
+        to_name: p.to_name || undefined,
+        subject: p.subject || "",
+        body: p.body || "",
+      };
+    };
+
+    // Primary: properly fenced ```draft-json``` block
+    const fencedRegex = /```draft-json\s*\n([\s\S]*?)\n```/g;
     let match;
-    while ((match = regex.exec(text)) !== null) {
+    while ((match = fencedRegex.exec(text)) !== null) {
       try {
-        const parsed = JSON.parse(match[1].trim());
-        if (parsed.to_email && parsed.subject && parsed.body) {
-          results.push(parsed);
+        const n = normalize(JSON.parse(match[1].trim()));
+        if (n) results.push(n);
+      } catch { /* skip malformed */ }
+    }
+
+    // Fallback: bare JSON object the model emitted without code fences.
+    // Walk character-by-character to find balanced {…} blocks.
+    if (results.length === 0) {
+      let depth = 0, start = -1, buf = "";
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (c === "{") {
+          if (depth === 0) { start = i; buf = ""; }
+          depth++;
         }
-      } catch {
-        // skip malformed
+        if (depth > 0) buf += c;
+        if (c === "}") {
+          depth--;
+          if (depth === 0 && start !== -1) {
+            try {
+              const parsed = JSON.parse(buf);
+              if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+                const n = normalize(parsed);
+                if (n) results.push(n);
+              }
+            } catch { /* skip */ }
+            start = -1; buf = "";
+          }
+        }
       }
     }
+
     return results;
   }, [text]);
 
