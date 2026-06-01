@@ -81,8 +81,7 @@ Deno.serve(async (req) => {
     };
     if (cc) sendPayload.cc = parseRecipients(cc);
     if (bcc) sendPayload.bcc = parseRecipients(bcc);
-    if (replyToMessageId) sendPayload.reply_to_message_id = replyToMessageId;
-    if (threadId) sendPayload.reply_to_message_id = replyToMessageId || threadId;
+    if (replyToMessageId || threadId) sendPayload.reply_to_message_id = replyToMessageId || threadId;
 
     const sendRes = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/messages/send`, {
       method: "POST",

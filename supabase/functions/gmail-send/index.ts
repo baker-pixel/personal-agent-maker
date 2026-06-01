@@ -107,16 +107,28 @@ Deno.serve(async (req) => {
       throw tokenError;
     }
 
+    // Fetch user's email signature and append if set
+    const { data: prefs } = await adminClient
+      .from("user_preferences")
+      .select("email_signature")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const signature = prefs?.email_signature?.trim();
+    const fullBody = signature ? `${draft.body}\n\n${signature}` : draft.body;
+
     // Build and send the email via Nylas
-    const toRecipients = (draft.to_email as string)
+    const emails = (draft.to_email as string)
       .split(",")
       .map((e: string) => e.trim())
-      .filter(Boolean)
-      .map((e: string) => ({ email: e }));
+      .filter(Boolean);
+    const toRecipients = emails.map((e: string, i: number) => ({
+      email: e,
+      ...(i === 0 && draft.to_name ? { name: draft.to_name as string } : {}),
+    }));
 
     const sendBody: Record<string, any> = {
       subject: draft.subject,
-      body: draft.body,
+      body: fullBody,
       to: toRecipients,
     };
     if (draft.thread_id) {

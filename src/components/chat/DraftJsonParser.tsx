@@ -94,6 +94,7 @@ export function DraftJsonParser({ text }: { text: string }) {
 
   const handleSendNow = async (draft: DraftData, index: number) => {
     setSendingIndices((prev) => new Set(prev).add(index));
+    let savedId: string | null = null;
     try {
       const saved = await saveDraft({
         to_email: draft.to_email,
@@ -101,13 +102,20 @@ export function DraftJsonParser({ text }: { text: string }) {
         subject: draft.subject,
         body: draft.body,
       });
-      if (!saved) throw new Error("Could not save draft");
+      if (!saved) throw new Error("Could not save draft — are you signed in?");
+      savedId = saved.id;
       const { success, error } = await approveDraft(saved.id);
       if (!success) throw new Error(error || "Send failed");
       setSentIndices((prev) => new Set(prev).add(index));
       toast({ title: "Email sent", description: `Sent to ${draft.to_name || draft.to_email}` });
     } catch (err: any) {
-      toast({ title: "Failed to send", description: err.message, variant: "destructive" });
+      toast({
+        title: "Failed to send directly",
+        description: savedId
+          ? `${err.message}. Draft saved to Approval Inbox — you can send it from there.`
+          : err.message,
+        variant: "destructive",
+      });
     } finally {
       setSendingIndices((prev) => { const s = new Set(prev); s.delete(index); return s; });
     }
@@ -130,7 +138,7 @@ export function DraftJsonParser({ text }: { text: string }) {
             ) : isSaved ? (
               <span className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-accent/10 text-accent">
                 <Check className="w-3.5 h-3.5" />
-                Saved to Inbox
+                Saved — review &amp; send in Approval Inbox
               </span>
             ) : (
               <>
