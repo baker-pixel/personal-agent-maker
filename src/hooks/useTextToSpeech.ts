@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const VOICE_KEY = "normy_tts_voice";
 const RATE_KEY = "normy_tts_rate";
@@ -91,6 +92,7 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
+  const fetchAbortRef = useRef<AbortController | null>(null);
   const unlockedRef = useRef(false);
   const keepAliveRef = useRef<number | null>(null);
 
@@ -178,6 +180,10 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     .trim();
 
   const stop = useCallback(() => {
+    if (fetchAbortRef.current) {
+      fetchAbortRef.current.abort();
+      fetchAbortRef.current = null;
+    }
     if (isSupported) window.speechSynthesis.cancel();
     if (audioRef.current) {
       // Detach handlers BEFORE clearing src so we don't fire spurious onerror
@@ -224,36 +230,52 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const speakElevenLabs = useCallback(async (text: string, onComplete?: () => void) => {
     try {
       setIsSpeaking(true);
+      // Abort any in-flight request before starting a new one
+      if (fetchAbortRef.current) fetchAbortRef.current.abort();
+      fetchAbortRef.current = new AbortController();
+      const signal = fetchAbortRef.current.signal;
+
       // Use direct fetch (not supabase.functions.invoke) because the SDK
       // tries to JSON-parse responses, which corrupts binary audio.
       const { data: { session } } = await supabase.auth.getSession();
       const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
       const anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const res = await fetch(`${supabaseUrl}/functions/v1/elevenlabs-tts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": anonKey,
-          "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
-        },
-        body: JSON.stringify({
-          text,
-          voice_id: elevenlabsVoiceId,
-          model_id: elevenlabsModelId,
-          stability,
-          similarity_boost: similarity,
-          speed: rate,
-        }),
+      const body = JSON.stringify({
+        text,
+        voice_id: elevenlabsVoiceId,
+        model_id: elevenlabsModelId,
+        stability,
+        similarity_boost: similarity,
+        speed: rate,
       });
+      const headers = {
+        "Content-Type": "application/json",
+        "apikey": anonKey,
+        "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
+      };
+      const url = `${supabaseUrl}/functions/v1/elevenlabs-tts`;
+
+      let res = await fetch(url, { method: "POST", headers, body, signal });
+      // 429 = rate limited — don't retry, surface immediately
+      if (res.status === 429) {
+        throw new Error("RATE_LIMITED");
+      }
+      // Retry once on 502/503 (transient upstream error — not a rate limit)
+      if (res.status === 502 || res.status === 503) {
+        await new Promise((r) => setTimeout(r, 1000));
+        if (signal.aborted) return;
+        fetchAbortRef.current = new AbortController();
+        res = await fetch(url, { method: "POST", headers, body, signal: fetchAbortRef.current.signal });
+      }
       if (!res.ok) {
         const errText = await res.text();
         throw new Error(`Premium TTS failed (${res.status}): ${errText}`);
       }
       const blob = await res.blob();
       // TTS debug log removed for production
-      const url = URL.createObjectURL(blob);
+      const blobUrl = URL.createObjectURL(blob);
       if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
-      audioUrlRef.current = url;
+      audioUrlRef.current = blobUrl;
       if (!audioRef.current) {
         audioRef.current = new Audio();
         audioRef.current.preload = "auto";
@@ -264,7 +286,7 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
       // iOS Safari requires these every time we reuse the element
       audioRef.current.setAttribute("playsinline", "true");
       (audioRef.current as any).playsInline = true;
-      audioRef.current.src = url;
+      audioRef.current.src = blobUrl;
       audioRef.current.onended = () => { setIsSpeaking(false); onComplete?.(); };
       audioRef.current.onerror = (e) => {
         console.error("[ElevenLabs TTS] audio playback error", e);
@@ -281,10 +303,21 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
         console.warn("[ElevenLabs TTS] play() rejected, falling back:", playErr?.name);
         throw playErr;
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.name === "AbortError") { setIsSpeaking(false); return; }
       console.error("[ElevenLabs TTS] failed, falling back to browser:", e);
       setIsSpeaking(false);
-      // Fallback to browser TTS so the user still hears something
+      const msg = e instanceof Error ? e.message : String(e);
+      const isApiKey = msg.includes("ELEVENLABS_API_KEY not configured");
+      const isRateLimited = msg === "RATE_LIMITED";
+      toast.error(
+        isRateLimited
+          ? "Too many requests — slow down a bit and try again."
+          : isApiKey
+          ? "Premium voice not configured — API key missing. Using browser voice instead."
+          : "Premium voice unavailable — using browser voice instead.",
+        { duration: 5000 }
+      );
       speakBrowser(text, onComplete);
     }
   }, [elevenlabsVoiceId, elevenlabsModelId, stability, similarity, rate, speakBrowser]);

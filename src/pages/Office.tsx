@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { useNavigate } from "react-router-dom";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { NotConnectedState } from "@/components/NotConnectedState";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -291,6 +293,8 @@ const officeItems = [
 export default function Office() {
   const navigate = useNavigate();
   const { agentName } = useAgent();
+  const { isConnected, integrationsLoading } = useIntegrations();
+  const gmailConnected = isConnected("gmail");
   const [briefing, setBriefing] = useState<BriefingData | null>(null);
   const [showGreeting, setShowGreeting] = useState(true);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
@@ -373,7 +377,7 @@ export default function Office() {
   const particles = useParticles();
 
   return (
-    <div className="min-h-screen bg-background overflow-hidden relative pt-[var(--header-h)]">
+    <div className="min-h-screen bg-background relative pt-[var(--header-h)]">
       {/* Ambient background blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div
@@ -411,9 +415,9 @@ export default function Office() {
       </div>
 
       {/* Top bar — pr-14 clears the fixed AppMenu button (w-8 + p-3 = ~44px from right) */}
-      <header className="relative z-10 flex items-center justify-between pl-4 sm:pl-6 pr-14 py-3 sm:py-4">
+      <header className="sticky top-[var(--header-h)] z-[55] bg-background/80 backdrop-blur-sm flex items-center justify-between pl-4 sm:pl-6 pr-14 py-3 sm:py-4">
         <button
-          onClick={() => navigate("/mode-select")}
+          onClick={() => navigate("/dashboard")}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
         >
           ← Back
@@ -421,11 +425,18 @@ export default function Office() {
         <div className="flex items-center gap-2 sm:gap-3">
           <AnalogClock size={36} />
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-            <span className="text-[11px] text-muted-foreground whitespace-nowrap">{agentName} online</span>
+            <span className={`w-2 h-2 rounded-full shrink-0 ${gmailConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+              {gmailConnected ? `${agentName} online` : "Gmail not connected"}
+            </span>
           </div>
         </div>
       </header>
+
+      {/* Not-connected banner */}
+      {!integrationsLoading && !gmailConnected && (
+        <NotConnectedState integration="both" variant="inline" agentName={agentName} />
+      )}
 
       {/* Status legend */}
       <div className="relative z-10 flex items-center justify-center mb-2 px-4">
@@ -587,9 +598,11 @@ export default function Office() {
 
                   {/* Badge for desk */}
                   {item.id === "desk" && (
-                    <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 border border-accent/20">
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                      <span className="text-xs font-medium text-accent">Agent ready</span>
+                    <div className={`mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${gmailConnected ? "bg-accent/10 border-accent/20" : "bg-amber-500/10 border-amber-500/20"}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${gmailConnected ? "bg-accent animate-pulse" : "bg-amber-500"}`} />
+                      <span className={`text-xs font-medium ${gmailConnected ? "text-accent" : "text-amber-600"}`}>
+                        {gmailConnected ? "Agent ready" : "Connect Gmail first"}
+                      </span>
                     </div>
                   )}
 

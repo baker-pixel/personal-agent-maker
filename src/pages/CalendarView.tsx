@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { PriorityLegend } from "@/components/PriorityLegend";
 import { ReconnectBanner } from "@/components/ReconnectBanner";
+import { NotConnectedState } from "@/components/NotConnectedState";
 
 interface CalendarEvent {
   id: string;
@@ -355,18 +356,7 @@ export default function CalendarView() {
             <div className="w-8" />
           </div>
         </nav>
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="text-center max-w-md">
-            <Calendar className="w-12 h-12 text-accent mx-auto mb-4" />
-            <h2 className="font-display text-2xl font-semibold mb-2">Connect Calendar</h2>
-            <p className="text-muted-foreground mb-4">
-              Connect your Google Calendar in Settings to view and manage your schedule here.
-            </p>
-            <Button onClick={() => navigate("/settings")} className="bg-accent text-accent-foreground hover:bg-accent/90">
-              Go to Settings
-            </Button>
-          </div>
-        </div>
+        <NotConnectedState integration="calendar" />
       </div>
     );
   }

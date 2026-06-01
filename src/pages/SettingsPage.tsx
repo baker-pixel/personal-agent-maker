@@ -36,6 +36,7 @@ interface AgentSettings {
   decisionStyle: string;
   notifyEmail: boolean;
   notifyPush: boolean;
+  emailSignature: string;
 }
 
 const defaults: AgentSettings = {
@@ -46,6 +47,7 @@ const defaults: AgentSettings = {
   decisionStyle: "careful",
   notifyEmail: true,
   notifyPush: false,
+  emailSignature: "",
 };
 
 type SettingsTab = "home" | "profile" | "integrations" | "email" | "notifications" | "account";
@@ -141,7 +143,7 @@ export default function Settings() {
       if (user) {
         const { data } = await supabase
           .from("user_preferences")
-          .select("agent_name, tone, email_length, priority_visibility, decision_style")
+          .select("agent_name, tone, email_length, priority_visibility, decision_style, email_signature")
           .eq("user_id", user.id)
           .maybeSingle();
         if (data) {
@@ -152,6 +154,7 @@ export default function Settings() {
             emailLength: data.email_length ?? prev.emailLength,
             priorityVisibility: data.priority_visibility ?? prev.priorityVisibility,
             decisionStyle: data.decision_style ?? prev.decisionStyle,
+            emailSignature: (data as any).email_signature ?? prev.emailSignature,
           }));
           return;
         }
@@ -211,6 +214,7 @@ export default function Settings() {
               email_length: settings.emailLength,
               priority_visibility: settings.priorityVisibility,
               decision_style: settings.decisionStyle,
+              email_signature: settings.emailSignature,
               updated_at: new Date().toISOString(),
             },
             { onConflict: "user_id" }
@@ -404,6 +408,17 @@ export default function Settings() {
                 <OptionBtn key={t} selected={settings.decisionStyle === t} onClick={() => update("decisionStyle", t)}>{t.charAt(0).toUpperCase() + t.slice(1)}</OptionBtn>
               ))}
             </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Email Signature</label>
+            <textarea
+              value={settings.emailSignature}
+              onChange={(e) => update("emailSignature", e.target.value)}
+              placeholder={"Best,\nYour Name\nTitle | Company"}
+              rows={4}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:ring-1 focus:ring-accent resize-none"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Appended automatically to every email you send through Normy.</p>
           </div>
           <div className="bg-card border rounded-xl p-5 space-y-3">
             <div className="flex items-center gap-2">

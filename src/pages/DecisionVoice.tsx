@@ -13,10 +13,14 @@ import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 import { CalendarJsonParser } from "@/components/chat/CalendarJsonParser";
 import { useAgent } from "@/contexts/AgentContext";
 import { VoiceSettingsPanel } from "@/components/VoiceSettingsPanel";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { NotConnectedState } from "@/components/NotConnectedState";
 
 export default function DecisionVoice() {
   const navigate = useNavigate();
   const { agentName } = useAgent();
+  const { isConnected, integrationsLoading } = useIntegrations();
+  const gmailConnected = isConnected("gmail");
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [firstName, setFirstName] = useState<string>("");
@@ -100,7 +104,7 @@ export default function DecisionVoice() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-background flex pt-[var(--header-h)]">
+    <div className="h-[100dvh] bg-background flex pt-[var(--header-h)]">
       <DelegateSidebar
         conversations={chat.conversations}
         activeId={chat.activeConversationId}
@@ -112,8 +116,8 @@ export default function DecisionVoice() {
         agentName={agentName}
       />
 
-      <div className="flex-1 flex flex-col min-h-[100dvh]">
-        <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <nav className="border-b bg-background sticky top-0 z-50">
           <div className="container flex items-center h-14 px-4">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -123,7 +127,7 @@ export default function DecisionVoice() {
               <PanelLeft className="w-4 h-4" />
             </button>
             <button
-              onClick={() => { voice.stopConversation(); navigate("/mode-select"); }}
+              onClick={() => { voice.stopConversation(); navigate("/dashboard"); }}
               className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -168,9 +172,12 @@ export default function DecisionVoice() {
               New chat
             </button>
           </div>
+          {!integrationsLoading && !gmailConnected && (
+            <NotConnectedState integration="both" variant="inline" agentName={agentName} />
+          )}
         </nav>
 
-        <div className="flex-1 container max-w-lg py-6 px-4 overflow-y-auto">
+        <div className="flex-1 container max-w-lg mx-auto w-full py-6 px-4 overflow-y-auto min-h-0">
           {chat.loading && (
             <div className="flex items-center justify-center h-full pt-20">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

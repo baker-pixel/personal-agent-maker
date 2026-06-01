@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { NotConnectedState } from "@/components/NotConnectedState";
 import {
   ArrowLeft, Sparkles, Loader2, Check, X, Mail, Calendar,
   CheckCheck, AlertTriangle, RefreshCw,
@@ -20,6 +22,8 @@ function lastScanKey(userId: string) {
 export default function Tasks() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isConnected, integrationsLoading } = useIntegrations();
+  const gmailConnected = isConnected("gmail");
   const [scanning, setScanning] = useState(false);
   const [lastScannedAt, setLastScannedAt] = useState<Date | null>(null);
   const [suggestionRefresh, setSuggestionRefresh] = useState(0);
@@ -75,6 +79,11 @@ export default function Tasks() {
           <ArrowLeft className="w-4 h-4" /> Dashboard
         </button>
 
+        {/* Not-connected banner */}
+        {!integrationsLoading && !gmailConnected && (
+          <NotConnectedState integration="gmail" variant="inline" />
+        )}
+
         {/* AI Scan card */}
         <div className="glass-card rounded-2xl p-4 flex items-center gap-4" style={{ animation: "fade-up 0.25s ease-out both" }}>
           <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
@@ -94,7 +103,7 @@ export default function Tasks() {
               if (session) localStorage.setItem(lastScanKey(session.user.id), String(Date.now()));
               scanInboxForTasks();
             }}
-            disabled={scanning}
+            disabled={scanning || !gmailConnected}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
           >
             {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}

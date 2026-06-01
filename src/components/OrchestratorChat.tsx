@@ -10,6 +10,7 @@ import { DashboardBriefing } from "./chat/DashboardBriefing";
 import { FileAttachmentButton, AttachmentPreview, type Attachment } from "./chat/FileAttachment";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
+import { useVoicePreferences } from "@/hooks/useVoicePreferences";
 import type { Conversation } from "@/hooks/useConversations";
 
 export type Message = { role: "user" | "assistant"; content: string; attachments?: any[] };
@@ -70,7 +71,21 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const tts = useTextToSpeech();
+  const { prefs, loaded: prefsLoaded } = useVoicePreferences();
+  const tts = useTextToSpeech({
+    remote: {
+      voiceURI: prefs.tts_voice_uri,
+      rate: prefs.tts_rate,
+      pitch: prefs.tts_pitch,
+      enabled: prefs.tts_enabled,
+      provider: prefs.tts_provider,
+      elevenlabsVoiceId: prefs.tts_elevenlabs_voice_id,
+      elevenlabsModelId: prefs.tts_elevenlabs_model_id,
+      stability: prefs.tts_stability,
+      similarity: prefs.tts_similarity,
+      loaded: prefsLoaded,
+    },
+  });
   const pendingSendRef = useRef(false);
 
   const handleVoiceResult = useCallback((text: string) => {

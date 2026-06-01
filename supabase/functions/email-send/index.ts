@@ -65,9 +65,18 @@ Deno.serve(async (req) => {
       });
     };
 
+    // Fetch user's email signature and append if set
+    const { data: prefs } = await adminClient
+      .from("user_preferences")
+      .select("email_signature")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const signature = prefs?.email_signature?.trim();
+    const fullBody = signature ? `${emailBody}\n\n${signature}` : emailBody;
+
     const sendPayload: Record<string, any> = {
       subject,
-      body: emailBody,
+      body: fullBody,
       to: parseRecipients(to),
     };
     if (cc) sendPayload.cc = parseRecipients(cc);
@@ -96,7 +105,7 @@ Deno.serve(async (req) => {
       status: "sent",
       to_email: toStr,
       subject,
-      body: emailBody,
+      body: fullBody,
       gmail_message_id: sendData.data?.id || null,
       updated_at: new Date().toISOString(),
     });

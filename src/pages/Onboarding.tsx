@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,15 @@ import { toast } from "@/hooks/use-toast";
 import {
   ArrowRight, ArrowLeft, Mail, Calendar,
   CheckCircle2, Sparkles, Shield, MessageSquare,
-  Check, Loader2, Zap,
+  Check, Loader2, Zap, Volume2,
 } from "lucide-react";
+import { ELEVENLABS_VOICES } from "@/lib/elevenlabsVoices";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface OnboardingState {
   agentName: string;
+  voiceId: string;
   tone: string;
   emailLength: string;
   priorityVisibility: string;
@@ -26,6 +28,7 @@ interface OnboardingState {
 
 const defaults: OnboardingState = {
   agentName: "",
+  voiceId: "EXAVITQu4vr4xnSDxMaL", // Sarah
   tone: "friendly",
   emailLength: "balanced",
   priorityVisibility: "important",
@@ -53,7 +56,11 @@ export default function Onboarding({ onComplete }: Props) {
   const [state, setState] = useState<OnboardingState>(defaults);
   const [saving, setSaving] = useState(false);
 
-  const TOTAL_STEPS = 4;
+  const TOTAL_STEPS = 5;
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const previewAbortRef = useRef<AbortController | null>(null);
 
   // Wait for IntegrationsContext to finish loading before reading connection state.
   // Without this, step 1 would flash "not connected" even for already-connected accounts.
@@ -96,6 +103,8 @@ export default function Onboarding({ onComplete }: Props) {
           email_length: state.emailLength,
           priority_visibility: state.priorityVisibility,
           decision_style: state.decisionStyle,
+          tts_elevenlabs_voice_id: state.voiceId,
+          tts_provider: "elevenlabs",
           updated_at: new Date().toISOString(),
         }, { onConflict: "user_id" });
 
@@ -139,9 +148,84 @@ export default function Onboarding({ onComplete }: Props) {
   const agentDisplay = state.agentName.trim() || "your agent";
 
   const getContinueLabel = () => {
-    if (step === 1) return anyConnected ? "Continue" : "Skip for now";
+    if (step === 2) return anyConnected ? "Continue" : "Skip for now";
     if (step === TOTAL_STEPS - 1) return saving ? "Setting up…" : "Go to my dashboard";
     return "Continue";
+  };
+
+  const previewVoice = async (voiceId: string) => {
+    // Abort any in-flight request so we don't fire multiple concurrent fetches
+    if (previewAbortRef.current) {
+      previewAbortRef.current.abort();
+      previewAbortRef.current = null;
+    }
+    // Stop any playing audio and free the blob URL
+    if (previewAudioRef.current) {
+      previewAudioRef.current.onended = null;
+      previewAudioRef.current.onerror = null;
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+    }
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+
+    const name = state.agentName.trim() || "your agent";
+    const text = `Hi, I'm ${name}, your personal assistant. Ready to help you take on the day.`;
+    setPreviewingVoiceId(voiceId);
+
+    const abort = new AbortController();
+    previewAbortRef.current = abort;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
+      const anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/elevenlabs-tts`, {
+        method: "POST",
+        signal: abort.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": anonKey,
+          "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
+        },
+        body: JSON.stringify({
+          text,
+          voice_id: voiceId,
+          model_id: "eleven_turbo_v2_5",
+          stability: 0.5,
+          similarity_boost: 0.75,
+          speed: 1.0,
+        }),
+      });
+
+      if (abort.signal.aborted) return;
+
+      if (res.status === 429) {
+        toast({ title: "Too many previews", description: "Please wait a moment before previewing again.", variant: "destructive" });
+        setPreviewingVoiceId(null);
+        return;
+      }
+      if (!res.ok) throw new Error(`${res.status}`);
+
+      const blob = await res.blob();
+      if (abort.signal.aborted) return;
+
+      const url = URL.createObjectURL(blob);
+      previewUrlRef.current = url;
+      const audio = new Audio(url);
+      previewAudioRef.current = audio;
+      const cleanup = () => { setPreviewingVoiceId(null); URL.revokeObjectURL(url); previewUrlRef.current = null; };
+      audio.onended = cleanup;
+      audio.onerror = cleanup;
+      await audio.play();
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+      setPreviewingVoiceId(null);
+      toast({ title: "Preview unavailable", description: "ElevenLabs API key not configured yet.", variant: "destructive" });
+    }
   };
 
   return (
@@ -227,8 +311,60 @@ export default function Onboarding({ onComplete }: Props) {
                 </div>
               )}
 
-              {/* ── Step 1: Connect accounts ──────────────────────────────── */}
+              {/* ── Step 1: Voice selection ───────────────────────────────── */}
               {step === 1 && (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-6">
+                      <Volume2 className="w-8 h-8 text-accent" />
+                    </div>
+                    <h1 className="font-display text-3xl font-bold mb-2">Pick {agentDisplay}'s voice</h1>
+                    <p className="text-muted-foreground leading-relaxed">
+                      Choose how your agent sounds. Hit play to preview.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
+                    {ELEVENLABS_VOICES.map(v => {
+                      const selected = state.voiceId === v.id;
+                      const previewing = previewingVoiceId === v.id;
+                      return (
+                        <button
+                          key={v.id}
+                          onClick={() => update("voiceId", v.id)}
+                          className={`relative text-left rounded-2xl border p-3.5 transition-all ${
+                            selected
+                              ? "border-accent bg-accent/10 shadow-sm"
+                              : "border-border bg-card hover:border-accent/40 hover:bg-accent/[0.02]"
+                          }`}
+                        >
+                          <p className={`text-sm font-semibold leading-tight ${selected ? "text-accent" : "text-foreground"}`}>
+                            {v.name}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">{v.accent}</p>
+                          <p className="text-[11px] text-muted-foreground leading-snug mt-1">{v.description}</p>
+                          <button
+                            onClick={e => { e.stopPropagation(); previewVoice(v.id); }}
+                            className={`mt-2.5 flex items-center gap-1 text-[11px] font-medium transition-colors ${
+                              previewing ? "text-accent" : "text-muted-foreground hover:text-accent"
+                            }`}
+                          >
+                            <Volume2 className={`w-3 h-3 ${previewing ? "animate-pulse" : ""}`} />
+                            {previewing ? "Playing…" : "Preview"}
+                          </button>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground text-center">
+                    Browser preview only — full premium voice activates in the app. Change anytime in Settings.
+                  </p>
+                </div>
+              )}
+
+              {/* ── Step 2: Connect accounts ──────────────────────────────── */}
+              {step === 2 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <h1 className="font-display text-3xl font-bold mb-2">Connect your accounts</h1>
@@ -309,8 +445,8 @@ export default function Onboarding({ onComplete }: Props) {
                 </div>
               )}
 
-              {/* ── Step 2: Preferences ───────────────────────────────────── */}
-              {step === 2 && (
+              {/* ── Step 3: Preferences ───────────────────────────────────── */}
+              {step === 3 && (
                 <div className="space-y-6">
                   <div className="text-center">
                     <h1 className="font-display text-3xl font-bold mb-2">How should {agentDisplay} work?</h1>
@@ -399,8 +535,8 @@ export default function Onboarding({ onComplete }: Props) {
                 </div>
               )}
 
-              {/* ── Step 3: Done ──────────────────────────────────────────── */}
-              {step === 3 && (
+              {/* ── Step 4: Done ──────────────────────────────────────────── */}
+              {step === 4 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <motion.div

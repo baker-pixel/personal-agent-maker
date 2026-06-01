@@ -9,10 +9,14 @@ import ReactMarkdown from "react-markdown";
 import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 import { CalendarJsonParser } from "@/components/chat/CalendarJsonParser";
 import { useAgent } from "@/contexts/AgentContext";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { NotConnectedState } from "@/components/NotConnectedState";
 
 export default function DecisionText() {
   const navigate = useNavigate();
   const { agentName } = useAgent();
+  const { isConnected, integrationsLoading } = useIntegrations();
+  const gmailConnected = isConnected("gmail");
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -30,7 +34,7 @@ export default function DecisionText() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-background flex pt-[var(--header-h)]">
+    <div className="h-[100dvh] bg-background flex pt-[var(--header-h)]">
       <DelegateSidebar
         conversations={chat.conversations}
         activeId={chat.activeConversationId}
@@ -42,8 +46,8 @@ export default function DecisionText() {
         agentName={agentName}
       />
 
-      <div className="flex-1 flex flex-col min-h-[100dvh]">
-        <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <nav className="border-b bg-background sticky top-0 z-50">
           <div className="container flex items-center h-14 px-4">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -52,7 +56,7 @@ export default function DecisionText() {
               <PanelLeft className="w-4 h-4" />
             </button>
             <button
-              onClick={() => navigate("/mode-select")}
+              onClick={() => navigate("/dashboard")}
               className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -67,9 +71,12 @@ export default function DecisionText() {
               New chat
             </button>
           </div>
+          {!integrationsLoading && !gmailConnected && (
+            <NotConnectedState integration="both" variant="inline" agentName={agentName} />
+          )}
         </nav>
 
-        <div className="flex-1 container max-w-lg mx-auto w-full py-6 px-4 overflow-y-auto">
+        <div className="flex-1 container max-w-lg mx-auto w-full py-6 px-4 overflow-y-auto min-h-0">
           {chat.loading && (
             <div className="flex items-center justify-center h-full pt-20">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -161,13 +168,14 @@ export default function DecisionText() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder={`Tell ${agentName} what you need...`}
+              placeholder={gmailConnected ? `Tell ${agentName} what you need...` : "Connect Gmail to start chatting"}
+              disabled={!gmailConnected}
               className="flex-1"
               autoFocus
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || chat.thinking}
+              disabled={!input.trim() || chat.thinking || !gmailConnected}
               className="w-11 h-11 rounded-xl bg-accent text-accent-foreground flex items-center justify-center hover:bg-accent/90 active:scale-95 transition-all disabled:opacity-40"
             >
               <Send className="w-4 h-4" />

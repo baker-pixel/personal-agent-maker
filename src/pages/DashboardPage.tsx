@@ -2,6 +2,8 @@ import { useNavigate } from "react-router-dom";
 import { MessageSquare, Mic } from "lucide-react";
 
 import { useAgent } from "@/contexts/AgentContext";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
+import { NotConnectedState } from "@/components/NotConnectedState";
 import TasksWidget from "@/components/dashboard/TasksWidget";
 import EmailSummaryWidget from "@/components/dashboard/EmailSummaryWidget";
 import { UpcomingWidget } from "@/components/dashboard/UpcomingWidget";
@@ -19,10 +21,16 @@ function getGreeting() {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { agentName } = useAgent();
+  const { isConnected, integrationsLoading } = useIntegrations();
+  const gmailConnected = isConnected("gmail");
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container pb-8 sm:pb-12 max-w-2xl px-4 space-y-5 pt-[calc(var(--header-h)+2rem)]">
+    <div className="min-h-screen bg-background pt-[var(--header-h)]">
+      {!integrationsLoading && !gmailConnected && (
+        <NotConnectedState integration="both" variant="inline" agentName={agentName} />
+      )}
+
+      <div className="container pb-8 sm:pb-12 max-w-2xl px-4 space-y-5 pt-8">
 
         {/* Greeting */}
         <div>
@@ -30,7 +38,9 @@ export default function Dashboard() {
             {getGreeting()} 👋
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            {agentName} is monitoring your inbox, calendar, and tasks.
+            {gmailConnected
+              ? `${agentName} is monitoring your inbox, calendar, and tasks.`
+              : `Connect Gmail to let ${agentName} get to work.`}
           </p>
         </div>
 

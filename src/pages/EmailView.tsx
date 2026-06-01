@@ -19,6 +19,7 @@ import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { GmailStatusBanner } from "@/components/GmailStatusBanner";
+import { NotConnectedState } from "@/components/NotConnectedState";
 import { useDraftActions } from "@/hooks/useDraftActions";
 import { useAnnieChat } from "@/hooks/useAnnieChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
@@ -396,8 +397,6 @@ export default function EmailView() {
 
   // ── Not connected ─────────────────────────────────────────────────────────
 
-  if (integrationsLoading) return null;
-
   if (!gmailConnected) {
     return (
       <div className="min-h-screen bg-background flex flex-col pt-[var(--header-h)]">
@@ -409,14 +408,7 @@ export default function EmailView() {
             <h1 className="font-display font-semibold text-sm">Email</h1>
           </div>
         </div>
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="text-center max-w-md">
-            <Mail className="w-12 h-12 text-accent mx-auto mb-4" />
-            <h2 className="font-display text-2xl font-semibold mb-2">Connect Gmail</h2>
-            <p className="text-muted-foreground mb-4">Connect your Gmail in Settings to let {agentName} triage your inbox.</p>
-            <Button onClick={() => navigate("/settings")} className="bg-accent text-accent-foreground">Go to Settings</Button>
-          </div>
-        </div>
+        <NotConnectedState integration="gmail" agentName={agentName} />
       </div>
     );
   }
