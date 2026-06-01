@@ -1,11 +1,31 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
+import { clientsClaim } from "workbox-core";
 
 declare let self: ServiceWorkerGlobalScope;
+
+// Take immediate control of all open tabs when this SW activates.
+// Without this, old tabs keep using the old SW until they reload.
+clientsClaim();
 
 // Workbox injects the precache manifest here at build time
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
+
+// On activate: nuke ALL non-Workbox caches left behind by old SW versions.
+// This clears old Workbox caches AND any stale runtime caches so clients
+// always fetch fresh files after an update.
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((k) => !k.startsWith("workbox-precache"))
+          .map((k) => caches.delete(k))
+      )
+    )
+  );
+});
 
 // Allow the app to trigger a SW update (used by the UpdatePrompt component)
 self.addEventListener("message", (event) => {
