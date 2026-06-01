@@ -42,15 +42,11 @@ const isPreviewHost =
   window.location.hostname.includes("id-preview--") ||
   window.location.hostname.includes("lovableproject.com");
 
+// In preview/iframe, kill any lingering SW so it doesn't interfere with HMR.
+// In production, VitePWA handles SW registration automatically.
 if (isPreviewHost || isInIframe) {
   navigator.serviceWorker?.getRegistrations().then((registrations) => {
     registrations.forEach((r) => r.unregister());
-  });
-} else if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) =>
-      console.warn('SW registration failed:', err)
-    );
   });
 }
 

@@ -35,6 +35,7 @@ import BetaCrm from "./pages/BetaCrm";
 import AppHeader from "./components/AppHeader";
 import InstallBanner from "./components/InstallBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { UpdatePrompt } from "./components/UpdatePrompt";
 import NotFound from "./pages/NotFound";
 import Pricing from "./pages/Pricing";
 import Investors from "./pages/Investors";
@@ -154,6 +155,7 @@ const App = () => {
           <AgentProvider>
           <Toaster />
           <Sonner />
+          <UpdatePrompt />
           <BrowserRouter>
             <Routes>
               <Route path="/" element={isRecovery ? <Navigate to="/reset-password" replace /> : session ? <Navigate to="/dashboard" replace /> : <Landing />} />

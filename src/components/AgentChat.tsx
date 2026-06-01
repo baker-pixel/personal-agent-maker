@@ -10,6 +10,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 import { CalendarJsonParser } from "@/components/chat/CalendarJsonParser";
+import { ContactJsonParser } from "@/components/chat/ContactJsonParser";
 import { stripAgentBlocks } from "@/lib/stripAgentBlocks";
 import { toast } from "@/hooks/use-toast";
 
@@ -390,6 +391,7 @@ export const AgentChat = () => {
                       </div>
                       <DraftJsonParser text={msg.content} />
                       <CalendarJsonParser text={msg.content} />
+                      <ContactJsonParser text={msg.content} />
                     </>
                   ) : (
                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>

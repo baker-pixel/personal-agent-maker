@@ -17,24 +17,17 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt" lets us show a toast and let the user decide when to reload.
+      registerType: "prompt",
       devOptions: { enabled: false },
+      // injectManifest: we own the SW source (src/sw.ts) — Workbox injects
+      // the precache manifest into it. Push notification handlers live there too.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       includeAssets: ["icon-192-v2.png", "icon-512-v2.png", "icon-maskable-512-v2.png", "apple-touch-icon.png", "offline.html"],
-      workbox: {
-        navigateFallbackDenylist: [/^\/~oauth/],
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        offlineGoogleAnalytics: false,
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "google-fonts-cache",
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
       },
       manifest: {
         name: "Normy — AI Executive Assistant",

@@ -11,6 +11,7 @@ import { DelegateSidebar } from "@/components/chat/DelegateSidebar";
 import ReactMarkdown from "react-markdown";
 import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 import { CalendarJsonParser } from "@/components/chat/CalendarJsonParser";
+import { ContactJsonParser } from "@/components/chat/ContactJsonParser";
 import { useAgent } from "@/contexts/AgentContext";
 import { stripAgentBlocks } from "@/lib/stripAgentBlocks";
 import { VoiceSettingsPanel } from "@/components/VoiceSettingsPanel";
@@ -244,6 +245,7 @@ export default function DecisionVoice() {
                       </div>
                       <DraftJsonParser text={msg.text} />
                       <CalendarJsonParser text={msg.text} />
+                      <ContactJsonParser text={msg.text} />
                     </>
                   ) : (
                     msg.text

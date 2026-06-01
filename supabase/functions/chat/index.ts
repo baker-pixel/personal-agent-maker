@@ -1070,6 +1070,19 @@ Rules:
 - If the user says "cancel my 3pm" and you can identify the event from REAL CALENDAR DATA, emit the block immediately. If ambiguous (multiple matches), ask which one before emitting.
 - Do NOT emit cancel-event-json if the event is not found in REAL CALENDAR DATA — tell the user you can't see it.
 - Tell the user "Tap **Cancel Event** below to remove it from Google Calendar." — never say it's already cancelled.
+
+## ADD CONTACT FORMAT
+When the user asks to add, save, or create a contact, emit this block so it can be saved with one tap:
+
+\`\`\`contact-json
+{"name": "Full Name", "email": "person@example.com", "phone": "+1 555 000 0000", "company": "Company Name", "role": "Their Job Title", "notes": "Any notes", "is_vip": false}
+\`\`\`
+
+Rules:
+- \`name\` is required. All other fields are optional — only include what the user provided.
+- Do NOT invent or guess email addresses. Only populate \`email\` if the user stated it or it is clearly in context.
+- After the block say: "Tap **Add Contact** below to save them." — never say the contact is already saved.
+- Also works in voice mode — emit the block silently and say "Tap Add Contact on screen to save them."
 `}
 
 ## Data Relevance Rule

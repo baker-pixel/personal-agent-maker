@@ -3,7 +3,7 @@
  * Handles both properly-fenced blocks AND bare JSON the model emits without fences.
  */
 
-const FENCED_TAGS = ["draft-json", "calendar-json", "update-event-json", "cancel-event-json"];
+const FENCED_TAGS = ["draft-json", "calendar-json", "update-event-json", "cancel-event-json", "contact-json"];
 
 function stripFencedBlocks(text: string): string {
   let result = text;
@@ -20,8 +20,10 @@ function looksLikeActionBlock(obj: Record<string, unknown>): boolean {
   if ((keys.includes("to_email") || keys.includes("to")) && keys.includes("subject") && keys.includes("body")) return true;
   // Calendar event: has summary + start + attendees
   if (keys.includes("summary") && keys.includes("start") && keys.includes("attendees")) return true;
-  // Update event: has eventId + summary + (start or end or description)
+  // Update/cancel event: has eventId + summary
   if (keys.includes("eventId") && keys.includes("summary")) return true;
+  // Contact: has name + (email or phone or company)
+  if (keys.includes("name") && (keys.includes("email") || keys.includes("phone") || keys.includes("company"))) return true;
   return false;
 }
 
