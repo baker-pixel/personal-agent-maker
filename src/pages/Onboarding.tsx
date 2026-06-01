@@ -51,7 +51,10 @@ export default function Onboarding({ onComplete }: Props) {
   const { integrations, integrationsLoading } = useIntegrations();
   const { connecting, connect } = useGoogleOAuthPopup();
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => {
+    const saved = sessionStorage.getItem("onboarding-step");
+    return saved ? Math.min(parseInt(saved, 10) || 0, TOTAL_STEPS - 1) : 0;
+  });
   const [dir, setDir] = useState(1);
   const [state, setState] = useState<OnboardingState>(defaults);
   const [saving, setSaving] = useState(false);
@@ -71,15 +74,20 @@ export default function Onboarding({ onComplete }: Props) {
   const update = <K extends keyof OnboardingState>(key: K, val: OnboardingState[K]) =>
     setState(s => ({ ...s, [key]: val }));
 
+  const goToStep = (n: number) => {
+    sessionStorage.setItem("onboarding-step", String(n));
+    setStep(n);
+  };
+
   const next = () => {
     // Step 0: if no name entered, use default but show brief confirmation
     if (step === 0 && !state.agentName.trim()) {
       setState(s => ({ ...s, agentName: "Normy Agent" }));
     }
     setDir(1);
-    setStep(s => Math.min(s + 1, TOTAL_STEPS - 1));
+    goToStep(Math.min(step + 1, TOTAL_STEPS - 1));
   };
-  const prev = () => { setDir(-1); setStep(s => Math.max(s - 1, 0)); };
+  const prev = () => { setDir(-1); goToStep(Math.max(step - 1, 0)); };
 
   const finish = async () => {
     setSaving(true);
@@ -112,6 +120,9 @@ export default function Onboarding({ onComplete }: Props) {
 
       // Update agent name in context immediately
       setAgentName(agentName);
+
+      // Clear persisted step so a future fresh onboarding starts at 0
+      sessionStorage.removeItem("onboarding-step");
 
       // Signal parent (App.tsx) that onboarding is done — this sets isOnboarded = true
       // so ProtectedRoute stops redirecting to /onboarding before we navigate.
