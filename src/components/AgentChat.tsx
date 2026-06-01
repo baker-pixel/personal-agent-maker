@@ -6,6 +6,7 @@ import {
   Send, Loader2, Zap, Trash2,
   Mail, Calendar, ListTodo, Users, Inbox, ArrowRight,
 } from "lucide-react";
+
 import ReactMarkdown from "react-markdown";
 import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
 import { CalendarJsonParser } from "@/components/chat/CalendarJsonParser";
