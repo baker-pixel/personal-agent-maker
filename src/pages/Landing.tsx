@@ -75,18 +75,18 @@ export default function Landing() {
         )}
       </nav>
 
-      <section className="pt-24 pb-8 md:pt-44 md:pb-16">
+      <section className="pt-36 pb-10 md:pt-44 md:pb-16">
         <div className="container max-w-4xl text-center px-5">
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }} className="flex items-center justify-center gap-2 md:gap-3 mb-6 md:mb-8">
-            <img src={normyLogo} alt="Normy Agent" className="h-16 md:h-32 lg:h-40 w-auto" />
-            <span className="font-display text-4xl md:text-7xl lg:text-8xl font-bold tracking-tight" style={{ color: '#1e3a5f' }}>Agent</span>
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }} className="flex items-center justify-center gap-2 md:gap-3 mb-5 md:mb-8">
+            <img src={normyLogo} alt="Normy Agent" className="h-12 sm:h-16 md:h-32 lg:h-40 w-auto" />
+            <span className="font-display text-3xl sm:text-4xl md:text-7xl lg:text-8xl font-bold tracking-tight" style={{ color: '#1e3a5f' }}>Agent</span>
           </motion.div>
-          <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="font-display text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-bold leading-[1.08] tracking-tight mb-5 md:mb-6">Your AI Business Team</motion.h1>
-          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }} className="text-muted-foreground text-base md:text-xl max-w-2xl mx-auto mb-3 md:mb-4">
+          <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="font-display text-2xl sm:text-4xl md:text-7xl lg:text-8xl font-bold leading-[1.08] tracking-tight mb-4 md:mb-6">Your AI Business Team</motion.h1>
+          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }} className="text-muted-foreground text-sm sm:text-base md:text-xl max-w-2xl mx-auto mb-3 md:mb-4">
             AI has so much potential to help your small business. But, AI is being built by techies — for techies.{" "}
             <span className="text-accent font-semibold">Normy Agent</span> was built for everyone else.
           </motion.p>
-          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }} className="text-muted-foreground text-base md:text-xl max-w-2xl mx-auto mb-8 md:mb-10">
+          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }} className="text-muted-foreground text-sm sm:text-base md:text-xl max-w-2xl mx-auto mb-7 md:mb-10">
             Built <span className="font-bold uppercase">By</span> non-technical entrepreneurs, <span className="font-bold uppercase">For</span> non-technical entrepreneurs.
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.4 }}>
