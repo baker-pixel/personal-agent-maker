@@ -1,12 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { DEFAULT_GROQ_VOICE } from "@/lib/groqVoices";
 
 const VOICE_KEY = "normy_tts_voice";
 const RATE_KEY = "normy_tts_rate";
 const PITCH_KEY = "normy_tts_pitch";
 
-export type TtsProvider = "browser" | "elevenlabs";
+export type TtsProvider = "browser" | "groq";
 
 interface TtsRemoteOpts {
   remote?: {
@@ -15,12 +16,8 @@ interface TtsRemoteOpts {
     pitch: number;
     enabled: boolean;
     loaded: boolean;
-    // Premium
     provider?: TtsProvider;
-    elevenlabsVoiceId?: string | null;
-    elevenlabsModelId?: string;
-    stability?: number;
-    similarity?: number;
+    groqVoiceId?: string | null;
   };
   onChange?: (patch: {
     tts_voice_uri?: string | null;
@@ -28,11 +25,28 @@ interface TtsRemoteOpts {
     tts_pitch?: number;
     tts_enabled?: boolean;
     tts_provider?: TtsProvider;
-    tts_elevenlabs_voice_id?: string | null;
-    tts_elevenlabs_model_id?: string;
-    tts_stability?: number;
-    tts_similarity?: number;
+    tts_groq_voice_id?: string | null;
   }) => void;
+}
+
+// Split text into sentence chunks. All chunks are fetched in parallel so
+// playback of chunk 1 starts while chunks 2+ are still being generated.
+function splitSentences(text: string, maxLen = 220): string[] {
+  if (text.length <= maxLen) return [text];
+  const parts = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const chunks: string[] = [];
+  let cur = '';
+  for (const part of parts) {
+    const candidate = cur ? cur + ' ' + part : part;
+    if (cur && candidate.length > maxLen) {
+      chunks.push(cur.trim());
+      cur = part;
+    } else {
+      cur = candidate;
+    }
+  }
+  if (cur.trim()) chunks.push(cur.trim());
+  return chunks.length ? chunks : [text];
 }
 
 export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
@@ -51,12 +65,8 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     const v = parseFloat(localStorage.getItem(PITCH_KEY) || "1.0");
     return isNaN(v) ? 1.0 : v;
   });
-  // Premium state (purely remote-driven; no localStorage fallback)
   const [provider, setProviderState] = useState<TtsProvider>("browser");
-  const [elevenlabsVoiceId, setElevenlabsVoiceIdState] = useState<string | null>("EXAVITQu4vr4xnSDxMaL");
-  const [elevenlabsModelId, setElevenlabsModelIdState] = useState<string>("eleven_multilingual_v2");
-  const [stability, setStabilityState] = useState<number>(0.5);
-  const [similarity, setSimilarityState] = useState<number>(0.75);
+  const [groqVoiceId, setGroqVoiceIdState] = useState<string | null>(DEFAULT_GROQ_VOICE); // "tara"
 
   const hydratedRef = useRef(false);
   useEffect(() => {
@@ -67,11 +77,8 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     setPitchState(remote.pitch);
     setEnabledState(remote.enabled);
     if (remote.provider) setProviderState(remote.provider);
-    if (remote.elevenlabsVoiceId !== undefined) setElevenlabsVoiceIdState(remote.elevenlabsVoiceId);
-    if (remote.elevenlabsModelId) setElevenlabsModelIdState(remote.elevenlabsModelId);
-    if (remote.stability != null) setStabilityState(remote.stability);
-    if (remote.similarity != null) setSimilarityState(remote.similarity);
-  }, [remote?.loaded, remote?.voiceURI, remote?.rate, remote?.pitch, remote?.enabled, remote?.provider, remote?.elevenlabsVoiceId, remote?.elevenlabsModelId, remote?.stability, remote?.similarity]);
+    if (remote.groqVoiceId !== undefined) setGroqVoiceIdState(remote.groqVoiceId);
+  }, [remote?.loaded, remote?.voiceURI, remote?.rate, remote?.pitch, remote?.enabled, remote?.provider, remote?.groqVoiceId]);
 
   const setEnabled = (v: boolean | ((prev: boolean) => boolean)) => {
     setEnabledState((prev) => {
@@ -84,10 +91,7 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const setRate = (v: number) => { setRateState(v); onChange?.({ tts_rate: v }); };
   const setPitch = (v: number) => { setPitchState(v); onChange?.({ tts_pitch: v }); };
   const setProvider = (v: TtsProvider) => { setProviderState(v); onChange?.({ tts_provider: v }); };
-  const setElevenlabsVoiceId = (v: string | null) => { setElevenlabsVoiceIdState(v); onChange?.({ tts_elevenlabs_voice_id: v }); };
-  const setElevenlabsModelId = (v: string) => { setElevenlabsModelIdState(v); onChange?.({ tts_elevenlabs_model_id: v }); };
-  const setStability = (v: number) => { setStabilityState(v); onChange?.({ tts_stability: v }); };
-  const setSimilarity = (v: number) => { setSimilarityState(v); onChange?.({ tts_similarity: v }); };
+  const setGroqVoiceId = (v: string | null) => { setGroqVoiceIdState(v); onChange?.({ tts_groq_voice_id: v }); };
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -98,24 +102,16 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
 
   const isSupported = typeof window !== "undefined" && "speechSynthesis" in window;
 
-  // iOS unlock for both Web Speech AND <audio> playback. MUST be called
-  // synchronously inside a real user gesture (touchend/click) — never after
-  // an `await`. On iOS Safari, a single silent SpeechSynthesisUtterance +
-  // a silent Audio play are required to unlock both pipelines.
   const unlockAudio = useCallback(() => {
     if (unlockedRef.current) return;
     try {
       if (isSupported) {
-        // Cancel any queued items first (Safari quirk)
         try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
         const u = new SpeechSynthesisUtterance(" ");
         u.volume = 0;
         u.rate = 1;
         window.speechSynthesis.speak(u);
       }
-      // Prime an HTMLAudioElement so the FIRST real play() call doesn't
-      // get rejected by iOS as "not user-initiated". We attach iOS-friendly
-      // attributes and synchronously call play() on a tiny silent WAV.
       if (!audioRef.current) {
         audioRef.current = new Audio();
         audioRef.current.preload = "auto";
@@ -123,7 +119,6 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
         (audioRef.current as any).playsInline = true;
         audioRef.current.crossOrigin = "anonymous";
       }
-      // 1-frame silent WAV (44 bytes) — synchronous play unlocks the element.
       const SILENT_WAV =
         "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
       audioRef.current.src = SILENT_WAV;
@@ -186,7 +181,6 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     }
     if (isSupported) window.speechSynthesis.cancel();
     if (audioRef.current) {
-      // Detach handlers BEFORE clearing src so we don't fire spurious onerror
       audioRef.current.onended = null;
       audioRef.current.onerror = null;
       try { audioRef.current.pause(); } catch { /* ignore */ }
@@ -227,55 +221,39 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     window.speechSynthesis.speak(utterance);
   }, [isSupported, rate, pitch, pickVoice]);
 
-  const speakElevenLabs = useCallback(async (text: string, onComplete?: () => void) => {
+  const speakGroq = useCallback(async (text: string, onComplete?: () => void) => {
     try {
       setIsSpeaking(true);
-      // Abort any in-flight request before starting a new one
       if (fetchAbortRef.current) fetchAbortRef.current.abort();
-      fetchAbortRef.current = new AbortController();
-      const signal = fetchAbortRef.current.signal;
+      const abort = new AbortController();
+      fetchAbortRef.current = abort;
 
-      // Use direct fetch (not supabase.functions.invoke) because the SDK
-      // tries to JSON-parse responses, which corrupts binary audio.
       const { data: { session } } = await supabase.auth.getSession();
       const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
       const anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const body = JSON.stringify({
-        text,
-        voice_id: elevenlabsVoiceId,
-        model_id: elevenlabsModelId,
-        stability,
-        similarity_boost: similarity,
-        speed: rate,
-      });
       const headers = {
         "Content-Type": "application/json",
         "apikey": anonKey,
         "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
       };
-      const url = `${supabaseUrl}/functions/v1/elevenlabs-tts`;
+      const url = `${supabaseUrl}/functions/v1/groq-tts`;
 
-      let res = await fetch(url, { method: "POST", headers, body, signal });
-      // 429 = rate limited — don't retry, surface immediately
-      if (res.status === 429) {
-        throw new Error("RATE_LIMITED");
-      }
-      // Retry once on 502/503 (transient upstream error — not a rate limit)
-      if (res.status === 502 || res.status === 503) {
-        await new Promise((r) => setTimeout(r, 1000));
-        if (signal.aborted) return;
-        fetchAbortRef.current = new AbortController();
-        res = await fetch(url, { method: "POST", headers, body, signal: fetchAbortRef.current.signal });
-      }
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Premium TTS failed (${res.status}): ${errText}`);
-      }
-      const blob = await res.blob();
-      // TTS debug log removed for production
-      const blobUrl = URL.createObjectURL(blob);
-      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
-      audioUrlRef.current = blobUrl;
+      // Fetch one sentence chunk — returns null if aborted
+      const fetchChunk = async (chunk: string): Promise<Blob | null> => {
+        if (abort.signal.aborted) return null;
+        const res = await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ text: chunk, voice: groqVoiceId, speed: rate }),
+          signal: abort.signal,
+        });
+        if (abort.signal.aborted) return null;
+        if (res.status === 429) throw new Error("RATE_LIMITED");
+        if (!res.ok) throw new Error(`Groq TTS failed (${res.status}): ${await res.text()}`);
+        return res.blob();
+      };
+
+      // Ensure audio element exists
       if (!audioRef.current) {
         audioRef.current = new Audio();
         audioRef.current.preload = "auto";
@@ -283,56 +261,66 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
         (audioRef.current as any).playsInline = true;
         audioRef.current.crossOrigin = "anonymous";
       }
-      // iOS Safari requires these every time we reuse the element
-      audioRef.current.setAttribute("playsinline", "true");
-      (audioRef.current as any).playsInline = true;
-      audioRef.current.src = blobUrl;
-      audioRef.current.onended = () => { setIsSpeaking(false); onComplete?.(); };
-      audioRef.current.onerror = (e) => {
-        console.error("[ElevenLabs TTS] audio playback error", e);
+
+      // Play a blob and wait for it to finish
+      const playBlob = (blob: Blob): Promise<void> => new Promise((resolve) => {
+        if (abort.signal.aborted) { resolve(); return; }
+        const blobUrl = URL.createObjectURL(blob);
+        if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = blobUrl;
+        const el = audioRef.current!;
+        el.setAttribute("playsinline", "true");
+        (el as any).playsInline = true;
+        el.src = blobUrl;
+        el.onended = () => resolve();
+        el.onerror = () => { console.error("[Groq TTS] playback error"); resolve(); };
+        el.play().catch(() => resolve());
+      });
+
+      // Split into sentence chunks — all fetches fire in parallel,
+      // playback starts as soon as the first blob arrives
+      const chunks = splitSentences(text);
+      const blobPromises = chunks.map(fetchChunk);
+
+      for (const blobPromise of blobPromises) {
+        if (abort.signal.aborted) break;
+        const blob = await blobPromise;
+        if (!blob || abort.signal.aborted) break;
+        await playBlob(blob);
+      }
+
+      if (!abort.signal.aborted) {
         setIsSpeaking(false);
         onComplete?.();
-      };
-      try {
-        await audioRef.current.play();
-      } catch (playErr: any) {
-        // iOS NotAllowedError happens if the gesture context was lost
-        // (e.g. the user enabled TTS but then waited too long). Fall back
-        // to browser SpeechSynthesis which has a more lenient policy in
-        // PWAs / standalone Safari.
-        console.warn("[ElevenLabs TTS] play() rejected, falling back:", playErr?.name);
-        throw playErr;
       }
     } catch (e: any) {
       if (e?.name === "AbortError") { setIsSpeaking(false); return; }
-      console.error("[ElevenLabs TTS] failed, falling back to browser:", e);
+      console.error("[Groq TTS] failed, falling back to browser:", e);
       setIsSpeaking(false);
       const msg = e instanceof Error ? e.message : String(e);
-      const isApiKey = msg.includes("ELEVENLABS_API_KEY not configured");
-      const isRateLimited = msg === "RATE_LIMITED";
       toast.error(
-        isRateLimited
+        msg === "RATE_LIMITED"
           ? "Too many requests — slow down a bit and try again."
-          : isApiKey
+          : msg.includes("GROQ_API_KEY not configured")
           ? "Premium voice not configured — API key missing. Using browser voice instead."
           : "Premium voice unavailable — using browser voice instead.",
         { duration: 5000 }
       );
       speakBrowser(text, onComplete);
     }
-  }, [elevenlabsVoiceId, elevenlabsModelId, stability, similarity, rate, speakBrowser]);
+  }, [groqVoiceId, rate, speakBrowser]);
 
   const speak = useCallback((text: string, onComplete?: () => void) => {
     if (!enabled) { onComplete?.(); return; }
     const clean = cleanText(text);
     if (!clean) { onComplete?.(); return; }
     stop();
-    if (provider === "elevenlabs") {
-      speakElevenLabs(clean, onComplete);
+    if (provider === "groq") {
+      speakGroq(clean, onComplete);
     } else {
       speakBrowser(clean, onComplete);
     }
-  }, [enabled, provider, speakBrowser, speakElevenLabs, stop]);
+  }, [enabled, provider, speakBrowser, speakGroq, stop]);
 
   const toggle = useCallback(() => {
     setEnabled((prev) => {
@@ -348,8 +336,8 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const previewVoice = useCallback(() => {
     const previewText = "Hi, I'm Normy. This is how I'll sound when we talk.";
     stop();
-    if (provider === "elevenlabs") {
-      speakElevenLabs(previewText);
+    if (provider === "groq") {
+      speakGroq(previewText);
     } else if (isSupported) {
       const u = new SpeechSynthesisUtterance(previewText);
       u.rate = rate;
@@ -361,7 +349,7 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
       u.onerror = () => setIsSpeaking(false);
       window.speechSynthesis.speak(u);
     }
-  }, [provider, isSupported, rate, pitch, pickVoice, speakElevenLabs, stop]);
+  }, [provider, isSupported, rate, pitch, pickVoice, speakGroq, stop]);
 
   return {
     enabled,
@@ -379,16 +367,9 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     pitch,
     setPitch,
     previewVoice,
-    // Premium
     provider,
     setProvider,
-    elevenlabsVoiceId,
-    setElevenlabsVoiceId,
-    elevenlabsModelId,
-    setElevenlabsModelId,
-    stability,
-    setStability,
-    similarity,
-    setSimilarity,
+    groqVoiceId,
+    setGroqVoiceId,
   };
 }

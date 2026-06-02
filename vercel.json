@@ -15,6 +15,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/normy-siri-shortcut.txt", "destination": "/normy-siri-shortcut.txt" },
+    { "source": "/((?!.*\\.[a-zA-Z0-9]{1,5}$).*)", "destination": "/index.html" }
   ]
 }

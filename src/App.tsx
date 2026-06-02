@@ -32,6 +32,7 @@ import Files from "./pages/Files";
 import Leads from "./pages/Leads";
 import Tasks from "./pages/Tasks";
 import BetaCrm from "./pages/BetaCrm";
+import InboxPage from "./pages/InboxPage";
 import AppHeader from "./components/AppHeader";
 import InstallBanner from "./components/InstallBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -189,6 +190,7 @@ const App = () => {
               <Route path="/files" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Files /></ProtectedRoute>} />
               <Route path="/leads" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Leads /></ProtectedRoute>} />
               <Route path="/tasks" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Tasks /></ProtectedRoute>} />
+              <Route path="/inbox" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><InboxPage /></ProtectedRoute>} />
               <Route path="/beta-crm" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><BetaCrm /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>

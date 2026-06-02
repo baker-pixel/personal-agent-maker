@@ -110,14 +110,24 @@ export function useDraftActions() {
     );
 
     const result = await resp.json();
+
+    if (resp.status === 409) {
+      // Another request already claimed this draft — sync local state
+      setDrafts((prev) => prev.filter((d) => d.id !== draftId));
+      return { success: false, error: "This draft was already sent or is being processed." };
+    }
+
     if (!resp.ok) {
+      // On failure the backend set status="failed" — realtime will remove from list,
+      // but refetch to ensure UI is consistent if realtime is slow.
+      fetchDrafts();
       return { success: false, error: result.error || "Failed to send" };
     }
 
     // Realtime will handle removing from list, but optimistic update feels faster
     setDrafts((prev) => prev.filter((d) => d.id !== draftId));
     return { success: true };
-  }, []);
+  }, [fetchDrafts]);
 
   const rejectDraft = useCallback(async (draftId: string) => {
     await supabase

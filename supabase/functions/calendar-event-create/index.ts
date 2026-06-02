@@ -87,11 +87,12 @@ Deno.serve(async (req) => {
     if (location) eventBody.location = location;
 
     // Attendees: validate and attach as Nylas participants
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const validAttendees: Array<{ email: string; name?: string }> = [];
     if (Array.isArray(attendees)) {
       for (const a of attendees) {
         const email = (typeof a === "string" ? a : a?.email || "").trim().toLowerCase();
-        if (email && email.includes("@")) {
+        if (email && emailRegex.test(email)) {
           validAttendees.push({ email, ...(a?.name ? { name: a.name } : {}) });
         }
       }

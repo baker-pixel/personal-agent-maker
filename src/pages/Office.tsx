@@ -341,7 +341,7 @@ export default function Office() {
         navigate("/decision/text");
         break;
       case "inbox":
-        navigate("/dashboard");
+        navigate("/inbox");
         break;
       case "tasks":
         navigate("/tasks");
@@ -558,9 +558,9 @@ export default function Office() {
             {agentName}'s Office
           </h1>
           <p className="text-sm text-muted-foreground">Click on anything to get started</p>
-          <p className="text-xs text-muted-foreground mt-2">
+          {/* <p className="text-xs text-muted-foreground mt-2">
             Text {agentName} at <span className="font-mono font-semibold text-foreground">+1 (844) 392-6449</span>
-          </p>
+          </p> */}
         </motion.div>
 
         {/* Office grid */}

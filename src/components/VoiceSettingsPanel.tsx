@@ -13,9 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ELEVENLABS_VOICES, ELEVENLABS_MODELS } from "@/lib/elevenlabsVoices";
+import { GROQ_VOICES } from "@/lib/groqVoices";
 
-type TtsProvider = "browser" | "elevenlabs";
+type TtsProvider = "browser" | "groq";
 
 interface VoiceSettingsPanelProps {
   voices: SpeechSynthesisVoice[];
@@ -27,25 +27,15 @@ interface VoiceSettingsPanelProps {
   onPitchChange: (v: number) => void;
   onPreview: () => void;
   isSupported: boolean;
-  // STT language
   sttLanguage?: string;
   onSttLanguageChange?: (lang: string) => void;
-  // Premium (ElevenLabs)
   provider?: TtsProvider;
   onProviderChange?: (p: TtsProvider) => void;
-  elevenlabsVoiceId?: string | null;
-  onElevenlabsVoiceChange?: (id: string) => void;
-  elevenlabsModelId?: string;
-  onElevenlabsModelChange?: (id: string) => void;
-  stability?: number;
-  onStabilityChange?: (v: number) => void;
-  similarity?: number;
-  onSimilarityChange?: (v: number) => void;
-  // Layout: when true, render controls inline (no popover wrapper)
+  groqVoiceId?: string | null;
+  onGroqVoiceChange?: (id: string) => void;
   inline?: boolean;
 }
 
-// Common dictation languages for the STT picker.
 const STT_LANGUAGES: { code: string; label: string }[] = [
   { code: "en-US", label: "English (US)" },
   { code: "en-GB", label: "English (UK)" },
@@ -76,35 +66,19 @@ const STT_LANGUAGES: { code: string; label: string }[] = [
   { code: "ru-RU", label: "Russian" },
 ];
 
-// Tone presets — friendly defaults that map to rate/pitch combos.
 const TONE_PRESETS = [
   { id: "professional", label: "Professional", rate: 1.0, pitch: 1.0 },
-  { id: "warm", label: "Warm", rate: 0.95, pitch: 0.95 },
-  { id: "energetic", label: "Energetic", rate: 1.15, pitch: 1.1 },
-  { id: "calm", label: "Calm", rate: 0.9, pitch: 0.9 },
-  { id: "fast", label: "Fast briefing", rate: 1.3, pitch: 1.0 },
+  { id: "warm",         label: "Warm",         rate: 0.95, pitch: 0.95 },
+  { id: "energetic",    label: "Energetic",    rate: 1.15, pitch: 1.1 },
+  { id: "calm",         label: "Calm",         rate: 0.9, pitch: 0.9 },
+  { id: "fast",         label: "Fast briefing", rate: 1.3, pitch: 1.0 },
 ];
 
 const LANG_DISPLAY: Record<string, string> = {
-  en: "English",
-  es: "Spanish",
-  fr: "French",
-  de: "German",
-  it: "Italian",
-  pt: "Portuguese",
-  nl: "Dutch",
-  sv: "Swedish",
-  da: "Danish",
-  no: "Norwegian",
-  fi: "Finnish",
-  pl: "Polish",
-  ja: "Japanese",
-  ko: "Korean",
-  zh: "Chinese",
-  hi: "Hindi",
-  ar: "Arabic",
-  tr: "Turkish",
-  ru: "Russian",
+  en: "English", es: "Spanish", fr: "French", de: "German", it: "Italian",
+  pt: "Portuguese", nl: "Dutch", sv: "Swedish", da: "Danish", no: "Norwegian",
+  fi: "Finnish", pl: "Polish", ja: "Japanese", ko: "Korean", zh: "Chinese",
+  hi: "Hindi", ar: "Arabic", tr: "Turkish", ru: "Russian",
 };
 
 function languageGroupLabel(lang: string): string {
@@ -128,19 +102,12 @@ export function VoiceSettingsPanel({
   onSttLanguageChange,
   provider = "browser",
   onProviderChange,
-  elevenlabsVoiceId,
-  onElevenlabsVoiceChange,
-  elevenlabsModelId,
-  onElevenlabsModelChange,
-  stability = 0.5,
-  onStabilityChange,
-  similarity = 0.75,
-  onSimilarityChange,
+  groqVoiceId,
+  onGroqVoiceChange,
   inline = false,
 }: VoiceSettingsPanelProps) {
-  const isPremium = provider === "elevenlabs";
+  const isPremium = provider === "groq";
 
-  // Group voices by language tag (e.g. "en-US", "fr-FR"). Sort: English first, then alpha.
   const voiceGroups = useMemo(() => {
     const groups = new Map<string, SpeechSynthesisVoice[]>();
     for (const v of voices) {
@@ -156,7 +123,6 @@ export function VoiceSettingsPanel({
       if (bEn && !aEn) return 1;
       return a.localeCompare(b);
     });
-    // Sort voices inside each group alphabetically.
     for (const [, list] of entries) list.sort((a, b) => a.name.localeCompare(b.name));
     return entries;
   }, [voices]);
@@ -177,7 +143,6 @@ export function VoiceSettingsPanel({
         </p>
       </div>
 
-      {/* Voice quality toggle (Standard / Premium) */}
       {onProviderChange && (
         <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-3 py-2.5">
           <div className="flex items-start gap-2">
@@ -187,19 +152,18 @@ export function VoiceSettingsPanel({
                 Premium voice
               </Label>
               <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
-                Studio-quality, consistent on every device.
+                Studio-quality AI voice, consistent on every device.
               </p>
             </div>
           </div>
           <Switch
             id="premium-toggle"
             checked={isPremium}
-            onCheckedChange={(c) => onProviderChange(c ? "elevenlabs" : "browser")}
+            onCheckedChange={(c) => onProviderChange(c ? "groq" : "browser")}
           />
         </div>
       )}
 
-      {/* Tone presets — apply to both providers via rate/pitch */}
       <div className="space-y-1.5">
         <Label className="text-xs flex items-center gap-1.5">
           <Sparkles className="w-3 h-3" />
@@ -219,81 +183,25 @@ export function VoiceSettingsPanel({
       </div>
 
       {isPremium ? (
-        <>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Premium voice</Label>
-            <Select
-              value={elevenlabsVoiceId ?? undefined}
-              onValueChange={(v) => onElevenlabsVoiceChange?.(v)}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Pick a voice" />
-              </SelectTrigger>
-              <SelectContent className="max-h-72">
-                {ELEVENLABS_VOICES.map((v) => (
-                  <SelectItem key={v.id} value={v.id} className="text-sm">
-                    <span className="font-medium">{v.name}</span>
-                    <span className="text-muted-foreground ml-1.5">— {v.accent}, {v.description}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs">Model</Label>
-            <Select
-              value={elevenlabsModelId ?? "eleven_multilingual_v2"}
-              onValueChange={(v) => onElevenlabsModelChange?.(v)}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ELEVENLABS_MODELS.map((m) => (
-                  <SelectItem key={m.id} value={m.id} className="text-sm">
-                    <span className="font-medium">{m.label}</span>
-                    <span className="text-muted-foreground block text-[11px]">{m.description}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">Stability</Label>
-              <span className="text-xs text-muted-foreground tabular-nums">{stability.toFixed(2)}</span>
-            </div>
-            <Slider
-              min={0}
-              max={1}
-              step={0.05}
-              value={[stability]}
-              onValueChange={(v) => onStabilityChange?.(v[0])}
-            />
-            <p className="text-[11px] text-muted-foreground leading-snug">
-              Lower = more expressive & variable. Higher = more consistent.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">Similarity</Label>
-              <span className="text-xs text-muted-foreground tabular-nums">{similarity.toFixed(2)}</span>
-            </div>
-            <Slider
-              min={0}
-              max={1}
-              step={0.05}
-              value={[similarity]}
-              onValueChange={(v) => onSimilarityChange?.(v[0])}
-            />
-            <p className="text-[11px] text-muted-foreground leading-snug">
-              How closely to match the original voice character.
-            </p>
-          </div>
-        </>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Premium voice</Label>
+          <Select
+            value={groqVoiceId ?? undefined}
+            onValueChange={(v) => onGroqVoiceChange?.(v)}
+          >
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="Pick a voice" />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              {GROQ_VOICES.map((v) => (
+                <SelectItem key={v.id} value={v.id} className="text-sm">
+                  <span className="font-medium">{v.name}</span>
+                  <span className="text-muted-foreground ml-1.5">— {v.description}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       ) : (
         isSupported && (
           <div className="space-y-1.5">
@@ -386,7 +294,7 @@ export function VoiceSettingsPanel({
 
       {!isSupported && !isPremium && (
         <p className="text-xs text-muted-foreground">
-          Your browser's voice synthesis isn't available. Toggle <strong>Premium voice</strong> above to use ElevenLabs.
+          Your browser's voice synthesis isn't available. Toggle <strong>Premium voice</strong> above to use AI voices.
         </p>
       )}
     </div>

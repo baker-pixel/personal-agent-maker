@@ -79,10 +79,7 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       pitch: prefs.tts_pitch,
       enabled: prefs.tts_enabled,
       provider: prefs.tts_provider,
-      elevenlabsVoiceId: prefs.tts_elevenlabs_voice_id,
-      elevenlabsModelId: prefs.tts_elevenlabs_model_id,
-      stability: prefs.tts_stability,
-      similarity: prefs.tts_similarity,
+      groqVoiceId: prefs.tts_groq_voice_id,
       loaded: prefsLoaded,
     },
   });

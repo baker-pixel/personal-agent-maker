@@ -278,12 +278,18 @@ export function useAnnieChat(agentName: string, mode: "text" | "voice" = "text")
     setActiveConversationId(null);
   }, []);
 
+  const injectAgentMessage = useCallback((text: string) => {
+    setMessages((prev) => [...prev, { role: "agent", text }]);
+    if (convIdRef.current) persistMessage(convIdRef.current, "assistant", text);
+  }, []);
+
   return {
     messages,
     thinking,
     loading,
     send,
     reset,
+    injectAgentMessage,
     conversations,
     activeConversationId,
     loadConversation,

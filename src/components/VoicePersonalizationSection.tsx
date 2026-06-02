@@ -6,14 +6,12 @@ import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
-/**
- * Voice personalization section for the Settings page.
- * Lets users pick voice provider (browser/ElevenLabs), voice, accent,
- * speed, pitch, stability, similarity, and STT language. Persists to
- * `user_preferences` so settings sync across devices.
- */
-export function VoicePersonalizationSection() {
-  const { prefs, loaded, update } = useVoicePreferences();
+interface VoicePersonalizationSectionProps {
+  initialData?: { userId: string; row: Record<string, any> };
+}
+
+export function VoicePersonalizationSection({ initialData }: VoicePersonalizationSectionProps) {
+  const { prefs, loaded, update } = useVoicePreferences(initialData ? { initialData } : undefined);
   const tts = useTextToSpeech({
     remote: {
       voiceURI: prefs.tts_voice_uri,
@@ -21,10 +19,7 @@ export function VoicePersonalizationSection() {
       pitch: prefs.tts_pitch,
       enabled: prefs.tts_enabled,
       provider: prefs.tts_provider,
-      elevenlabsVoiceId: prefs.tts_elevenlabs_voice_id,
-      elevenlabsModelId: prefs.tts_elevenlabs_model_id,
-      stability: prefs.tts_stability,
-      similarity: prefs.tts_similarity,
+      groqVoiceId: prefs.tts_groq_voice_id,
       loaded,
     },
     onChange: (patch) => update(patch as any),
@@ -91,14 +86,8 @@ export function VoicePersonalizationSection() {
           onSttLanguageChange={(lang) => update({ stt_language: lang })}
           provider={tts.provider}
           onProviderChange={tts.setProvider}
-          elevenlabsVoiceId={tts.elevenlabsVoiceId}
-          onElevenlabsVoiceChange={tts.setElevenlabsVoiceId}
-          elevenlabsModelId={tts.elevenlabsModelId}
-          onElevenlabsModelChange={tts.setElevenlabsModelId}
-          stability={tts.stability}
-          onStabilityChange={tts.setStability}
-          similarity={tts.similarity}
-          onSimilarityChange={tts.setSimilarity}
+          groqVoiceId={tts.groqVoiceId}
+          onGroqVoiceChange={tts.setGroqVoiceId}
         />
       </div>
     </section>

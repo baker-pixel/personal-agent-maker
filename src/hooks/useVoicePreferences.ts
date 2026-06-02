@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { DEFAULT_GROQ_VOICE, isLegacyVoiceId } from "@/lib/groqVoices";
 
-export type TtsProvider = "browser" | "elevenlabs";
+export type TtsProvider = "browser" | "groq";
 
 export interface VoicePrefs {
   tts_voice_uri: string | null;
@@ -10,12 +11,8 @@ export interface VoicePrefs {
   tts_enabled: boolean;
   voice_conversation_enabled: boolean;
   stt_language: string;
-  // Premium TTS
   tts_provider: TtsProvider;
-  tts_elevenlabs_voice_id: string | null;
-  tts_elevenlabs_model_id: string;
-  tts_stability: number;
-  tts_similarity: number;
+  tts_groq_voice_id: string | null;
 }
 
 const DEFAULTS: VoicePrefs = {
@@ -26,23 +23,44 @@ const DEFAULTS: VoicePrefs = {
   voice_conversation_enabled: false,
   stt_language: "en-US",
   tts_provider: "browser",
-  tts_elevenlabs_voice_id: "EXAVITQu4vr4xnSDxMaL", // Sarah
-  tts_elevenlabs_model_id: "eleven_multilingual_v2",
-  tts_stability: 0.5,
-  tts_similarity: 0.75,
+  tts_groq_voice_id: DEFAULT_GROQ_VOICE,
 };
 
-/**
- * Loads voice preferences from user_preferences and exposes a setter that
- * persists changes (debounced) to the DB so settings sync across devices.
- */
-export function useVoicePreferences() {
-  const [prefs, setPrefs] = useState<VoicePrefs>(DEFAULTS);
-  const [loaded, setLoaded] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+function rowToPrefs(d: Record<string, any>): VoicePrefs {
+  const rawProvider = d.tts_provider as string | null;
+  const provider: TtsProvider = rawProvider === "browser" ? "browser" : "groq";
+  const rawVoice = d.tts_elevenlabs_voice_id as string | null;
+  const groqVoiceId = isLegacyVoiceId(rawVoice) ? DEFAULT_GROQ_VOICE : rawVoice;
+  return {
+    tts_voice_uri: d.tts_voice_uri ?? null,
+    tts_rate: d.tts_rate != null ? Number(d.tts_rate) : DEFAULTS.tts_rate,
+    tts_pitch: d.tts_pitch != null ? Number(d.tts_pitch) : DEFAULTS.tts_pitch,
+    tts_enabled: !!d.tts_enabled,
+    voice_conversation_enabled: !!d.voice_conversation_enabled,
+    stt_language: d.stt_language ?? DEFAULTS.stt_language,
+    tts_provider: provider,
+    tts_groq_voice_id: groqVoiceId,
+  };
+}
+
+interface VoicePrefsOptions {
+  // When the parent already fetched user_preferences, pass userId + raw row
+  // to skip the duplicate query and auth subscription.
+  initialData?: { userId: string; row: Record<string, any> };
+}
+
+export function useVoicePreferences(opts?: VoicePrefsOptions) {
+  const [prefs, setPrefs] = useState<VoicePrefs>(() =>
+    opts?.initialData ? rowToPrefs(opts.initialData.row) : DEFAULTS
+  );
+  const [loaded, setLoaded] = useState(() => !!opts?.initialData);
+  const [userId, setUserId] = useState<string | null>(() => opts?.initialData?.userId ?? null);
   const saveTimer = useRef<number | null>(null);
 
   useEffect(() => {
+    // Skip self-fetch when the parent already supplied data
+    if (opts?.initialData) return;
+
     let cancelled = false;
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -51,32 +69,17 @@ export function useVoicePreferences() {
       setUserId(user.id);
       const { data } = await supabase
         .from("user_preferences")
-        .select("tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language, tts_provider, tts_elevenlabs_voice_id, tts_elevenlabs_model_id, tts_stability, tts_similarity")
+        .select("tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language, tts_provider, tts_elevenlabs_voice_id")
         .eq("user_id", user.id)
         .maybeSingle();
       if (cancelled) return;
-      if (data) {
-        const d = data as any;
-        setPrefs({
-          tts_voice_uri: d.tts_voice_uri ?? null,
-          tts_rate: d.tts_rate != null ? Number(d.tts_rate) : DEFAULTS.tts_rate,
-          tts_pitch: d.tts_pitch != null ? Number(d.tts_pitch) : DEFAULTS.tts_pitch,
-          tts_enabled: !!d.tts_enabled,
-          voice_conversation_enabled: !!d.voice_conversation_enabled,
-          stt_language: d.stt_language ?? DEFAULTS.stt_language,
-          tts_provider: (d.tts_provider as TtsProvider) ?? DEFAULTS.tts_provider,
-          tts_elevenlabs_voice_id: d.tts_elevenlabs_voice_id ?? DEFAULTS.tts_elevenlabs_voice_id,
-          tts_elevenlabs_model_id: d.tts_elevenlabs_model_id ?? DEFAULTS.tts_elevenlabs_model_id,
-          tts_stability: d.tts_stability != null ? Number(d.tts_stability) : DEFAULTS.tts_stability,
-          tts_similarity: d.tts_similarity != null ? Number(d.tts_similarity) : DEFAULTS.tts_similarity,
-        });
-      }
+      if (data) setPrefs(rowToPrefs(data as any));
       setLoaded(true);
     };
     load();
     const { data: sub } = supabase.auth.onAuthStateChange(() => load());
     return () => { cancelled = true; sub.subscription.unsubscribe(); };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persist = (next: VoicePrefs) => {
     if (!userId) return;
@@ -94,10 +97,7 @@ export function useVoicePreferences() {
             voice_conversation_enabled: next.voice_conversation_enabled,
             stt_language: next.stt_language,
             tts_provider: next.tts_provider,
-            tts_elevenlabs_voice_id: next.tts_elevenlabs_voice_id,
-            tts_elevenlabs_model_id: next.tts_elevenlabs_model_id,
-            tts_stability: next.tts_stability,
-            tts_similarity: next.tts_similarity,
+            tts_elevenlabs_voice_id: next.tts_groq_voice_id, // reuse existing column
           } as any,
           { onConflict: "user_id" }
         );

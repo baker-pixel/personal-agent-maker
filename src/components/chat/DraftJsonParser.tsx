@@ -24,14 +24,17 @@ export function DraftJsonParser({ text }: { text: string }) {
     const results: DraftData[] = [];
 
     // Normalize: accept "to" as alias for "to_email", allow empty subject/body
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const normalize = (p: any): DraftData | null => {
       const to_email = (p.to_email || p.to || "").trim();
-      if (!to_email || !to_email.includes("@")) return null;
+      if (!to_email || !emailRegex.test(to_email)) return null;
+      const body = (p.body || "").trim();
+      if (!body) return null;
       return {
         to_email,
         to_name: p.to_name || undefined,
         subject: p.subject || "",
-        body: p.body || "",
+        body,
       };
     };
 

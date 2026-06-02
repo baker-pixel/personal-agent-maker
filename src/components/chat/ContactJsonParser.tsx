@@ -69,8 +69,8 @@ export function ContactJsonParser({ text }: { text: string }) {
     try {
       const { data, error } = await supabase.functions.invoke("contact-create", { body: contact });
       if (error) throw error;
-      if (data?.code === "DUPLICATE") {
-        toast.warning(`Contact already exists: ${contact.name}`);
+      if (data?.code === "DUPLICATE" || data?.code === "DUPLICATE_NAME") {
+        toast.warning(`${contact.name} is already in your contacts`);
         setAddedIndices(prev => new Set(prev).add(index));
         return;
       }
@@ -81,6 +81,7 @@ export function ContactJsonParser({ text }: { text: string }) {
       if (msg.includes("DUPLICATE")) {
         toast.warning(`${contact.name} is already in your contacts`);
         setAddedIndices(prev => new Set(prev).add(index));
+
       } else {
         toast.error(`Failed to add contact: ${msg}`);
       }

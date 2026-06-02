@@ -101,7 +101,7 @@ export default function InstallBanner() {
               </div>
             ) : (
               <p className="text-muted-foreground text-xs mt-1 leading-relaxed">
-                Use your browser menu to install Normy for quick access anytime.
+                Open browser menu (⋮ or ···) → <span className="font-medium text-foreground">"Install app"</span> or <span className="font-medium text-foreground">"Add to Home Screen"</span>
               </p>
             )}
           </div>

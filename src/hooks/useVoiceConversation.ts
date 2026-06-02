@@ -38,10 +38,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
       enabled: voicePrefs.prefs.tts_enabled,
       loaded: voicePrefs.loaded,
       provider: voicePrefs.prefs.tts_provider,
-      elevenlabsVoiceId: voicePrefs.prefs.tts_elevenlabs_voice_id,
-      elevenlabsModelId: voicePrefs.prefs.tts_elevenlabs_model_id,
-      stability: voicePrefs.prefs.tts_stability,
-      similarity: voicePrefs.prefs.tts_similarity,
+      groqVoiceId: voicePrefs.prefs.tts_groq_voice_id,
     },
     onChange: voicePrefs.update,
   });
@@ -335,14 +332,8 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     // Premium TTS
     provider: tts.provider,
     setProvider: tts.setProvider,
-    elevenlabsVoiceId: tts.elevenlabsVoiceId,
-    setElevenlabsVoiceId: tts.setElevenlabsVoiceId,
-    elevenlabsModelId: tts.elevenlabsModelId,
-    setElevenlabsModelId: tts.setElevenlabsModelId,
-    stability: tts.stability,
-    setStability: tts.setStability,
-    similarity: tts.similarity,
-    setSimilarity: tts.setSimilarity,
+    groqVoiceId: tts.groqVoiceId,
+    setGroqVoiceId: tts.setGroqVoiceId,
     // STT language preference
     sttLanguage: voicePrefs.prefs.stt_language,
     setSttLanguage: (lang: string) => voicePrefs.update({ stt_language: lang }),

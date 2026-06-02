@@ -13,7 +13,7 @@ import {
   CheckCircle2, Sparkles, Shield, MessageSquare,
   Check, Loader2, Zap, Volume2,
 } from "lucide-react";
-import { ELEVENLABS_VOICES } from "@/lib/elevenlabsVoices";
+import { GROQ_VOICES, DEFAULT_GROQ_VOICE } from "@/lib/groqVoices";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ interface OnboardingState {
 
 const defaults: OnboardingState = {
   agentName: "",
-  voiceId: "EXAVITQu4vr4xnSDxMaL", // Sarah
+  voiceId: DEFAULT_GROQ_VOICE,
   tone: "friendly",
   emailLength: "balanced",
   priorityVisibility: "important",
@@ -42,6 +42,8 @@ const slideVariants = {
 };
 
 interface Props { onComplete?: () => void; }
+
+const TOTAL_STEPS = 5;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -58,8 +60,6 @@ export default function Onboarding({ onComplete }: Props) {
   const [dir, setDir] = useState(1);
   const [state, setState] = useState<OnboardingState>(defaults);
   const [saving, setSaving] = useState(false);
-
-  const TOTAL_STEPS = 5;
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const previewUrlRef = useRef<string | null>(null);
@@ -111,8 +111,8 @@ export default function Onboarding({ onComplete }: Props) {
           email_length: state.emailLength,
           priority_visibility: state.priorityVisibility,
           decision_style: state.decisionStyle,
-          tts_elevenlabs_voice_id: state.voiceId,
-          tts_provider: "elevenlabs",
+          tts_elevenlabs_voice_id: state.voiceId, // column reused for groq voice id
+          tts_provider: "groq",
           updated_at: new Date().toISOString(),
         }, { onConflict: "user_id" });
 
@@ -194,7 +194,7 @@ export default function Onboarding({ onComplete }: Props) {
       const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
       const anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-      const res = await fetch(`${supabaseUrl}/functions/v1/elevenlabs-tts`, {
+      const res = await fetch(`${supabaseUrl}/functions/v1/groq-tts`, {
         method: "POST",
         signal: abort.signal,
         headers: {
@@ -202,14 +202,7 @@ export default function Onboarding({ onComplete }: Props) {
           "apikey": anonKey,
           "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
         },
-        body: JSON.stringify({
-          text,
-          voice_id: voiceId,
-          model_id: "eleven_turbo_v2_5",
-          stability: 0.5,
-          similarity_boost: 0.75,
-          speed: 1.0,
-        }),
+        body: JSON.stringify({ text, voice: voiceId, speed: 1.0 }),
       });
 
       if (abort.signal.aborted) return;
@@ -235,7 +228,7 @@ export default function Onboarding({ onComplete }: Props) {
     } catch (e: any) {
       if (e?.name === "AbortError") return;
       setPreviewingVoiceId(null);
-      toast({ title: "Preview unavailable", description: "ElevenLabs API key not configured yet.", variant: "destructive" });
+      toast({ title: "Preview unavailable", description: "Voice API key not configured yet.", variant: "destructive" });
     }
   };
 
@@ -336,7 +329,7 @@ export default function Onboarding({ onComplete }: Props) {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
-                    {ELEVENLABS_VOICES.map(v => {
+                    {GROQ_VOICES.map(v => {
                       const selected = state.voiceId === v.id;
                       const previewing = previewingVoiceId === v.id;
                       return (
@@ -352,8 +345,7 @@ export default function Onboarding({ onComplete }: Props) {
                           <p className={`text-sm font-semibold leading-tight ${selected ? "text-accent" : "text-foreground"}`}>
                             {v.name}
                           </p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">{v.accent}</p>
-                          <p className="text-[11px] text-muted-foreground leading-snug mt-1">{v.description}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">{v.description}</p>
                           <button
                             onClick={e => { e.stopPropagation(); previewVoice(v.id); }}
                             className={`mt-2.5 flex items-center gap-1 text-[11px] font-medium transition-colors ${

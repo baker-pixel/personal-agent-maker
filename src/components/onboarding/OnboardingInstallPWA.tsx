@@ -184,11 +184,23 @@ export const OnboardingInstallPWA = ({ onNext, onBack, onSkip }: Props) => {
                 </button>
               </div>
             ) : (
-              <div className="bg-card/60 border border-border/20 rounded-xl px-4 py-3 text-left">
-                <p className="text-sm text-muted-foreground">
-                  Click the <Download className="inline w-3.5 h-3.5 -mt-0.5" /> install icon in your browser's address bar, or use the browser menu to "Install app".
-                </p>
-              </div>
+              <>
+                {[
+                  { step: "1", text: 'Click the ⋮ or ··· menu in your browser\'s toolbar' },
+                  { step: "2", text: 'Select "Install app" or "Add to Home Screen"' },
+                  { step: "3", text: 'Click "Install" to confirm' },
+                ].map((item) => (
+                  <div
+                    key={item.step}
+                    className="flex items-center gap-3.5 bg-card/60 border border-border/20 rounded-xl px-4 py-3 text-left"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0 text-xs font-bold text-accent">
+                      {item.step}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{item.text}</p>
+                  </div>
+                ))}
+              </>
             )}
           </>
         )}

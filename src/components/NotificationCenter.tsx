@@ -238,8 +238,11 @@ export const NotificationCenter = () => {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-12 z-50 w-[360px] bg-card border border-border/50 rounded-2xl shadow-xl overflow-hidden"
-            style={{ animation: "fade-up 0.15s ease-out both" }}>
+          {/* Mobile: full-width fixed sheet. Desktop: absolute dropdown */}
+          <div
+            className="fixed left-0 right-0 z-50 mx-3 top-[calc(env(safe-area-inset-top,0px)+60px)] bg-card border border-border/50 rounded-2xl shadow-xl overflow-hidden sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:mx-0 sm:w-[360px]"
+            style={{ animation: "fade-up 0.15s ease-out both" }}
+          >
 
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
@@ -262,7 +265,6 @@ export const NotificationCenter = () => {
               </div>
             </div>
 
-            {/* List */}
             {/* Enable push notifications prompt */}
             {permission === "default" && (
               <button
@@ -280,7 +282,7 @@ export const NotificationCenter = () => {
               </button>
             )}
 
-            <div className="max-h-[420px] overflow-y-auto">
+            <div className="overflow-y-auto" style={{ maxHeight: "min(420px, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 80px))" }}>
               {notifications.length === 0 ? (
                 <div className="py-12 text-center">
                   <CheckCircle2 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />

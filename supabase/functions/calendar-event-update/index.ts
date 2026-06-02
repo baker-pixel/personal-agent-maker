@@ -81,11 +81,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (Array.isArray(attendees)) {
       const validAttendees: Array<{ email: string; name?: string }> = [];
       for (const a of attendees) {
         const email = (typeof a === "string" ? a : a?.email || "").trim().toLowerCase();
-        if (email && email.includes("@")) {
+        if (email && emailRegex.test(email)) {
           validAttendees.push({ email, ...(a?.name ? { name: a.name } : {}) });
         }
       }

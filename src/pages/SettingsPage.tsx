@@ -88,6 +88,7 @@ export default function Settings() {
   }, [location.hash]);
 
   const [saved, setSaved] = useState(false);
+  const [voiceInitialData, setVoiceInitialData] = useState<{ userId: string; row: Record<string, any> } | undefined>();
   const { connecting, connect } = useGoogleOAuthPopup();
   const { isConnected, integrations, removeAccount, refreshConnections } = useIntegrations();
   const { toast } = useToast();
@@ -136,26 +137,28 @@ export default function Settings() {
 
   useEffect(() => {
     const loadSettings = async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData.session?.user;
+      const { data: { user } } = await supabase.auth.getUser();
       if (user?.email) setUserEmail(user.email);
 
       if (user) {
+        // One query fetches all columns needed by this page AND VoicePersonalizationSection
         const { data } = await supabase
           .from("user_preferences")
-          .select("agent_name, tone, email_length, priority_visibility, decision_style, email_signature")
+          .select("agent_name, tone, email_length, priority_visibility, decision_style, email_signature, tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language, tts_provider, tts_elevenlabs_voice_id")
           .eq("user_id", user.id)
           .maybeSingle();
         if (data) {
           setSettings((prev) => ({
             ...prev,
-            agentName: data.agent_name ?? prev.agentName,
-            tone: data.tone ?? prev.tone,
-            emailLength: data.email_length ?? prev.emailLength,
-            priorityVisibility: data.priority_visibility ?? prev.priorityVisibility,
-            decisionStyle: data.decision_style ?? prev.decisionStyle,
+            agentName: (data as any).agent_name ?? prev.agentName,
+            tone: (data as any).tone ?? prev.tone,
+            emailLength: (data as any).email_length ?? prev.emailLength,
+            priorityVisibility: (data as any).priority_visibility ?? prev.priorityVisibility,
+            decisionStyle: (data as any).decision_style ?? prev.decisionStyle,
             emailSignature: (data as any).email_signature ?? prev.emailSignature,
           }));
+          // Pass voice columns to VoicePersonalizationSection so it skips its own fetch
+          setVoiceInitialData({ userId: user.id, row: data as Record<string, any> });
           return;
         }
       }
@@ -165,7 +168,7 @@ export default function Settings() {
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          setSettings((prev) => ({ ...prev, ...parsed, agentName }));
+          setSettings((prev) => ({ ...prev, ...parsed }));
         } catch {}
       }
     };
@@ -175,7 +178,7 @@ export default function Settings() {
       if (session?.user?.email) setUserEmail(session.user.email);
     });
     return () => subscription.unsubscribe();
-  }, [agentName]);
+  }, []); // no deps — runs once on mount
 
   const handleChangePassword = async () => {
     if (newPassword.length < 6) {
@@ -549,7 +552,7 @@ export default function Settings() {
         {/* ── Email ────────────────────────────────────────────────────── */}
         {activeTab === "email" && <>
           <EmailTriageSettings />
-          <VoicePersonalizationSection />
+          <VoicePersonalizationSection initialData={voiceInitialData} />
         </>}
 
         {/* ── Notifications ────────────────────────────────────────────── */}

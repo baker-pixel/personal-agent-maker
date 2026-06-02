@@ -30,7 +30,17 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // Check for duplicate by email (if provided)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    // Validate email format if provided
+    if (email && !emailRegex.test(email.trim())) {
+      return new Response(
+        JSON.stringify({ error: "Invalid email address format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check for duplicate by email
     if (email) {
       const { data: existing } = await adminClient
         .from("contacts")
@@ -44,6 +54,20 @@ Deno.serve(async (req) => {
           { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+    }
+
+    // Check for duplicate by name (same user — catches no-email duplicates)
+    const { data: sameName } = await adminClient
+      .from("contacts")
+      .select("id, name")
+      .eq("user_id", user.id)
+      .ilike("name", name.trim())
+      .maybeSingle();
+    if (sameName) {
+      return new Response(
+        JSON.stringify({ error: `A contact named "${sameName.name}" already exists`, code: "DUPLICATE_NAME" }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const { data: contact, error: insertErr } = await adminClient

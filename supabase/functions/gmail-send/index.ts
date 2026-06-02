@@ -26,6 +26,10 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Hoisted so the catch block can reset status on crash
+  let draftId: string | null = null;
+  let adminClient: any = null;
+
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -50,7 +54,8 @@ Deno.serve(async (req) => {
     }
     const userId = user.id;
 
-    const { draftId } = await req.json();
+    const body = await req.json();
+    draftId = body.draftId;
     if (!draftId) {
       return new Response(
         JSON.stringify({ error: "draftId is required" }),
@@ -58,46 +63,50 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch the draft using service role to bypass RLS timing issues
-    const adminClient = createClient(
+    adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: draft, error: draftError } = await adminClient
+    // Atomic claim: only one request wins the race. UPDATE succeeds only if
+    // status is currently "pending" — concurrent duplicates get 0 rows back.
+    const { data: draft, error: claimError } = await adminClient
       .from("draft_actions")
-      .select("*")
+      .update({ status: "sending", updated_at: new Date().toISOString() })
       .eq("id", draftId)
       .eq("user_id", userId)
+      .eq("status", "pending")
+      .select("*")
       .single();
 
-    if (draftError || !draft) {
+    if (claimError || !draft) {
       return new Response(
-        JSON.stringify({ error: "Draft not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Draft not found or already processing" }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (draft.status !== "pending") {
-      return new Response(
-        JSON.stringify({ error: "Draft already processed" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Get Nylas grant
     const nylasApiKey = Deno.env.get("NYLAS_API_KEY") ?? "";
     if (!nylasApiKey) {
+      await adminClient
+        .from("draft_actions")
+        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .eq("id", draftId);
       return new Response(
         JSON.stringify({ error: "Email sending not configured. Contact support." }),
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
     let grantId: string;
     try {
       const grant = await getNylasGrant(adminClient, userId);
       grantId = grant.grantId;
     } catch (tokenError: any) {
+      await adminClient
+        .from("draft_actions")
+        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .eq("id", draftId);
       if (tokenError.code === "NOT_CONNECTED") {
         return new Response(
           JSON.stringify({ error: "Gmail not connected", code: "NOT_CONNECTED" }),
@@ -107,7 +116,6 @@ Deno.serve(async (req) => {
       throw tokenError;
     }
 
-    // Fetch user's email signature and append if set
     const { data: prefs } = await adminClient
       .from("user_preferences")
       .select("email_signature")
@@ -116,7 +124,6 @@ Deno.serve(async (req) => {
     const signature = prefs?.email_signature?.trim();
     const fullBody = signature ? `${draft.body}\n\n${signature}` : draft.body;
 
-    // Build and send the email via Nylas
     const emails = (draft.to_email as string)
       .split(",")
       .map((e: string) => e.trim())
@@ -147,6 +154,11 @@ Deno.serve(async (req) => {
     const sendData = await sendRes.json();
 
     if (!sendRes.ok) {
+      await adminClient
+        .from("draft_actions")
+        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .eq("id", draftId);
+
       if (sendRes.status === 401) {
         return new Response(
           JSON.stringify({
@@ -156,12 +168,6 @@ Deno.serve(async (req) => {
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      // Update draft status to failed
-      await adminClient
-        .from("draft_actions")
-        .update({ status: "failed", updated_at: new Date().toISOString() })
-        .eq("id", draftId);
-
       return new Response(
         JSON.stringify({ error: sendData.message || "Failed to send email" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -170,7 +176,6 @@ Deno.serve(async (req) => {
 
     const sentMsgId = sendData.data?.id || null;
 
-    // Update draft status to sent
     await adminClient
       .from("draft_actions")
       .update({
@@ -180,7 +185,6 @@ Deno.serve(async (req) => {
       })
       .eq("id", draftId);
 
-    // Mark the source email as replied in email_metadata
     if (draft.nylas_message_id) {
       await adminClient
         .from("email_metadata")
@@ -194,6 +198,16 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
+    // If we atomically claimed the draft (set to "sending"), mark it failed
+    // so it doesn't get stuck in a non-actionable state.
+    if (draftId && adminClient) {
+      await adminClient
+        .from("draft_actions")
+        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .eq("id", draftId)
+        .eq("status", "sending")
+        .catch(() => {});
+    }
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

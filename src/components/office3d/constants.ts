@@ -20,7 +20,7 @@ export const OBJECTS: OfficeObject[] = [
     size: [1, 0.8, 0.7],
     color: "#D97706",
     emissive: "#F59E0B",
-    route: "/dashboard",
+    route: "/inbox",
     icon: "📥",
   },
   {
@@ -31,7 +31,7 @@ export const OBJECTS: OfficeObject[] = [
     size: [2, 1.4, 0.1],
     color: "#059669",
     emissive: "#10B981",
-    route: "/dashboard",
+    route: "/tasks",
     icon: "📋",
   },
   {
