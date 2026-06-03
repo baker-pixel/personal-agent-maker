@@ -13,7 +13,7 @@ export default function AppHeader() {
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
       <div className="flex items-center justify-between h-14 px-4">
-        <button onClick={() => navigate("/dashboard")} className="shrink-0">
+        <button onClick={() => navigate("/mode-select")} className="shrink-0">
           <img src={normyLogo} alt="Normy Agent" className="h-7 w-auto" />
         </button>
         <div className="flex items-center gap-0.5">

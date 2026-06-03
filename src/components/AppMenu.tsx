@@ -16,7 +16,7 @@ export default function AppMenu() {
   const { agentName } = useAgent();
 
   const navItems = [
-    { label: "Home", path: "/dashboard", icon: Home },
+    { label: "Home", path: "/mode-select", icon: Home },
     { label: `${agentName}'s Office`, path: "/office", icon: Building2 },
     { label: "Email", path: "/email", icon: Mail },
     { label: "Approval Inbox", path: "/inbox", icon: Inbox },

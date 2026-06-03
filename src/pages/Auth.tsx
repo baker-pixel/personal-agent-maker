@@ -16,7 +16,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState<"confirm" | "reset" | null>(null);
+  const [emailSent, setEmailSent] = useState<"reset" | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,12 +24,8 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (!error) { navigate("/dashboard"); return; }
-    if (error.message.toLowerCase().includes("email not confirmed")) {
-      toast({ title: "Email not confirmed", description: "Check your inbox and click the confirmation link we sent you.", variant: "destructive" });
-    } else {
-      toast({ title: "Login failed", description: error.message, variant: "destructive" });
-    }
+    if (!error) { navigate("/mode-select"); return; }
+    toast({ title: "Login failed", description: error.message, variant: "destructive" });
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -43,7 +39,6 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { emailRedirectTo: `${window.location.origin}/onboarding` },
     });
     setLoading(false);
     if (error) {
@@ -51,7 +46,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
     } else if (data.user?.identities?.length === 0) {
       toast({ title: "Account already exists", description: "An account with this email already exists. Try signing in instead.", variant: "destructive" });
     } else {
-      setEmailSent("confirm");
+      navigate("/onboarding");
     }
   };
 
@@ -77,18 +72,6 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
           <img src={normyLogo} alt="Normy" className="h-10 w-auto" />
           <span className="font-display text-2xl font-bold" style={{ color: "#1e3a5f" }}>Agent</span>
         </div>
-
-        {emailSent === "confirm" && (
-          <div className="text-center space-y-4">
-            <h2 className="font-display text-xl font-semibold">Check your email</h2>
-            <p className="text-sm text-muted-foreground">
-              We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account.
-            </p>
-            <button type="button" onClick={() => { setEmailSent(null); setMode("login"); }} className="text-sm text-accent hover:underline">
-              Back to sign in
-            </button>
-          </div>
-        )}
 
         {emailSent === "reset" && (
           <div className="text-center space-y-4">

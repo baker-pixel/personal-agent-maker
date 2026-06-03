@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, Share, PlusSquare, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getPwaInstallPrompt, clearPwaInstallPrompt, onPwaInstallPromptReady } from "@/lib/pwaInstallPrompt";
 
 type Platform = "ios" | "android" | "desktop" | null;
 
@@ -32,39 +33,34 @@ export default function InstallBanner() {
     const plat = getPlatform();
     setPlatform(plat);
 
-    if (plat === "android" || plat === "desktop") {
-      const handler = (e: Event) => {
-        e.preventDefault();
-        setDeferredPrompt(e);
-        setVisible(true);
-      };
-      window.addEventListener("beforeinstallprompt", handler);
-
-      // Also show on iOS where beforeinstallprompt doesn't fire
-      if (plat !== "android") {
-        const timer = setTimeout(() => setVisible(true), 3000);
-        return () => {
-          clearTimeout(timer);
-          window.removeEventListener("beforeinstallprompt", handler);
-        };
-      }
-
-      return () => window.removeEventListener("beforeinstallprompt", handler);
-    }
-
-    // iOS — show after short delay
     if (plat === "ios") {
       const timer = setTimeout(() => setVisible(true), 3000);
       return () => clearTimeout(timer);
     }
+
+    // Android / desktop: show when prompt is available (may already be ready)
+    const show = () => {
+      const p = getPwaInstallPrompt();
+      if (p) {
+        setDeferredPrompt(p);
+        setVisible(true);
+      }
+    };
+
+    if (getPwaInstallPrompt()) {
+      show();
+    }
+    const unsub = onPwaInstallPromptReady(show);
+    return unsub;
   }, []);
 
   const handleInstall = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === "accepted") dismiss();
+      clearPwaInstallPrompt();
       setDeferredPrompt(null);
+      if (outcome === "accepted") dismiss();
     }
   };
 

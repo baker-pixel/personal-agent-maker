@@ -30,6 +30,7 @@ import { reloadAfterIntegrationChange } from "@/lib/integrationReload";
 
 interface AgentSettings {
   agentName: string;
+  userDisplayName: string;
   tone: string;
   emailLength: string;
   priorityVisibility: string;
@@ -41,6 +42,7 @@ interface AgentSettings {
 
 const defaults: AgentSettings = {
   agentName: "Annie",
+  userDisplayName: "",
   tone: "friendly",
   emailLength: "balanced",
   priorityVisibility: "important",
@@ -144,13 +146,14 @@ export default function Settings() {
         // One query fetches all columns needed by this page AND VoicePersonalizationSection
         const { data } = await supabase
           .from("user_preferences")
-          .select("agent_name, tone, email_length, priority_visibility, decision_style, email_signature, tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language, tts_provider, tts_elevenlabs_voice_id")
+          .select("agent_name, user_display_name, tone, email_length, priority_visibility, decision_style, email_signature, tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language, tts_provider, tts_elevenlabs_voice_id")
           .eq("user_id", user.id)
           .maybeSingle();
         if (data) {
           setSettings((prev) => ({
             ...prev,
             agentName: (data as any).agent_name ?? prev.agentName,
+            userDisplayName: (data as any).user_display_name ?? prev.userDisplayName,
             tone: (data as any).tone ?? prev.tone,
             emailLength: (data as any).email_length ?? prev.emailLength,
             priorityVisibility: (data as any).priority_visibility ?? prev.priorityVisibility,
@@ -213,6 +216,7 @@ export default function Settings() {
             {
               user_id: user.id,
               agent_name: settings.agentName,
+              user_display_name: settings.userDisplayName || null,
               tone: settings.tone,
               email_length: settings.emailLength,
               priority_visibility: settings.priorityVisibility,
@@ -377,6 +381,16 @@ export default function Settings() {
           <div>
             <label className="text-sm font-medium mb-1 block">Agent Name</label>
             <Input value={settings.agentName} onChange={(e) => update("agentName", e.target.value)} className="rounded-xl" />
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">What should {settings.agentName || "your agent"} call you?</label>
+            <Input
+              value={settings.userDisplayName}
+              onChange={(e) => update("userDisplayName", e.target.value)}
+              placeholder="e.g. Alex, Boss, Captain…"
+              className="rounded-xl"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Your agent will use this name when addressing you in messages and calls.</p>
           </div>
           <div>
             <label className="text-sm font-medium mb-2 block">Tone</label>

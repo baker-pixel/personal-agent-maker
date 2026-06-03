@@ -209,12 +209,17 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const speakBrowser = useCallback((text: string, onComplete?: () => void) => {
     if (!isSupported) { onComplete?.(); return; }
     window.speechSynthesis.cancel();
+    // Set isSpeaking immediately (same as speakGroq) so the STT onEnd watchdog
+    // sees isSpeaking=true before its 600ms timer fires and restarts the mic.
+    // Waiting for utterance.onstart creates a race: the browser queues speech
+    // async, so onstart can fire 100-500ms later — after the watchdog already
+    // restarted listening and captured the agent's reply as user input.
+    setIsSpeaking(true);
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = rate;
     utterance.pitch = pitch;
     const preferred = pickVoice();
     if (preferred) utterance.voice = preferred;
-    utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => { setIsSpeaking(false); onComplete?.(); };
     utterance.onerror = () => { setIsSpeaking(false); onComplete?.(); };
     utteranceRef.current = utterance;

@@ -286,6 +286,7 @@ serve(async (req) => {
     }).format(now);
 
     let realDataContext = "";
+    let userDisplayName = "";
     const authHeader = req.headers.get("Authorization");
 
     // Always fetch real data when user is authenticated
@@ -326,6 +327,7 @@ serve(async (req) => {
           triagedEmailsRes,
           pendingDraftsRes,
           followUpRes,
+          userPrefsRes,
         ] = await Promise.all([
           canFetchNylas && nylasGrants.length > 0
             ? Promise.all(nylasGrants.map((g) => fetchRecentEmails(g.grantId, nylasApiKey, 8, g.email)))
@@ -401,6 +403,11 @@ serve(async (req) => {
             .gte("replied_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
             .order("replied_at", { ascending: false })
             .limit(8),
+          adminForContacts
+            .from("user_preferences")
+            .select("user_display_name")
+            .eq("user_id", user.id)
+            .maybeSingle(),
         ]);
 
         // Helper: load the archived transcript .txt from storage
@@ -447,6 +454,7 @@ serve(async (req) => {
         const triagedEmails: any[] = (triagedEmailsRes as any)?.data || [];
         const pendingDrafts: any[] = (pendingDraftsRes as any)?.data || [];
         const followUps: any[] = (followUpRes as any)?.data || [];
+        userDisplayName = ((userPrefsRes as any)?.data?.user_display_name || "").trim();
 
         // "Right now" context from calendar events already fetched
         const nowTs = now.getTime();
@@ -961,6 +969,7 @@ Location: ${e.location || "None"}\n`;
     }
 
     const systemPrompt = `You are ${agentName || "Normy"}, an elite AI executive assistant. Today is ${today}. The user's local time right now is ${currentTimeStr} (${tz}) — it is ${timeOfDay}. ALWAYS reason about dates and times relative to this local time, never UTC.
+${userDisplayName ? `\nThe user's preferred name is "${userDisplayName}". Always refer to them by this name (e.g., "Good ${timeOfDay}, ${userDisplayName}!", "Here's what's on your plate today, ${userDisplayName}"). Never use their email address as a name.\n` : ""}
 
 ## YOUR LIVE AWARENESS
 You have real-time access to the user's:

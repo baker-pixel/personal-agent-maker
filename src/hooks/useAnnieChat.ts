@@ -27,7 +27,14 @@ async function persistMessage(conversationId: string, role: string, content: str
     .eq("id", conversationId);
 }
 
-export function useAnnieChat(agentName: string, mode: "text" | "voice" = "text") {
+export function useAnnieChat(
+  agentName: string,
+  mode: "text" | "voice" = "text",
+  options?: { conversationTitle?: string; enabled?: boolean }
+) {
+  const conversationTitle = options?.conversationTitle ?? "Delegate";
+  const enabled = options?.enabled ?? true;
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [thinking, setThinking] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -43,11 +50,11 @@ export function useAnnieChat(agentName: string, mode: "text" | "voice" = "text")
       .from("chat_conversations")
       .select("id, title, updated_at")
       .eq("user_id", session.user.id)
-      .eq("title", "Delegate")
+      .eq("title", conversationTitle)
       .order("updated_at", { ascending: false })
       .limit(50);
     if (data) setConversations(data);
-  }, []);
+  }, [conversationTitle]);
 
   const loadConversation = useCallback(async (conversationId: string) => {
     setLoading(true);
@@ -84,8 +91,9 @@ export function useAnnieChat(agentName: string, mode: "text" | "voice" = "text")
     fetchConversations();
   }, [fetchConversations]);
 
-  // Load most recent conversation on mount
+  // Load most recent conversation on mount (skipped until enabled)
   useEffect(() => {
+    if (!enabled) { setLoading(false); return; }
     let cancelled = false;
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -98,7 +106,7 @@ export function useAnnieChat(agentName: string, mode: "text" | "voice" = "text")
         .from("chat_conversations")
         .select("id")
         .eq("user_id", session.user.id)
-        .eq("title", "Delegate")
+        .eq("title", conversationTitle)
         .gte("updated_at", cutoff)
         .order("updated_at", { ascending: false })
         .limit(1);
@@ -128,7 +136,7 @@ export function useAnnieChat(agentName: string, mode: "text" | "voice" = "text")
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [enabled, conversationTitle, fetchConversations]);
 
   const send = useCallback(
     async (input: string) => {
@@ -145,7 +153,7 @@ export function useAnnieChat(agentName: string, mode: "text" | "voice" = "text")
         if (session?.user) {
           const { data: created } = await supabase
             .from("chat_conversations")
-            .insert({ user_id: session.user.id, title: "Delegate" })
+            .insert({ user_id: session.user.id, title: conversationTitle })
             .select("id")
             .single();
           if (created) {

@@ -15,6 +15,7 @@ import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Onboarding from "./pages/Onboarding";
 import DashboardPage from "./pages/DashboardPage";
+import ModeSelect from "./pages/ModeSelect";
 import DecisionText from "./pages/DecisionText";
 import DecisionVoice from "./pages/DecisionVoice";
 import EmailView from "./pages/EmailView";
@@ -159,8 +160,8 @@ const App = () => {
           <UpdatePrompt />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={isRecovery ? <Navigate to="/reset-password" replace /> : session ? <Navigate to="/dashboard" replace /> : <Landing />} />
-              <Route path="/auth" element={!session ? <Auth /> : isRecovery ? <Navigate to="/reset-password" replace /> : <Navigate to="/dashboard" replace />} />
+              <Route path="/" element={isRecovery ? <Navigate to="/reset-password" replace /> : session ? <Navigate to="/mode-select" replace /> : <Landing />} />
+              <Route path="/auth" element={!session ? <Auth /> : isRecovery ? <Navigate to="/reset-password" replace /> : <Navigate to="/mode-select" replace />} />
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/pricing" element={<Pricing />} />
@@ -173,7 +174,7 @@ const App = () => {
                 isOnboarded ? <Navigate to="/dashboard" replace /> :
                 <Onboarding onComplete={() => setIsOnboarded(true)} />
               } />
-              <Route path="/mode-select" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/mode-select" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><ModeSelect /></ProtectedRoute>} />
               <Route path="/office" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Office /></ProtectedRoute>} />
               <Route path="/office-3d" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin" /></div>}><Office3D /></Suspense></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><DashboardPage /></ProtectedRoute>} />

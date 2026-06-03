@@ -447,9 +447,11 @@ export default function DecisionVoice() {
             <VoiceWaveform isActive={voice.isListening} />
             <button
               onClick={() => {
-                // In iOS PWA, the mic API is blocked but TTS works. Toggling
-                // here at least unlocks SpeechSynthesis on the user gesture
-                // and turns voice replies on/off, so tapping does *something*.
+                // Reset chat history when starting a new voice session
+                if (!voice.conversationActive) {
+                  chat.reset();
+                  greetedRef.current = false;
+                }
                 if (voice.speechRecognitionBlockedByPwa) {
                   voice.toggleConversation();
                   return;

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -53,10 +53,16 @@ export default function Onboarding({ onComplete }: Props) {
   const { integrations, integrationsLoading } = useIntegrations();
   const { connecting, connect } = useGoogleOAuthPopup();
 
-  const [step, setStep] = useState(() => {
-    const saved = sessionStorage.getItem("onboarding-step");
-    return saved ? Math.min(parseInt(saved, 10) || 0, TOTAL_STEPS - 1) : 0;
-  });
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        toast({ title: "Session expired", description: "Please sign in again.", variant: "destructive" });
+        supabase.auth.signOut();
+      }
+    });
+  }, []);
+
+  const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
   const [state, setState] = useState<OnboardingState>(defaults);
   const [saving, setSaving] = useState(false);
@@ -69,15 +75,11 @@ export default function Onboarding({ onComplete }: Props) {
   // Without this, step 1 would flash "not connected" even for already-connected accounts.
   const gmailConnected = !integrationsLoading && integrations.find(i => i.id === "gmail")?.connected;
   const calendarConnected = !integrationsLoading && integrations.find(i => i.id === "google-calendar")?.connected;
-  const anyConnected = gmailConnected || calendarConnected;
 
   const update = <K extends keyof OnboardingState>(key: K, val: OnboardingState[K]) =>
     setState(s => ({ ...s, [key]: val }));
 
-  const goToStep = (n: number) => {
-    sessionStorage.setItem("onboarding-step", String(n));
-    setStep(n);
-  };
+  const goToStep = (n: number) => { setStep(n); };
 
   const next = () => {
     // Step 0: if no name entered, use default but show brief confirmation
@@ -121,16 +123,13 @@ export default function Onboarding({ onComplete }: Props) {
       // Update agent name in context immediately
       setAgentName(agentName);
 
-      // Clear persisted step so a future fresh onboarding starts at 0
-      sessionStorage.removeItem("onboarding-step");
-
       // Signal parent (App.tsx) that onboarding is done — this sets isOnboarded = true
       // so ProtectedRoute stops redirecting to /onboarding before we navigate.
       onComplete?.();
 
       // Navigate after onComplete has been called so the route guard sees
       // isOnboarded = true on the next render cycle.
-      navigate("/dashboard", { replace: true });
+      navigate("/mode-select", { replace: true });
     } catch (err: any) {
       console.error("[Onboarding] finish error", err);
       toast({
@@ -158,11 +157,7 @@ export default function Onboarding({ onComplete }: Props) {
 
   const agentDisplay = state.agentName.trim() || "your agent";
 
-  const getContinueLabel = () => {
-    if (step === 2) return anyConnected ? "Continue" : "Skip for now";
-    if (step === TOTAL_STEPS - 1) return saving ? "Setting up…" : "Go to my dashboard";
-    return "Continue";
-  };
+  const getContinueLabel = () => "Continue";
 
   const previewVoice = async (voiceId: string) => {
     // Abort any in-flight request so we don't fire multiple concurrent fetches
@@ -366,8 +361,8 @@ export default function Onboarding({ onComplete }: Props) {
                 </div>
               )}
 
-              {/* ── Step 2: Connect accounts ──────────────────────────────── */}
-              {step === 2 && (
+              {/* ── Step 3: Connect accounts ──────────────────────────────── */}
+              {step === 3 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <h1 className="font-display text-3xl font-bold mb-2">Connect your accounts</h1>
@@ -448,8 +443,8 @@ export default function Onboarding({ onComplete }: Props) {
                 </div>
               )}
 
-              {/* ── Step 3: Preferences ───────────────────────────────────── */}
-              {step === 3 && (
+              {/* ── Step 2: Preferences ───────────────────────────────────── */}
+              {step === 2 && (
                 <div className="space-y-6">
                   <div className="text-center">
                     <h1 className="font-display text-3xl font-bold mb-2">How should {agentDisplay} work?</h1>
