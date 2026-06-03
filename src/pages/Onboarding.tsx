@@ -115,6 +115,7 @@ export default function Onboarding({ onComplete }: Props) {
           decision_style: state.decisionStyle,
           tts_elevenlabs_voice_id: state.voiceId, // column reused for groq voice id
           tts_provider: "groq",
+          tts_enabled: true,
           updated_at: new Date().toISOString(),
         }, { onConflict: "user_id" });
 
