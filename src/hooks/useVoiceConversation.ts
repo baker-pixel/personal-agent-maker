@@ -93,11 +93,9 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
       // Don't interrupt if agent is already working or TTS is playing.
       if (thinkingRef.current || ttsSpeakingRef.current || pendingTranscriptRef.current) return;
       const msg = "I didn't hear anything — I'm still here whenever you're ready.";
-      ttsRef.current.speak(msg, () => {
-        if (conversationActiveRef.current) {
-          setTimeout(() => { try { speechRef.current?.startListening(); } catch { /* ignore */ } }, 200);
-        }
-      });
+      setConversationActive(false);
+      conversationActiveRef.current = false;
+      ttsRef.current.speak(msg);
     },
     onResult: (text) => {
       const trimmed = text.trim();
