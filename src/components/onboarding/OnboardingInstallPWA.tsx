@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { ArrowRight, ArrowLeft, Download, Share, PlusSquare, Smartphone, Check } from "lucide-react";
+import { getPwaInstallPrompt, clearPwaInstallPrompt, onPwaInstallPromptReady } from "@/lib/pwaInstallPrompt";
 
 interface Props {
   onNext: () => void;
@@ -25,24 +26,26 @@ function isStandalone(): boolean {
 
 export const OnboardingInstallPWA = ({ onNext, onBack, onSkip }: Props) => {
   const [platform] = useState<Platform>(getPlatform);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(() => getPwaInstallPrompt());
   const [installed, setInstalled] = useState(isStandalone);
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-    window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    // Pick up already-captured prompt, or wait for it to arrive
+    const existing = getPwaInstallPrompt();
+    if (existing) {
+      setDeferredPrompt(existing);
+    }
+    const unsub = onPwaInstallPromptReady(() => setDeferredPrompt(getPwaInstallPrompt()));
+    return unsub;
   }, []);
 
   const handleInstall = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === "accepted") setInstalled(true);
+      clearPwaInstallPrompt();
       setDeferredPrompt(null);
+      if (outcome === "accepted") setInstalled(true);
     }
   };
 

@@ -52,6 +52,9 @@ if (isPreviewHost || isInIframe) {
 
 preparePasswordRecoveryUrlForManualHandling();
 
+// Capture beforeinstallprompt before any component mounts — event fires once early.
+import("./lib/pwaInstallPrompt").then(({ initPwaInstallCapture }) => initPwaInstallCapture());
+
 importApp()
   .then(({ default: App }) => {
     if (!rootElement) throw new Error("Root element not found");
