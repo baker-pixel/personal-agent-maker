@@ -45,6 +45,10 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const ttsSpeakingRef = useRef(false);
   ttsSpeakingRef.current = tts.isSpeaking;
 
+  // Stable ref — must be defined before `speech` so onSilenceTimeout can use it.
+  const ttsRef = useRef(tts);
+  ttsRef.current = tts;
+
   // Track consecutive error count for exponential backoff
   const errorCountRef = useRef(0);
   const lastErrorAtRef = useRef(0);
@@ -83,6 +87,18 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   const speech = useSpeechRecognition({
     continuous: true,
     lang: voicePrefs.prefs.stt_language || "en-US",
+    silenceTimeoutMs: 5000,
+    onSilenceTimeout: () => {
+      if (!conversationActiveRef.current) return;
+      // Don't interrupt if agent is already working or TTS is playing.
+      if (thinkingRef.current || ttsSpeakingRef.current || pendingTranscriptRef.current) return;
+      const msg = "I didn't hear anything — I'm still here whenever you're ready.";
+      ttsRef.current.speak(msg, () => {
+        if (conversationActiveRef.current) {
+          setTimeout(() => { try { speechRef.current?.startListening(); } catch { /* ignore */ } }, 200);
+        }
+      });
+    },
     onResult: (text) => {
       const trimmed = text.trim();
       if (!trimmed) return;
@@ -162,8 +178,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     return () => window.clearTimeout(id);
   }, [conversationActive, voicePrefs.loaded]);
 
-  // Stable refs to avoid re-running the speak effect on every render
-  const ttsRef = useRef(tts);
+  // Keep stable refs in sync each render.
   ttsRef.current = tts;
   speechRef.current = speech;
 
