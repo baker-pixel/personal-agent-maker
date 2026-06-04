@@ -1,7 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { Menu, Mail, Calendar, Settings, LogOut, Home, Building2, Users, Flame, ListTodo, Inbox } from "lucide-react";
+import { Menu, Mail, Calendar, Settings, LogOut, Home, Users, Inbox, NotebookPen } from "lucide-react";
 import { performSignOut } from "@/lib/signOut";
-import { useAgent } from "@/contexts/AgentContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,17 +12,14 @@ import {
 export default function AppMenu() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { agentName } = useAgent();
 
   const navItems = [
     { label: "Home", path: "/mode-select", icon: Home },
-    { label: `${agentName}'s Office`, path: "/office", icon: Building2 },
+    { label: "Steno", path: "/steno", icon: NotebookPen },
     { label: "Email", path: "/email", icon: Mail },
     { label: "Approval Inbox", path: "/inbox", icon: Inbox },
     { label: "Calendar", path: "/calendar", icon: Calendar },
-    { label: "Leads", path: "/leads", icon: Flame },
     { label: "Contacts", path: "/contacts", icon: Users },
-    { label: "Tasks", path: "/tasks", icon: ListTodo },
   ];
 
   const handleSignOut = async () => {

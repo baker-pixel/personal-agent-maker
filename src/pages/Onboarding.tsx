@@ -11,7 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import {
   ArrowRight, ArrowLeft, Mail, Calendar,
   CheckCircle2, Sparkles, Shield, MessageSquare,
-  Check, Loader2, Zap, Volume2,
+  Check, Loader2, Zap, Volume2, Brain,
 } from "lucide-react";
 import { GROQ_VOICES, DEFAULT_GROQ_VOICE } from "@/lib/groqVoices";
 
@@ -43,7 +43,7 @@ const slideVariants = {
 
 interface Props { onComplete?: () => void; }
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -123,6 +123,11 @@ export default function Onboarding({ onComplete }: Props) {
 
       // Update agent name in context immediately
       setAgentName(agentName);
+
+      // Kick off email triage in the background if Gmail is connected
+      if (gmailConnected) {
+        supabase.functions.invoke("email-triage", { body: {} }).catch(() => {});
+      }
 
       // Signal parent (App.tsx) that onboarding is done — this sets isOnboarded = true
       // so ProtectedRoute stops redirecting to /onboarding before we navigate.
@@ -347,8 +352,43 @@ export default function Onboarding({ onComplete }: Props) {
                 </div>
               )}
 
-              {/* ── Step 3: Connect accounts ──────────────────────────────── */}
+              {/* ── Step 3: Personality assessment ───────────────────────── */}
               {step === 3 && (
+                <div className="space-y-8">
+                  <div className="text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-6">
+                      <Brain className="w-8 h-8 text-accent" />
+                    </div>
+                    <h1 className="font-display text-3xl font-bold mb-2">
+                      Teach {agentDisplay} your personality!
+                    </h1>
+                  </div>
+
+                  <div className="space-y-4 text-muted-foreground leading-relaxed text-sm">
+                    <p>
+                      One of the most innovative aspects of {agentDisplay} is that we've built in the ability to understand your personality, your communication style, work preferences, your tone, pace. Just like any good personal assistant, getting to "know" you is vital for a strong relationship.
+                    </p>
+                    <p>
+                      Take our proprietary personality assessment now (3–5 minutes) and help {agentDisplay} work your way.
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={() => window.open("https://assessment.normyagent.com", "_blank", "noopener")}
+                    className="w-full bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl h-12 text-sm font-semibold shadow-lg shadow-accent/25"
+                  >
+                    Take the Personality Assessment
+                    <ArrowRight className="w-4 h-4 ml-1.5" />
+                  </Button>
+
+                  <p className="text-xs text-muted-foreground text-center">
+                    Opens in a new tab — come back here when you're done to continue setup.
+                  </p>
+                </div>
+              )}
+
+              {/* ── Step 4: Connect accounts ──────────────────────────────── */}
+              {step === 4 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <h1 className="font-display text-3xl font-bold mb-2">Connect your accounts</h1>
@@ -425,7 +465,7 @@ export default function Onboarding({ onComplete }: Props) {
                 </div>
               )}
 
-              {/* ── Step 2: Preferences ───────────────────────────────────── */}
+              {/* ── Step 2: Preferences ──────────────────────────────────── */}
               {step === 2 && (
                 <div className="space-y-6">
                   <div className="text-center">
@@ -515,8 +555,8 @@ export default function Onboarding({ onComplete }: Props) {
                 </div>
               )}
 
-              {/* ── Step 4: Done ──────────────────────────────────────────── */}
-              {step === 4 && (
+              {/* ── Step 5: Done ──────────────────────────────────────────── */}
+              {step === 5 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <motion.div

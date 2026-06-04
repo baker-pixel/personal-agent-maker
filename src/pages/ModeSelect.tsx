@@ -2,7 +2,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, X, PhoneOff, Send, Loader2 } from "lucide-react";
+import { Mic, X, PhoneOff, Send, Loader2, MessageSquare } from "lucide-react";
 import { useAgent } from "@/contexts/AgentContext";
 import { useAnnieChat } from "@/hooks/useAnnieChat";
 import { useVoiceConversation } from "@/hooks/useVoiceConversation";
@@ -113,14 +113,14 @@ export default function ModeSelect() {
     : "Ready";
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center px-5 pb-12" style={{ paddingTop: "calc(var(--header-h, 56px) + 2rem)" }}>
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-5 pb-12" style={{ paddingTop: "var(--header-h, 56px)" }}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
         className="w-full max-w-[420px] flex flex-col gap-5"
       >
-        <h1 className="font-display text-4xl font-bold text-foreground text-center leading-tight">
+        <h1 className="font-display text-3xl font-bold text-foreground text-center leading-tight">
           What do you want to do?
         </h1>
 
@@ -131,10 +131,10 @@ export default function ModeSelect() {
               <motion.div
                 key={i}
                 className="absolute rounded-full"
-                style={{ background: "hsl(16 80% 58% / 0.15)" }}
-                animate={{ scale: [1, 1.8, 1.8], opacity: [0.6, 0, 0] }}
+                style={{ background: "hsl(16 80% 58% / 0.15)", width: 112, height: 112 }}
+                initial={{ scale: 1, opacity: 0 }}
+                animate={{ scale: [1, 1.8], opacity: [0, 0.6, 0] }}
                 transition={{ duration: 2.4, repeat: Infinity, delay: i * 0.8, ease: "easeOut" }}
-                initial={{ width: 112, height: 112 }}
               />
             ))}
             <div className="w-44 h-44 rounded-full bg-accent/10 flex items-center justify-center relative z-10">
@@ -149,82 +149,25 @@ export default function ModeSelect() {
               </motion.div>
             </div>
           </button>
-          <div className="text-center">
-            <p className="font-display text-lg font-semibold text-foreground">Tap to talk</p>
-            <p className="text-sm text-muted-foreground">Start a voice chat with {displayName}</p>
+          <div className="flex gap-3 w-full max-w-xs">
+            <button
+              onClick={() => navigate("/decision/text")}
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-border bg-card text-sm font-semibold text-foreground hover:border-accent/50 hover:bg-accent/5 active:scale-[0.97] transition-all"
+            >
+              <MessageSquare className="w-4 h-4 text-muted-foreground" />
+              Text {displayName}
+            </button>
+            <button
+              onClick={handleMicTap}
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold text-accent-foreground active:scale-[0.97] transition-all shadow-md shadow-accent/20"
+              style={{ background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 32%))" }}
+            >
+              <Mic className="w-4 h-4" />
+              Talk to {displayName}
+            </button>
           </div>
         </div>
 
-        {/* Decision Mode – Delegate */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="rounded-2xl border-2 border-accent bg-card p-5 shadow-sm"
-        >
-          <h2 className="font-display text-lg font-bold text-foreground mb-1">Decision Mode–Delegate</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Tell {displayName} what you need. {displayName} will handle the thinking.
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => navigate("/decision/text")}
-              className="flex-1 py-3 rounded-xl font-semibold text-sm text-accent-foreground active:scale-[0.98] transition-all"
-              style={{ background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 38%))" }}
-            >
-              Text
-            </button>
-            <button
-              onClick={() => navigate("/decision/voice")}
-              className="flex-1 py-3 rounded-xl font-semibold text-sm text-accent-foreground active:scale-[0.98] transition-all"
-              style={{ background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 38%))" }}
-            >
-              Voice
-            </button>
-          </div>
-          <p className="text-center text-[10px] font-bold uppercase tracking-widest text-accent mt-3">
-            ★ RECOMMENDED
-          </p>
-        </motion.div>
-
-        {/* Detail Mode – Collaborate */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="rounded-2xl border border-border bg-card p-5 shadow-sm"
-        >
-          <h2 className="font-display text-lg font-bold text-foreground mb-1">Detail Mode–Collaborate</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Open your workspace and work side-by-side with {displayName}.
-          </p>
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="w-full py-3 rounded-xl font-semibold text-sm text-white bg-foreground hover:opacity-90 active:scale-[0.98] transition-all"
-          >
-            Enter Workspace
-          </button>
-        </motion.div>
-
-        {/* Agent's Office */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="rounded-2xl border border-border bg-card p-5 shadow-sm"
-        >
-          <h2 className="font-display text-lg font-bold text-foreground mb-1">{displayName}'s Office</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Step into {displayName}'s virtual office. Browse notifications, chat, and more.
-          </p>
-          <button
-            onClick={() => navigate("/office")}
-            className="w-full py-3 rounded-xl font-semibold text-sm text-accent-foreground active:scale-[0.98] transition-all"
-            style={{ background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 32%))" }}
-          >
-            Enter Office
-          </button>
-        </motion.div>
       </motion.div>
 
       {/* ── Voice Overlay ────────────────────────────────────────────────── */}

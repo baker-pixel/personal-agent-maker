@@ -394,7 +394,7 @@ export default function Steno() {
       <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
         <div className="container max-w-3xl flex items-center h-14 px-4">
           <button
-            onClick={() => { speech.stopListening(); navigate("/office"); }}
+            onClick={() => { speech.stopListening(); navigate(-1); }}
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

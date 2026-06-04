@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, Mail, Eye, EyeOff, Check, Building2, BellRing } from "lucide-react";
+import { ArrowLeft, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, Mail, Eye, EyeOff, Check, Building2, BellRing, Flame, ListTodo } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import EmailTriageSettings from "@/components/EmailTriageSettings";
@@ -335,6 +335,36 @@ export default function Settings() {
                   </button>
                 );
               })}
+            </div>
+
+            {/* Agent feature pages */}
+            <div className="mt-6">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-1">Agent Features</p>
+              <div className="space-y-2">
+                {[
+                  { label: `${settings.agentName || agentName}'s Office`, description: "Overview, status & agent activity", icon: Building2, iconBg: "bg-sky-500/15", iconColor: "text-sky-500", path: "/office" },
+                  { label: "Leads", description: "Pipeline, prospects & follow-up tracking", icon: Flame, iconBg: "bg-orange-500/15", iconColor: "text-orange-500", path: "/leads" },
+                  { label: "Tasks", description: "Delegated tasks & action items", icon: ListTodo, iconBg: "bg-violet-500/15", iconColor: "text-violet-500", path: "/tasks" },
+                ].map(item => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => navigate(item.path)}
+                      className="w-full flex items-center gap-4 p-4 rounded-2xl bg-card border border-border/40 hover:border-accent/30 hover:bg-accent/[0.02] transition-all group text-left"
+                    >
+                      <div className={`w-11 h-11 rounded-xl ${item.iconBg} flex items-center justify-center shrink-0`}>
+                        <Icon className={`w-5 h-5 ${item.iconColor}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{item.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-accent group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}

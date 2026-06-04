@@ -6,12 +6,12 @@ export interface GroqVoice {
 
 // Orpheus English — canopylabs/orpheus-v1-english
 export const GROQ_VOICES: GroqVoice[] = [
-  { id: "autumn", name: "Autumn", description: "Warm, conversational"  },
-  { id: "diana",  name: "Diana",  description: "Clear, professional"   },
-  { id: "hannah", name: "Hannah", description: "Friendly, natural"     },
-  { id: "austin", name: "Austin", description: "Casual, approachable"  },
-  { id: "daniel", name: "Daniel", description: "Steady, articulate"    },
-  { id: "troy",   name: "Troy",   description: "Confident, smooth"     },
+  { id: "autumn", name: "Female Warm",         description: "Warm, conversational"  },
+  { id: "diana",  name: "Female Professional", description: "Clear, professional"   },
+  { id: "hannah", name: "Female Friendly",     description: "Friendly, natural"     },
+  { id: "austin", name: "Male Casual",         description: "Casual, approachable"  },
+  { id: "daniel", name: "Male Articulate",     description: "Steady, articulate"    },
+  { id: "troy",   name: "Male Confident",      description: "Confident, smooth"     },
 ];
 
 export const DEFAULT_GROQ_VOICE = "autumn";
