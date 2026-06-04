@@ -9,6 +9,29 @@ interface UseVoiceConversationOpts {
   onUserUtterance: (text: string) => void;
   agentReply?: string | null;
   thinking?: boolean;
+  /** Live streaming text from the LLM while thinking=true. Hook speaks complete sentences immediately. */
+  streamingText?: string | null;
+}
+
+/** Extract sentences that end with .!? followed by whitespace from text[from..]. */
+function extractCompleteSentences(text: string, from: number): { sentences: string[]; newFrom: number } {
+  const portion = text.slice(from);
+  const sentences: string[] = [];
+  let pos = 0;
+  let sentenceStart = 0;
+  while (pos < portion.length) {
+    const ch = portion[pos];
+    if ('.!?'.includes(ch) && pos + 1 < portion.length && /\s/.test(portion[pos + 1])) {
+      const sentence = portion.slice(sentenceStart, pos + 1).trim();
+      if (sentence.length >= 4) sentences.push(sentence);
+      pos++;
+      while (pos < portion.length && /\s/.test(portion[pos])) pos++;
+      sentenceStart = pos;
+    } else {
+      pos++;
+    }
+  }
+  return { sentences, newFrom: from + sentenceStart };
 }
 
 /**
@@ -19,7 +42,7 @@ interface UseVoiceConversationOpts {
  * - After TTS ends, restarts listening
  * - If user starts speaking while TTS is playing, cancels TTS (barge-in)
  */
-export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: UseVoiceConversationOpts) {
+export function useVoiceConversation({ onUserUtterance, agentReply, thinking, streamingText }: UseVoiceConversationOpts) {
   const voicePrefs = useVoicePreferences();
   const [conversationActive, setConversationActive] = useState(false);
   const conversationActiveRef = useRef(false);
@@ -42,8 +65,9 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     },
     onChange: voicePrefs.update,
   });
-  const ttsSpeakingRef = useRef(false);
-  ttsSpeakingRef.current = tts.isSpeaking;
+  // Use TTS's synchronously-updated ref directly — avoids the React render-lag race
+  // where ttsSpeakingRef.current read stale false while TTS had already started.
+  const ttsSpeakingRef = tts.isSpeakingRef;
 
   // Stable ref — must be defined before `speech` so onSilenceTimeout can use it.
   const ttsRef = useRef(tts);
@@ -57,9 +81,41 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   // doesn't fire a second start before the previous one's `onstart` lands.
   const lastStartAttemptRef = useRef(0);
 
+  // Streaming TTS queue: speak LLM sentences as they arrive, not after full response.
+  const streamingSpokenUpToRef = useRef(0);  // chars of streamingText already queued
+  const ttsStreamQueueRef = useRef<string[]>([]);
+  const ttsStreamBusyRef = useRef(false);
+  const postDrainCallbackRef = useRef<(() => void) | null>(null);
+  // Real-time VAD signal — updated before React re-renders, used in drainStreamQueue closure.
+  const isSpeechActiveRef = useRef(false);
+
+  // Drain the streaming TTS queue one sentence at a time.
+  const drainStreamQueue = useCallback(() => {
+    if (ttsStreamBusyRef.current) return;
+    if (ttsStreamQueueRef.current.length === 0) {
+      const cb = postDrainCallbackRef.current;
+      if (cb) { postDrainCallbackRef.current = null; cb(); }
+      return;
+    }
+    if (!conversationActiveRef.current) { ttsStreamQueueRef.current = []; return; }
+    // Barge-in: user is speaking right now — discard remaining queue
+    if (isSpeechActiveRef.current) { ttsStreamQueueRef.current = []; ttsStreamBusyRef.current = false; return; }
+    const sentence = ttsStreamQueueRef.current.shift()!;
+    ttsStreamBusyRef.current = true;
+    const t = ttsRef.current;
+    if (t.enabled && t.isSupported) {
+      t.speak(sentence, () => { ttsStreamBusyRef.current = false; drainStreamQueue(); });
+    } else {
+      ttsStreamBusyRef.current = false;
+      drainStreamQueue();
+    }
+  // drainStreamQueue only uses refs — stable, no deps needed
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Buffer final transcripts so a brief pause (thinking) doesn't cut the user off.
   // We accumulate fragments and only submit after PAUSE_MS of true silence.
-  const PAUSE_MS = 2500;
+  const PAUSE_MS = 300;
   const pendingTranscriptRef = useRef<string>("");
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -75,6 +131,11 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     pendingTranscriptRef.current = "";
     if (!buffered) return;
     errorCountRef.current = 0;
+    // Barge-in: discard streaming TTS queue and reset state for next turn
+    ttsStreamQueueRef.current = [];
+    ttsStreamBusyRef.current = false;
+    postDrainCallbackRef.current = null;
+    streamingSpokenUpToRef.current = 0;
     if (ttsSpeakingRef.current) {
       try { ttsRef.current?.stop(); } catch { /* ignore */ }
     }
@@ -142,9 +203,8 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
       // If conversation is active and we're idle, restart listening shortly.
       // Use refs (not closure) so we read the *current* thinking/speaking state.
       if (!conversationActiveRef.current) return;
-      // Backoff if we're in an error storm: 600ms base (mobile Safari needs
-      // breathing room between recognition instances), doubling up to 4s.
-      const backoff = Math.min(600 * Math.pow(2, errorCountRef.current), 4000);
+      // Backoff if we're in an error storm: 250ms base, doubling up to 4s.
+      const backoff = Math.min(250 * Math.pow(2, errorCountRef.current), 4000);
       setTimeout(() => {
         if (
           conversationActiveRef.current &&
@@ -165,6 +225,21 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     conversationActiveRef.current = conversationActive;
   }, [conversationActive]);
 
+  // Real-time barge-in: as soon as VAD signals speech onset (isSpeechActive=true),
+  // cancel TTS so the user's voice is captured cleanly.
+  isSpeechActiveRef.current = speech.isSpeechActive;
+  useEffect(() => {
+    if (!speech.isSpeechActive) return;
+    if (!conversationActiveRef.current) return;
+    if (!ttsSpeakingRef.current && !ttsStreamBusyRef.current && !ttsStreamQueueRef.current.length) return;
+    // User started speaking — flush TTS state immediately.
+    ttsStreamQueueRef.current = [];
+    ttsStreamBusyRef.current = false;
+    postDrainCallbackRef.current = null;
+    try { ttsRef.current.stop(); } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speech.isSpeechActive]);
+
   useEffect(() => {
     if (!conversationActive || !voicePrefs.loaded || ensuredTtsAfterPrefsRef.current) return;
     const id = window.setTimeout(() => {
@@ -180,14 +255,32 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
   ttsRef.current = tts;
   speechRef.current = speech;
 
-  // When a new agent reply comes in, speak it (if conversation active and TTS enabled)
+  // Streaming TTS: as LLM streams, detect completed sentences and speak them immediately.
+  // This slashes perceived latency — user hears sentence 1 while sentence 2 is still generating.
+  useEffect(() => {
+    if (!streamingText || !conversationActive) return;
+    const { sentences, newFrom } = extractCompleteSentences(streamingText, streamingSpokenUpToRef.current);
+    if (!sentences.length) return;
+    streamingSpokenUpToRef.current = newFrom;
+    // Stop listening on first streaming chunk
+    if (!ttsSpeakingRef.current && !ttsStreamBusyRef.current) {
+      speechRef.current?.stopListening();
+    }
+    ttsStreamQueueRef.current.push(...sentences);
+    drainStreamQueue();
+  }, [streamingText, conversationActive, drainStreamQueue]);
+
+  // When the full agent reply arrives (thinking=false), speak only the unspoken tail,
+  // then resume listening. Coordinates with the streaming queue via postDrainCallbackRef.
   useEffect(() => {
     if (!agentReply || agentReply === lastSpokenReplyRef.current) return;
     if (!conversationActive) return;
     lastSpokenReplyRef.current = agentReply;
 
-    // Stop listening while we speak (mic stays available for barge-in via re-start after)
-    speechRef.current?.stopListening();
+    // How much was already queued via streaming TTS
+    const alreadyQueued = streamingSpokenUpToRef.current;
+    const remainder = alreadyQueued > 0 ? agentReply.slice(alreadyQueued).trim() : agentReply;
+    streamingSpokenUpToRef.current = 0; // reset for next turn
 
     const t = ttsRef.current;
     let watchdogId: ReturnType<typeof setTimeout> | null = null;
@@ -197,24 +290,36 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
       resumed = true;
       if (watchdogId) { clearTimeout(watchdogId); watchdogId = null; }
       if (conversationActiveRef.current) {
-        setTimeout(() => { try { speechRef.current?.startListening(); } catch { /* ignore */ } }, 200);
+        setTimeout(() => {
+          lastStartAttemptRef.current = Date.now();
+          try { speechRef.current?.startListening(); } catch { /* ignore */ }
+        }, 200);
       }
     };
-    if (t.enabled && t.isSupported) {
-      t.speak(agentReply, resume);
-      // Watchdog: if TTS never fires onend (e.g. iOS PWA glitch), force-resume
-      // after a generous timeout based on text length (~120 chars/sec read aloud
-      // at slowest, plus 8s buffer; cap at 60s).
-      const estMs = Math.min(60000, 8000 + agentReply.length * 80);
-      watchdogId = setTimeout(() => {
-        if (!resumed) {
-          console.warn("[voice] TTS watchdog fired — forcing stop & resume");
-          try { t.stop(); } catch { /* ignore */ }
-          resume();
-        }
-      }, estMs);
+
+    const speakRemainder = () => {
+      if (!remainder) { resume(); return; }
+      speechRef.current?.stopListening();
+      if (t.enabled && t.isSupported) {
+        t.speak(remainder, resume);
+        const estMs = Math.min(60000, 8000 + remainder.length * 80);
+        watchdogId = setTimeout(() => {
+          if (!resumed) {
+            console.warn("[voice] TTS watchdog fired — forcing stop & resume");
+            try { t.stop(); } catch { /* ignore */ }
+            resume();
+          }
+        }, estMs);
+      } else {
+        resume();
+      }
+    };
+
+    // Wait for streaming queue to drain before speaking remainder
+    if (ttsStreamBusyRef.current || ttsStreamQueueRef.current.length > 0) {
+      postDrainCallbackRef.current = speakRemainder;
     } else {
-      resume();
+      speakRemainder();
     }
   }, [agentReply, conversationActive]);
 
@@ -237,6 +342,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
         errorCountRef.current = 0;
         if (conversationActiveRef.current) {
           setTimeout(() => {
+            lastStartAttemptRef.current = Date.now();
             try { speechRef.current?.startListening(); } catch { /* ignore */ }
           }, 300);
         }
@@ -291,18 +397,22 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking }: 
     // Only attempt to start the mic if SpeechRecognition is actually supported.
     // On iOS PWA this API is missing entirely; TTS-only mode is the fallback.
     if (speech.isSupported) {
-      // Prompt for mic permission explicitly. iOS Safari sometimes won't show
-      // the SpeechRecognition prompt until getUserMedia has been called once,
-      // and Web Speech silently no-ops without it. Fire-and-forget — we don't
-      // need to keep the stream; we just need permission state to flip.
+      // Fire getUserMedia synchronously from the gesture handler to pre-warm mic
+      // permission state (iOS Safari won't show the SpeechRecognition prompt until
+      // getUserMedia has been called at least once from a gesture context).
+      // Fire-and-forget — we don't gate startListening on it because SpeechRecognition
+      // ALSO needs to be called from this same gesture context on iOS.
       try {
-        navigator.mediaDevices?.getUserMedia({ audio: true }).then((stream) => {
-          // Immediately release — Web Speech opens its own stream
-          stream.getTracks().forEach((t) => t.stop());
-        }).catch(() => { /* user denied; SpeechRecognition will surface the error */ });
-      } catch { /* navigator.mediaDevices missing on very old browsers */ }
-      lastStartAttemptRef.current = Date.now();
-      try { speech.startListening(); } catch { /* ignore */ }
+        navigator.mediaDevices?.getUserMedia({ audio: true })
+          .then((stream) => { stream.getTracks().forEach((t) => t.stop()); })
+          .catch(() => { /* user denied; SpeechRecognition will surface error */ });
+      } catch { /* ignore — mediaDevices missing on old browsers */ }
+      // Start recognition synchronously while still in the gesture handler.
+      // Skip if TTS is already playing (greeting may have started) — resume() handles restart.
+      if (!ttsSpeakingRef.current) {
+        lastStartAttemptRef.current = Date.now();
+        try { speech.startListening(); } catch { /* ignore */ }
+      }
     }
   }, [speech, tts, voicePrefs]);
 

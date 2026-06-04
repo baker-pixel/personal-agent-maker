@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { markStage, setTurnConversationId } from "@/lib/voiceLatency";
 
 export interface ChatMessage {
   role: "user" | "agent";
@@ -147,9 +148,11 @@ export function useAnnieChat(
       setMessages((prev) => [...prev, userMsg]);
       setThinking(true);
 
+      // Single getSession call for the whole send flow
+      const { data: { session } } = await supabase.auth.getSession();
+
       // Create conversation if needed
       if (!convIdRef.current) {
-        const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           const { data: created } = await supabase
             .from("chat_conversations")
@@ -185,7 +188,6 @@ export function useAnnieChat(
       };
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
         const authHeaders: Record<string, string> = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
@@ -195,6 +197,9 @@ export function useAnnieChat(
           role: m.role === "user" ? ("user" as const) : ("assistant" as const),
           content: m.text,
         }));
+
+        if (convIdRef.current) setTurnConversationId(convIdRef.current);
+        markStage("llm_start");
 
         const controller = new AbortController();
         abortRef.current = controller;
@@ -234,6 +239,7 @@ export function useAnnieChat(
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let firstToken = true;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -252,7 +258,10 @@ export function useAnnieChat(
             try {
               const parsed = JSON.parse(jsonStr);
               const content = parsed.choices?.[0]?.delta?.content;
-              if (content) upsertAssistant(content);
+              if (content) {
+                if (firstToken) { markStage("llm_first_token"); firstToken = false; }
+                upsertAssistant(content);
+              }
             } catch {
               buffer = line + "\n" + buffer;
               break;

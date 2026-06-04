@@ -1,28 +1,65 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { startTurn, markStage } from "@/lib/voiceLatency";
 
 interface UseSpeechRecognitionOptions {
   onResult?: (transcript: string) => void;
   onEnd?: () => void;
   onSilenceTimeout?: () => void;
-  /**
-   * Called when recognition errors. Receives the SpeechRecognition error string
-   * (e.g. "not-allowed", "network", "audio-capture", "service-not-allowed").
-   * Excludes "no-speech" and "aborted" which are normal lifecycle events.
-   */
   onError?: (error: string) => void;
   continuous?: boolean;
   lang?: string;
-  /** Auto-stop after this many ms of no speech results. 0 or undefined disables. */
   silenceTimeoutMs?: number;
 }
 
 interface SpeechRecognitionReturn {
   isListening: boolean;
+  isSpeechActive: boolean; // true the moment VAD detects speech onset; false after utterance submitted
   transcript: string;
   startListening: () => void;
   stopListening: () => void;
   toggleListening: () => void;
   isSupported: boolean;
+}
+
+// RMS of a byte time-domain buffer (values 0–255, center 128).
+function rms(data: Uint8Array): number {
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) {
+    const v = (data[i] - 128) / 128;
+    sum += v * v;
+  }
+  return Math.sqrt(sum / data.length);
+}
+
+const SPEECH_THRESHOLD = 0.015;
+const UTTERANCE_END_MS = 600; // silence after speech → send chunk
+const VAD_INTERVAL_MS = 100;
+
+const SUPABASE_URL = (import.meta as any).env.VITE_SUPABASE_URL as string;
+
+async function transcribe(blob: Blob, lang: string, signal: AbortSignal): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const form = new FormData();
+  form.append("audio", blob, `audio.${blob.type.includes("mp4") ? "mp4" : "webm"}`);
+  if (lang) form.append("language", lang);
+
+  markStage("stt_start");
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/groq-stt`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+    body: form,
+    signal,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? `STT error ${res.status}`);
+  }
+  const json = await res.json();
+  const text = (json.text ?? "").trim();
+  if (text) markStage("stt_complete");
+  return text;
 }
 
 export function useSpeechRecognition({
@@ -34,193 +71,242 @@ export function useSpeechRecognition({
   lang = "en-US",
   silenceTimeoutMs = 0,
 }: UseSpeechRecognitionOptions = {}): SpeechRecognitionReturn {
-  const onErrorRef = useRef(onError);
-  useEffect(() => { onErrorRef.current = onError; }, [onError]);
   const [isListening, setIsListening] = useState(false);
+  const [isSpeechActive, setIsSpeechActive] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const recognitionRef = useRef<any>(null);
-  const stoppingRef = useRef(false);
-  const startingRef = useRef(false);
-  const lastFinalRef = useRef<string>("");
-  const lastFinalAtRef = useRef<number>(0);
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const silenceTimeoutMsRef = useRef(silenceTimeoutMs);
+
+  const onResultRef = useRef(onResult);
+  const onEndRef = useRef(onEnd);
   const onSilenceTimeoutRef = useRef(onSilenceTimeout);
-  useEffect(() => { silenceTimeoutMsRef.current = silenceTimeoutMs; }, [silenceTimeoutMs]);
+  const onErrorRef = useRef(onError);
+  const langRef = useRef(lang);
+  const silenceTimeoutMsRef = useRef(silenceTimeoutMs);
+  const continuousRef = useRef(continuous);
+  useEffect(() => { onResultRef.current = onResult; }, [onResult]);
+  useEffect(() => { onEndRef.current = onEnd; }, [onEnd]);
   useEffect(() => { onSilenceTimeoutRef.current = onSilenceTimeout; }, [onSilenceTimeout]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+  useEffect(() => { langRef.current = lang; }, [lang]);
+  useEffect(() => { silenceTimeoutMsRef.current = silenceTimeoutMs; }, [silenceTimeoutMs]);
+  useEffect(() => { continuousRef.current = continuous; }, [continuous]);
 
-  const SpeechRecognitionAPI =
-    typeof window !== "undefined"
-      ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      : null;
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const vadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const isSupported = !!SpeechRecognitionAPI;
+  const hasSpeechRef = useRef(false);
+  const utteranceEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const teardown = useCallback((rec: any) => {
-    if (!rec) return;
-    try {
-      rec.onresult = null;
-      rec.onend = null;
-      rec.onerror = null;
-      rec.onstart = null;
-    } catch { /* ignore */ }
+  const abortRef = useRef<AbortController | null>(null);
+  const stopListeningRef = useRef<() => void>(() => {});
+
+  // stoppingRef: true only during an explicit stopListening() call — guards onstop from restarting.
+  const stoppingRef = useRef(false);
+  const isListeningRef = useRef(false);
+
+  const isSupported =
+    typeof window !== "undefined" &&
+    typeof window.MediaRecorder !== "undefined" &&
+    typeof window.AudioContext !== "undefined";
+
+  const clearTimers = useCallback(() => {
+    if (utteranceEndTimerRef.current) { clearTimeout(utteranceEndTimerRef.current); utteranceEndTimerRef.current = null; }
+    if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
   }, []);
-
-  const clearSilenceTimer = useCallback(() => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-  }, []);
-
-  const stopListening = useCallback(() => {
-    const rec = recognitionRef.current;
-    stoppingRef.current = true;
-    clearSilenceTimer();
-    setIsListening(false);
-    if (rec) {
-      teardown(rec);
-      // abort() halts immediately without firing a final onresult; stop() can flush a late result.
-      try { rec.abort(); } catch {
-        try { rec.stop(); } catch { /* ignore */ }
-      }
-    }
-    recognitionRef.current = null;
-    // Clear stopping flag on next tick so a quick re-start isn't blocked.
-    setTimeout(() => { stoppingRef.current = false; }, 0);
-  }, [teardown, clearSilenceTimer]);
 
   const armSilenceTimer = useCallback(() => {
     const ms = silenceTimeoutMsRef.current;
     if (!ms || ms <= 0) return;
-    clearSilenceTimer();
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     silenceTimerRef.current = setTimeout(() => {
       silenceTimerRef.current = null;
       onSilenceTimeoutRef.current?.();
-      stopListening();
     }, ms);
-  }, [clearSilenceTimer, stopListening]);
+  }, []);
+
+  const submitChunk = useCallback(() => {
+    if (utteranceEndTimerRef.current) { clearTimeout(utteranceEndTimerRef.current); utteranceEndTimerRef.current = null; }
+    hasSpeechRef.current = false;
+    setIsSpeechActive(false);
+
+    const mr = mediaRecorderRef.current;
+    if (!mr || mr.state === "inactive") return;
+    startTurn();
+    markStage("utterance_end");
+    mr.stop();
+  }, []);
+
+  const startRecorder = useCallback((stream: MediaStream) => {
+    chunksRef.current = [];
+    hasSpeechRef.current = false;
+
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : MediaRecorder.isTypeSupported("audio/mp4")
+        ? "audio/mp4"
+        : "";
+
+    const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    mediaRecorderRef.current = mr;
+
+    mr.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data);
+    };
+
+    mr.onstop = async () => {
+      const chunks = chunksRef.current.splice(0);
+      const mT = mr.mimeType || "audio/webm";
+
+      if (stoppingRef.current) return;
+
+      const blob = new Blob(chunks, { type: mT });
+      if (blob.size < 1000) {
+        if (isListeningRef.current && streamRef.current) startRecorder(streamRef.current);
+        return;
+      }
+
+      if (abortRef.current) abortRef.current.abort();
+      const abort = new AbortController();
+      abortRef.current = abort;
+
+      try {
+        const text = await transcribe(blob, langRef.current, abort.signal);
+        if (abort.signal.aborted) return;
+        if (text) {
+          setTranscript(text);
+          onResultRef.current?.(text);
+          armSilenceTimer();
+        }
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+        console.error("STT transcription error:", err);
+        onErrorRef.current?.(err?.message ?? "network");
+      } finally {
+        if (!continuousRef.current) {
+          stopListeningRef.current();
+        } else if (isListeningRef.current && streamRef.current && !stoppingRef.current) {
+          startRecorder(streamRef.current);
+        }
+      }
+    };
+
+    mr.start();
+  }, [armSilenceTimer]);
+
+  const stopListening = useCallback(() => {
+    stoppingRef.current = true;
+    isListeningRef.current = false;
+    setIsListening(false);
+    setIsSpeechActive(false);
+    clearTimers();
+
+    if (vadIntervalRef.current) { clearInterval(vadIntervalRef.current); vadIntervalRef.current = null; }
+    if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
+
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") {
+      try { mr.stop(); } catch { /* ignore */ }
+    }
+    mediaRecorderRef.current = null;
+
+    if (audioCtxRef.current) {
+      try { audioCtxRef.current.close(); } catch { /* ignore */ }
+      audioCtxRef.current = null;
+      analyserRef.current = null;
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+
+    setTranscript("");
+    setTimeout(() => { stoppingRef.current = false; }, 0);
+    // Only fire onEnd for unexpected terminations (not explicit stops), matching
+    // the old Web Speech API behaviour where stoppingRef suppressed onend.
+  }, [clearTimers]);
+
+  useEffect(() => { stopListeningRef.current = stopListening; }, [stopListening]);
 
   const startListening = useCallback(() => {
-    if (!SpeechRecognitionAPI) return;
-    if (startingRef.current) return;
-    // If something is already running, tear it down first.
-    if (recognitionRef.current) {
-      teardown(recognitionRef.current);
-      try { recognitionRef.current.abort(); } catch { /* ignore */ }
-      recognitionRef.current = null;
-    }
-    startingRef.current = true;
+    if (isListeningRef.current) return;
+    if (!isSupported) { onErrorRef.current?.("not-supported"); return; }
+
     stoppingRef.current = false;
-    lastFinalRef.current = "";
-    lastFinalAtRef.current = 0;
+    isListeningRef.current = true;
+    setIsListening(true);
+    setIsSpeechActive(false);
+    setTranscript("");
+    hasSpeechRef.current = false;
+    armSilenceTimer();
 
-    const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = continuous;
-    recognition.interimResults = true;
-    recognition.lang = lang;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      if (stoppingRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      if (stoppingRef.current) return; // ignore late results after stop
-      let finalTranscript = "";
-      let interimTranscript = "";
+      streamRef.current = stream;
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalTranscript += result[0].transcript;
-        } else {
-          interimTranscript += result[0].transcript;
-        }
-      }
+      const audioCtx = new AudioContext();
+      audioCtxRef.current = audioCtx;
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyserRef.current = analyser;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
 
-      const combined = finalTranscript || interimTranscript;
-      setTranscript(combined);
-      // Any speech activity (interim or final) resets the silence timer.
-      if (combined) armSilenceTimer();
-      if (finalTranscript) {
-        const trimmed = finalTranscript.trim();
-        const now = Date.now();
-        // Dedupe: ignore identical final chunks fired within 1.5s (some engines double-emit).
-        if (trimmed && (trimmed !== lastFinalRef.current || now - lastFinalAtRef.current > 1500)) {
-          lastFinalRef.current = trimmed;
-          lastFinalAtRef.current = now;
-          onResult?.(finalTranscript);
-        }
-      }
-    };
+      const vadBuf = new Uint8Array(analyser.frequencyBinCount);
+      startRecorder(stream);
 
-    recognition.onend = () => {
-      if (recognitionRef.current === recognition) {
-        recognitionRef.current = null;
-      }
-      clearSilenceTimer();
-      setIsListening(false);
-      if (!stoppingRef.current) onEnd?.();
-    };
+      vadIntervalRef.current = setInterval(() => {
+        if (!analyserRef.current || stoppingRef.current) return;
+        analyserRef.current.getByteTimeDomainData(vadBuf);
+        const level = rms(vadBuf);
 
-    recognition.onerror = (event: any) => {
-      const err = event?.error || "unknown";
-      if (err !== "aborted" && err !== "no-speech") {
-        console.error("Speech recognition error:", err);
-        try { onErrorRef.current?.(err); } catch { /* ignore */ }
-      }
-      clearSilenceTimer();
-      setIsListening(false);
-    };
-
-    recognition.onstart = () => {
-      startingRef.current = false;
-      armSilenceTimer();
-    };
-
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-      setIsListening(true);
-      setTranscript("");
-      // Safety: if onstart never fires within 1.5s, clear the starting guard so
-      // the watchdog can retry. Some browsers (esp. Safari/PWA) silently fail.
-      setTimeout(() => {
-        if (startingRef.current) {
-          startingRef.current = false;
-          // If recognition never actually started, clean it up so next attempt is fresh.
-          if (recognitionRef.current === recognition) {
-            try { recognition.abort(); } catch { /* ignore */ }
-            teardown(recognition);
-            recognitionRef.current = null;
-            setIsListening(false);
+        if (level > SPEECH_THRESHOLD) {
+          // Cancel idle-silence timer; reset it so we count from last speech.
+          if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+          armSilenceTimer();
+          if (utteranceEndTimerRef.current) { clearTimeout(utteranceEndTimerRef.current); utteranceEndTimerRef.current = null; }
+          if (!hasSpeechRef.current) {
+            // Speech onset — signal immediately so barge-in can react.
+            hasSpeechRef.current = true;
+            setIsSpeechActive(true);
           }
+        } else if (hasSpeechRef.current && !utteranceEndTimerRef.current) {
+          utteranceEndTimerRef.current = setTimeout(() => {
+            utteranceEndTimerRef.current = null;
+            submitChunk();
+          }, UTTERANCE_END_MS);
         }
-      }, 1500);
-    } catch (e) {
-      // start() throws if already started — clean up.
-      startingRef.current = false;
-      teardown(recognition);
-      recognitionRef.current = null;
+      }, VAD_INTERVAL_MS);
+    }).catch((err: any) => {
+      isListeningRef.current = false;
       setIsListening(false);
-    }
-  }, [SpeechRecognitionAPI, continuous, lang, onResult, onEnd, teardown, armSilenceTimer, clearSilenceTimer]);
+      const code = err?.name === "NotAllowedError" ? "not-allowed" : "audio-capture";
+      onErrorRef.current?.(code);
+    });
+  }, [isSupported, armSilenceTimer, startRecorder, submitChunk]);
 
   const toggleListening = useCallback(() => {
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
-    }
-  }, [isListening, startListening, stopListening]);
+    if (isListeningRef.current) stopListening();
+    else startListening();
+  }, [startListening, stopListening]);
 
   useEffect(() => {
     return () => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      const rec = recognitionRef.current;
-      if (rec) {
-        teardown(rec);
-        try { rec.abort(); } catch { /* ignore */ }
-        recognitionRef.current = null;
+      stoppingRef.current = true;
+      clearTimers();
+      if (vadIntervalRef.current) clearInterval(vadIntervalRef.current);
+      if (abortRef.current) abortRef.current.abort();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
       }
+      if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch { /* ignore */ } }
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
-  }, [teardown]);
+  }, [clearTimers]);
 
-  return { isListening, transcript, startListening, stopListening, toggleListening, isSupported };
+  return { isListening, isSpeechActive, transcript, startListening, stopListening, toggleListening, isSupported };
 }

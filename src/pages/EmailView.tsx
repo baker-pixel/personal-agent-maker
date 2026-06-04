@@ -167,7 +167,7 @@ export default function EmailView() {
   const [activeTab, setActiveTab] = useState<EmailCategory>("urgent");
   const [triaging, setTriaging] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
-  const [reconnectRequired, setReconnectRequired] = useState(false);
+  const [gmailError, setGmailError] = useState<{ type: "reconnect_required" | "account_blocked"; message: string } | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<TriagedEmail | null>(null);
   const [emailBody, setEmailBody] = useState("");
   const [loadingBody, setLoadingBody] = useState(false);
@@ -176,6 +176,7 @@ export default function EmailView() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const archiveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const autoTriaged = useRef(false);
 
   const handleArchive = useCallback((email: TriagedEmail) => {
     if (selectedEmail?.id === email.id) setSelectedEmail(null);
@@ -261,12 +262,19 @@ export default function EmailView() {
 
   const runTriage = useCallback(async () => {
     setTriaging(true);
-    setReconnectRequired(false);
+    setGmailError(null);
     try {
       const { data, error } = await supabase.functions.invoke("email-triage", { body: { force: true } });
       if (error) throw error;
       if (data?.error) {
-        if (data?.code === "RECONNECT_REQUIRED") { setReconnectRequired(true); return; }
+        if (data?.code === "RECONNECT_REQUIRED") {
+          setGmailError({ type: "reconnect_required", message: data.error });
+          return;
+        }
+        if (data?.code === "ACCOUNT_BLOCKED") {
+          setGmailError({ type: "account_blocked", message: data.error });
+          return;
+        }
         throw new Error(data.error);
       }
       setLastSyncAt(new Date());
@@ -276,17 +284,26 @@ export default function EmailView() {
       }
     } catch (err: any) {
       const msg = err?.message ?? "";
-      if (msg.includes("expired") || msg.includes("reconnect")) { setReconnectRequired(true); return; }
+      if (msg.includes("expired") || msg.includes("reconnect")) {
+        setGmailError({ type: "reconnect_required", message: msg });
+        return;
+      }
+      if (msg.includes("blocked") || msg.includes("restricted") || msg.includes("denied")) {
+        setGmailError({ type: "account_blocked", message: msg });
+        return;
+      }
       toast({ title: "Triage failed", description: msg || "Could not analyse emails", variant: "destructive" });
     } finally {
       setTriaging(false);
     }
   }, [refetch]);
 
-  // Only auto-triage on first load if inbox is genuinely empty (no cached data)
-  // — avoids unnecessary Nylas + Groq calls on every page visit
+  // Only auto-triage once per mount if inbox is genuinely empty (no cached data).
+  // Guard with a ref so refetch() toggling dbLoading false→true→false doesn't
+  // re-trigger this and create an infinite triage loop on empty inboxes.
   useEffect(() => {
-    if (!gmailConnected || dbLoading) return;
+    if (!gmailConnected || dbLoading || autoTriaged.current) return;
+    autoTriaged.current = true;
     const totalCached = Object.values(byCategory).reduce((s, arr) => s + arr.length, 0);
     if (totalCached === 0) runTriage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -476,10 +493,14 @@ export default function EmailView() {
           </button>
         </div>
 
-        {/* Reconnect banner */}
-        {reconnectRequired && (
+        {/* Gmail error banner */}
+        {gmailError && (
           <div className="container px-4 pb-2">
-            <GmailStatusBanner status="reconnect_required" />
+            <GmailStatusBanner
+              status={gmailError.type}
+              message={gmailError.message}
+              lastSyncAt={lastSyncAt}
+            />
           </div>
         )}
       </div>

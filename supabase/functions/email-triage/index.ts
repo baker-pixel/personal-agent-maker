@@ -26,19 +26,26 @@ async function getNylasGrant(adminClient: any, userId: string): Promise<{ grantI
   return { grantId: grant.grant_id, email: grant.email };
 }
 
-async function fetchEmails(grantId: string, nylasApiKey: string, maxResults = 20) {
+async function fetchEmails(grantId: string, nylasApiKey: string, maxResults = 30) {
   const params = new URLSearchParams({ limit: String(maxResults), in: "INBOX" });
   const listRes = await fetch(
     `${NYLAS_BASE}/v3/grants/${grantId}/messages?${params.toString()}`,
     { headers: { Authorization: `Bearer ${nylasApiKey}` } }
   );
   if (!listRes.ok) {
-    if (listRes.status === 401 || listRes.status === 403) {
-      const err = new Error("Your Gmail connection has expired. Please reconnect your account.") as any;
+    if (listRes.status === 401) {
+      const err = new Error("Your Gmail session has expired. Please reconnect your account.") as any;
       err.code = "RECONNECT_REQUIRED";
       throw err;
     }
-    return [];
+    if (listRes.status === 403) {
+      const err = new Error("Gmail access was denied. This account may be restricted or blocked by an admin.") as any;
+      err.code = "ACCOUNT_BLOCKED";
+      throw err;
+    }
+    const errText = await listRes.text().catch(() => "");
+    console.error("Nylas messages fetch failed:", listRes.status, errText);
+    throw new Error(`Failed to fetch emails from Nylas (HTTP ${listRes.status})`);
   }
   const listData = await listRes.json();
   const messages: any[] = listData.data || [];
@@ -171,6 +178,28 @@ Deno.serve(async (req) => {
 
     const nylasApiKey = Deno.env.get("NYLAS_API_KEY")!;
 
+    // Server-side rate limit: force re-triage cooldown 30s, incremental 10s.
+    // Prevents duplicate runs from multiple tabs or rapid button presses.
+    const cooldownMs = force ? 30_000 : 10_000;
+    const { data: lastRun } = await adminClient
+      .from("email_metadata")
+      .select("processed_at")
+      .eq("user_id", user.id)
+      .not("processed_at", "is", null)
+      .order("processed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lastRun?.processed_at) {
+      const elapsed = Date.now() - new Date(lastRun.processed_at).getTime();
+      if (elapsed < cooldownMs) {
+        const retryAfter = Math.ceil((cooldownMs - elapsed) / 1000);
+        return new Response(
+          JSON.stringify({ error: "Triage requested too soon. Please wait a moment.", retryAfter }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfter) } }
+        );
+      }
+    }
+
     let grantId: string;
     try {
       const grant = await getNylasGrant(adminClient, user.id);
@@ -193,9 +222,9 @@ Deno.serve(async (req) => {
         getUserTriagePrefs(user.id),
       ]);
     } catch (fetchError: any) {
-      if (fetchError.code === "RECONNECT_REQUIRED") {
+      if (fetchError.code === "RECONNECT_REQUIRED" || fetchError.code === "ACCOUNT_BLOCKED") {
         return new Response(
-          JSON.stringify({ error: fetchError.message, code: "RECONNECT_REQUIRED" }),
+          JSON.stringify({ error: fetchError.message, code: fetchError.code }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -548,6 +577,7 @@ Use the suggest_triage tool to return your analysis.`
           if (!sourceEmail) return null;
           const key = `email:${sourceEmail.id}`;
           if (seenKeys.has(key)) return null;
+          seenKeys.add(key); // guard duplicate action items from same email within this run
           return {
             user_id: user.id,
             title: ai.title,
@@ -567,9 +597,11 @@ Use the suggest_triage tool to return your analysis.`
       }
     }
 
-    // Fire-and-forget push notification for newly triaged urgent emails
+    // Fire-and-forget push notification for newly triaged urgent emails.
+    // Skip on force re-triage — user is already in the app and categories.urgent
+    // would include previously-known urgent emails, causing spurious notifications.
     const newUrgentCount = categories.urgent.length;
-    if (newUrgentCount > 0) {
+    if (!force && newUrgentCount > 0) {
       const pushPayload = {
         user_id: user.id,
         title: `${newUrgentCount} urgent email${newUrgentCount > 1 ? "s" : ""} need attention`,
@@ -610,7 +642,7 @@ Use the suggest_triage tool to return your analysis.`
   } catch (error: any) {
     console.error("email-triage error:", error);
     const code = (error as any).code || "UNKNOWN";
-    const status = code === "RECONNECT_REQUIRED" ? 401 : code === "NOT_CONNECTED" ? 404 : 500;
+    const status = (code === "RECONNECT_REQUIRED" || code === "ACCOUNT_BLOCKED") ? 200 : code === "NOT_CONNECTED" ? 404 : 500;
     return new Response(
       JSON.stringify({ error: error.message, code }),
       { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -285,28 +285,13 @@ export default function Onboarding({ onComplete }: Props) {
                       value={state.agentName}
                       onChange={e => update("agentName", e.target.value)}
                       onKeyDown={e => e.key === "Enter" && next()}
-                      placeholder="e.g. Annie, Nova, Aria…"
+                      placeholder="e.g. Alex, Sage, Max…"
                       className="text-center text-2xl font-display font-semibold h-16 rounded-2xl"
                       autoFocus
                     />
                     <p className="text-sm text-muted-foreground text-center">
                       You can change this anytime in Settings.
                     </p>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {["Annie", "Nova", "Aria"].map(name => (
-                      <button
-                        key={name}
-                        onClick={() => update("agentName", name)}
-                        className={`py-2.5 rounded-xl border text-sm font-medium transition-all ${
-                          state.agentName === name
-                            ? "border-accent bg-accent/10 text-accent"
-                            : "border-border text-muted-foreground hover:border-accent/40"
-                        }`}
-                      >
-                        {name}
-                      </button>
-                    ))}
                   </div>
                 </div>
               )}
@@ -373,73 +358,69 @@ export default function Onboarding({ onComplete }: Props) {
                   </div>
 
                   <div className="space-y-3">
-                    {/* Show skeleton while IntegrationsContext is loading */}
-                    {integrationsLoading ? (
-                      <>
-                        {[0, 1].map(i => (
-                          <div key={i} className="flex items-center gap-4 rounded-2xl px-5 py-4 border bg-card animate-pulse">
-                            <div className="w-11 h-11 rounded-xl bg-muted shrink-0" />
-                            <div className="flex-1 space-y-2">
-                              <div className="h-3.5 bg-muted rounded w-1/3" />
-                              <div className="h-2.5 bg-muted rounded w-2/3" />
-                            </div>
-                          </div>
-                        ))}
-                      </>
-                    ) : null}
+                    {/* Skeleton while loading */}
+                    {integrationsLoading && (
+                      <div className="flex items-center gap-4 rounded-2xl px-5 py-4 border bg-card animate-pulse">
+                        <div className="w-11 h-11 rounded-xl bg-muted shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3.5 bg-muted rounded w-1/3" />
+                          <div className="h-2.5 bg-muted rounded w-2/3" />
+                        </div>
+                      </div>
+                    )}
 
-                    {!integrationsLoading && [{
-                        service: "gmail",
-                        connected: gmailConnected,
-                        label: "Gmail",
-                        desc: "Triage, prioritize, and draft email replies automatically",
-                        Icon: Mail,
-                      },
-                      {
-                        service: "google-calendar",
-                        connected: calendarConnected,
-                        label: "Google Calendar",
-                        desc: "Prep meetings, get briefed before each call, manage your schedule",
-                        Icon: Calendar,
-                      },
-                    ].map(({ service, connected, label, desc, Icon }) => (
-                      <button
-                        key={service}
-                        onClick={() => { if (!connected) connect(service).catch(() => {}); }}
-                        disabled={!!connected || connecting === service}
-                        className={`w-full flex items-center gap-4 rounded-2xl px-5 py-4 border transition-all text-left ${
-                          connected
-                            ? "bg-green-500/5 border-green-500/20 cursor-default"
-                            : connecting === service
-                            ? "bg-card border-accent/30 opacity-80 cursor-wait"
-                            : "bg-card border-border hover:border-accent/50 hover:bg-accent/[0.02] cursor-pointer active:scale-[0.99]"
-                        }`}
-                      >
-                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                          connected ? "bg-green-500/10" : "bg-muted/60"
-                        }`}>
+                    {!integrationsLoading && (() => {
+                      const connected = gmailConnected || calendarConnected;
+                      const connecting_ = connecting === "gmail";
+                      return (
+                        <button
+                          onClick={() => { if (!connected) connect("gmail").catch(() => {}); }}
+                          disabled={connected || connecting_}
+                          className={`w-full flex items-center gap-4 rounded-2xl px-5 py-4 border transition-all text-left ${
+                            connected
+                              ? "bg-green-500/5 border-green-500/20 cursor-default"
+                              : connecting_
+                              ? "bg-card border-accent/30 opacity-80 cursor-wait"
+                              : "bg-card border-border hover:border-accent/50 hover:bg-accent/[0.02] cursor-pointer active:scale-[0.99]"
+                          }`}
+                        >
+                          <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                            connected ? "bg-green-500/10" : "bg-muted/60"
+                          }`}>
+                            {connected
+                              ? <Check className="w-5 h-5 text-green-600" />
+                              : connecting_
+                              ? <Loader2 className="w-5 h-5 text-accent animate-spin" />
+                              : <Mail className="w-5 h-5 text-muted-foreground" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground">
+                              {connected ? "Google Account connected" : connecting_ ? "Connecting…" : "Connect Google Account (Gmail & Calendar)"}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                              {connected ? "Gmail + Calendar access granted" : "Grants access to Gmail + Calendar in one step"}
+                            </p>
+                          </div>
                           {connected
-                            ? <Check className="w-5 h-5 text-green-600" />
-                            : connecting === service
-                            ? <Loader2 className="w-5 h-5 text-accent animate-spin" />
-                            : <Icon className="w-5 h-5 text-muted-foreground" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground">
-                            {connected ? `${label} connected` : connecting === service ? "Connecting…" : `Connect ${label}`}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{desc}</p>
-                        </div>
-                        {connected
-                          ? <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
-                          : <ArrowRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />}
-                      </button>
-                    ))}
+                            ? <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                            : <ArrowRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />}
+                        </button>
+                      );
+                    })()}
                   </div>
 
-                  <div className="flex items-center gap-2.5 text-muted-foreground/60 px-1">
-                    <Shield className="w-3.5 h-3.5 shrink-0" />
-                    <p className="text-xs">Secure OAuth — your passwords are never shared or stored</p>
+                  {/* Privacy / trust messaging */}
+                  <div className="rounded-2xl bg-muted/40 border border-border/40 px-4 py-3 space-y-2">
+                    {[
+                      { icon: Shield, text: "We never store your password — Google handles sign-in directly." },
+                      { icon: CheckCircle2, text: "Your emails stay private. We only read what's needed to help you." },
+                      { icon: ArrowRight, text: "Nothing is sent on your behalf without your approval first." },
+                    ].map(({ icon: Icon, text }) => (
+                      <div key={text} className="flex items-start gap-2.5">
+                        <Icon className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+                        <p className="text-xs text-muted-foreground leading-relaxed">{text}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

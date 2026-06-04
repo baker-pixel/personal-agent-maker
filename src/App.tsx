@@ -70,7 +70,10 @@ const ProtectedRoute = ({
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [isRecovery, setIsRecovery] = useState(() => getPasswordRecoveryParams().hasRecoveryIntent || hasStoredPasswordRecovery());
+  const [isRecovery, setIsRecovery] = useState(() => {
+    if (typeof window !== "undefined" && window.location.pathname === "/auth/google/callback") return false;
+    return getPasswordRecoveryParams().hasRecoveryIntent || hasStoredPasswordRecovery();
+  });
   const recoveryRedirected = useRef(false);
 
   // null = not yet fetched; false = not onboarded; true = onboarded
@@ -103,7 +106,8 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    const recoveryUrl = getPasswordRecoveryParams().hasRecoveryIntent || hasStoredPasswordRecovery();
+    const isOAuthCallback = typeof window !== "undefined" && window.location.pathname === "/auth/google/callback";
+    const recoveryUrl = !isOAuthCallback && (getPasswordRecoveryParams().hasRecoveryIntent || hasStoredPasswordRecovery());
     if (recoveryUrl) setIsRecovery(true);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(

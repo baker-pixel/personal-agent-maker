@@ -99,6 +99,22 @@ Deno.serve(async (req) => {
       revoked++;
     }
 
+    // Purge all email data for this user so reconnecting a different account
+    // starts from a clean slate — no stale emails from the old account.
+    // action_items(email_triage) and draft_actions deleted first; non-email_triage
+    // action_items have no FK constraint so email_metadata_id is nulled out
+    // rather than deleting rows the user may have intentionally kept.
+    await Promise.all([
+      admin.from("draft_actions").delete().eq("user_id", user.id),
+      admin.from("action_items").delete().eq("user_id", user.id).eq("source", "email_triage"),
+      admin.from("action_items")
+        .update({ email_metadata_id: null })
+        .eq("user_id", user.id)
+        .neq("source", "email_triage")
+        .not("email_metadata_id", "is", null),
+    ]);
+    await admin.from("email_metadata").delete().eq("user_id", user.id);
+
     return new Response(
       JSON.stringify({ ok: true, revoked, errors: errors.length ? errors : null }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

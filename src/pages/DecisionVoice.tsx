@@ -48,16 +48,26 @@ export default function DecisionVoice() {
     });
   }, []);
 
-  // Latest agent reply (used to trigger TTS)
+  // Latest agent reply (used to trigger TTS after streaming ends)
   const latestAgentReply = useMemo(() => {
     for (let i = chat.messages.length - 1; i >= 0; i--) {
       if (chat.messages[i].role === "agent") {
-        // Strip code blocks (e.g. draft-json) before speaking
         return chat.messages[i].text.replace(/```[\s\S]*?```/g, "").trim();
       }
     }
     return null;
   }, [chat.messages]);
+
+  // Live streaming text while LLM is generating — fed to voice hook for sentence-level TTS
+  const streamingAgentText = useMemo(() => {
+    if (!chat.thinking) return null;
+    for (let i = chat.messages.length - 1; i >= 0; i--) {
+      if (chat.messages[i].role === "agent") {
+        return chat.messages[i].text.replace(/```[\s\S]*?```/g, "").trim() || null;
+      }
+    }
+    return null;
+  }, [chat.messages, chat.thinking]);
 
   // Greeting spoken once when the voice conversation first starts
   const greeting = useMemo(() => {
@@ -229,6 +239,7 @@ export default function DecisionVoice() {
     },
     // Speak the greeting first; then defer to the live conversation thread
     agentReply: pendingGreeting ?? (chat.thinking ? null : latestAgentReply),
+    streamingText: pendingGreeting ? null : streamingAgentText,
     thinking: chat.thinking,
   });
 

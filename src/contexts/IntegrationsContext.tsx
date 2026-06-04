@@ -198,9 +198,15 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // Re-sync whenever the tab regains focus or becomes visible — covers the
     // case where an OAuth popup completes in another window/tab, or the user
     // returns to the app after a disconnect elsewhere.
-    const onFocus = () => { fetchConnected(); };
+    // Debounced to avoid rapid consecutive fetches on quick tab switches.
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedFetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => fetchConnected(), 500);
+    };
+    const onFocus = () => { debouncedFetch(); };
     const onVisibility = () => {
-      if (document.visibilityState === "visible") fetchConnected();
+      if (document.visibilityState === "visible") debouncedFetch();
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
@@ -209,6 +215,7 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       subscription.unsubscribe();
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibility);
+      if (debounceTimer) clearTimeout(debounceTimer);
     };
   }, [fetchConnected]);
 
@@ -236,7 +243,7 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       })
     );
 
-    // Revoke the Nylas grant (handles DB deletion internally).
+    // Revoke the Nylas grant (handles DB deletion + email data purge internally).
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -247,6 +254,9 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (err) {
       console.warn("Nylas revoke failed (continuing):", err);
     }
+
+    // Clear client-side email caches so no stale data survives reconnect.
+    try { localStorage.removeItem("normy_archived_emails"); } catch { /* ignore */ }
 
     // Re-sync from server so state is authoritative.
     await fetchConnected();

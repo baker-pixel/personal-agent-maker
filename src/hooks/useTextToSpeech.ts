@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DEFAULT_GROQ_VOICE } from "@/lib/groqVoices";
+import { markStage } from "@/lib/voiceLatency";
 
 const VOICE_KEY = "normy_tts_voice";
 const RATE_KEY = "normy_tts_rate";
@@ -54,7 +55,7 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const [enabled, setEnabledState] = useState(() => {
     return localStorage.getItem("normy_tts_enabled") === "true";
   });
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isSpeaking, setIsSpeakingState] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceURI, setVoiceURIState] = useState<string | null>(() => localStorage.getItem(VOICE_KEY));
   const [rate, setRateState] = useState<number>(() => {
@@ -99,8 +100,16 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const fetchAbortRef = useRef<AbortController | null>(null);
   const unlockedRef = useRef(false);
   const keepAliveRef = useRef<number | null>(null);
+  // Synchronously updated alongside setIsSpeaking — avoids the React render-lag
+  // race where callers read isSpeaking from a ref updated only on render.
+  const isSpeakingRef = useRef(false);
 
   const isSupported = typeof window !== "undefined" && "speechSynthesis" in window;
+
+  const setIsSpeaking = useCallback((v: boolean) => {
+    isSpeakingRef.current = v;
+    setIsSpeakingState(v);
+  }, []);
 
   const unlockAudio = useCallback(() => {
     if (unlockedRef.current) return;
@@ -209,11 +218,7 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const speakBrowser = useCallback((text: string, onComplete?: () => void) => {
     if (!isSupported) { onComplete?.(); return; }
     window.speechSynthesis.cancel();
-    // Set isSpeaking immediately (same as speakGroq) so the STT onEnd watchdog
-    // sees isSpeaking=true before its 600ms timer fires and restarts the mic.
-    // Waiting for utterance.onstart creates a race: the browser queues speech
-    // async, so onstart can fire 100-500ms later — after the watchdog already
-    // restarted listening and captured the agent's reply as user input.
+    markStage("tts_start");
     setIsSpeaking(true);
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = rate;
@@ -224,10 +229,12 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     utterance.onerror = () => { setIsSpeaking(false); onComplete?.(); };
     utteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
+    markStage("audio_play_start");
   }, [isSupported, rate, pitch, pickVoice]);
 
   const speakGroq = useCallback(async (text: string, onComplete?: () => void) => {
     try {
+      markStage("tts_start");
       setIsSpeaking(true);
       if (fetchAbortRef.current) fetchAbortRef.current.abort();
       const abort = new AbortController();
@@ -282,15 +289,15 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
         el.play().catch(() => resolve());
       });
 
-      // Split into sentence chunks — all fetches fire in parallel,
-      // playback starts as soon as the first blob arrives
       const chunks = splitSentences(text);
       const blobPromises = chunks.map(fetchChunk);
 
+      let firstBlob = true;
       for (const blobPromise of blobPromises) {
         if (abort.signal.aborted) break;
         const blob = await blobPromise;
         if (!blob || abort.signal.aborted) break;
+        if (firstBlob) { markStage("audio_play_start"); firstBlob = false; }
         await playBlob(blob);
       }
 
@@ -359,6 +366,7 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   return {
     enabled,
     isSpeaking,
+    isSpeakingRef,
     isSupported,
     speak,
     stop,

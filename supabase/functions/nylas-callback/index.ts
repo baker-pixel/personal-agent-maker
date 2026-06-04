@@ -73,7 +73,35 @@ Deno.serve(async (req) => {
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
       console.error("Nylas token exchange failed:", errText);
-      return new Response(JSON.stringify({ error: "Token exchange failed", detail: errText }), {
+
+      let errorCode = "TOKEN_EXCHANGE_FAILED";
+      let errorMsg = "Failed to connect your Gmail account. Please try again.";
+      try {
+        const errJson = JSON.parse(errText);
+        const code: string = (errJson.error || errJson.code || "").toLowerCase();
+        const desc: string = (errJson.error_description || errJson.message || "").toLowerCase();
+
+        if (code === "invalid_grant") {
+          if (desc.includes("suspended") || desc.includes("disabled") || desc.includes("blocked") || desc.includes("deactivated")) {
+            errorCode = "ACCOUNT_BLOCKED";
+            errorMsg = "This Google account is suspended or disabled by Google. Please use a different account.";
+          } else {
+            errorCode = "INVALID_GRANT";
+            errorMsg = "Google revoked access. Your account permissions may have changed — please reconnect.";
+          }
+        } else if (code === "access_denied") {
+          errorCode = "ACCESS_DENIED";
+          errorMsg = "Google denied access. This account may be restricted by an admin or organisation policy.";
+        } else if (code === "unauthorized_client") {
+          errorCode = "ACCOUNT_BLOCKED";
+          errorMsg = "This Google account isn't allowed to connect. Check with your Google Workspace admin.";
+        } else if (desc.includes("suspended") || desc.includes("blocked") || desc.includes("disabled")) {
+          errorCode = "ACCOUNT_BLOCKED";
+          errorMsg = "This Google account appears to be blocked or suspended. Please use a different account.";
+        }
+      } catch { /* not JSON — keep generic message */ }
+
+      return new Response(JSON.stringify({ error: errorMsg, code: errorCode }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
