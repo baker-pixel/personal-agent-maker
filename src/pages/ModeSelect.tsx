@@ -6,13 +6,9 @@ import { Mic, X, PhoneOff, Send, Loader2, MessageSquare } from "lucide-react";
 import { useAgent } from "@/contexts/AgentContext";
 import { useAnnieChat } from "@/hooks/useAnnieChat";
 import { useVoiceConversation } from "@/hooks/useVoiceConversation";
-import { useVoiceActions, CONFIRM_REGEX } from "@/hooks/useVoiceActions";
 import { useUserDisplayName } from "@/hooks/useUserDisplayName";
 import { stripMarkdown } from "@/lib/stripMarkdown";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
-import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
-import { CalendarJsonParser } from "@/components/chat/CalendarJsonParser";
-import { ContactJsonParser } from "@/components/chat/ContactJsonParser";
 import { stripAgentBlocks } from "@/lib/stripAgentBlocks";
 import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
@@ -37,6 +33,7 @@ export default function ModeSelect() {
   const chat = useAnnieChat(displayName, "voice", {
     conversationTitle: "Quick Chat",
     enabled: hookEnabled,
+    skipInitialLoad: true,
   });
 
   // Fix #1: strip markdown before TTS so "**bold**" isn't spoken literally
@@ -52,18 +49,8 @@ export default function ModeSelect() {
   // Fix #2: greeting uses saved display name preference
   const greeting = userName ? `Hey ${userName}, how can I help?` : "Hey, how can I help?";
 
-  // Fix #3: extracted shared hook — no more duplicated action logic
-  const { pendingVoiceAction, executeVoiceAction, resetActions } = useVoiceActions({
-    messages: chat.messages,
-    injectAgentMessage: chat.injectAgentMessage,
-  });
-
   const voice = useVoiceConversation({
     onUserUtterance: (text) => {
-      if (CONFIRM_REGEX.test(text) && pendingVoiceAction) {
-        executeVoiceAction(pendingVoiceAction);
-        return;
-      }
       chat.send(text);
     },
     agentReply: pendingGreeting ?? (chat.thinking ? null : latestAgentReply),
@@ -84,7 +71,8 @@ export default function ModeSelect() {
   }, [chat.messages, chat.thinking]);
 
   const handleMicTap = () => {
-    if (!hookEnabled) setHookEnabled(true); // lazily enable DB queries on first tap
+    if (!hookEnabled) setHookEnabled(true);
+    chat.reset(); // always start with a clean slate
     greetedRef.current = false;
     setVoiceOpen(true);
     if (!voice.conversationActive) voice.toggleConversation();
@@ -95,7 +83,6 @@ export default function ModeSelect() {
     setVoiceOpen(false);
     chat.reset();
     greetedRef.current = false;
-    resetActions();
   };
 
   const handleSend = () => {
@@ -149,12 +136,13 @@ export default function ModeSelect() {
               </motion.div>
             </div>
           </button>
-          <div className="flex gap-3 w-full max-w-xs">
+          <div className="flex gap-3 w-full max-w-xs mt-8">
             <button
               onClick={() => navigate("/decision/text")}
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-border bg-card text-sm font-semibold text-foreground hover:border-accent/50 hover:bg-accent/5 active:scale-[0.97] transition-all"
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold text-accent-foreground active:scale-[0.97] transition-all shadow-md shadow-accent/20"
+              style={{ background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 32%))" }}
             >
-              <MessageSquare className="w-4 h-4 text-muted-foreground" />
+              <MessageSquare className="w-4 h-4" />
               Text {displayName}
             </button>
             <button
@@ -250,9 +238,6 @@ export default function ModeSelect() {
                           <div className="prose prose-sm max-w-none">
                             <ReactMarkdown>{stripAgentBlocks(msg.text)}</ReactMarkdown>
                           </div>
-                          <DraftJsonParser text={msg.text} />
-                          <CalendarJsonParser text={msg.text} />
-                          <ContactJsonParser text={msg.text} />
                         </>
                       ) : msg.text}
                     </div>

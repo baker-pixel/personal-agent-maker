@@ -670,7 +670,7 @@ export default function Steno() {
                           {/* Type-specific fields */}
                           {it.type === "calendar_event" && (
                             <div className="space-y-2">
-                              <div className="grid grid-cols-2 gap-2">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 <Input
                                   type="date"
                                   value={it.event_date || ""}
@@ -703,7 +703,7 @@ export default function Steno() {
                             </div>
                           )}
                           {(it.type === "task" || it.type === "followup") && (
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               <Input
                                 type="date"
                                 value={it.due_date || ""}
@@ -738,7 +738,7 @@ export default function Steno() {
                                 placeholder="Contact name"
                                 className="h-9 text-xs"
                               />
-                              <div className="grid grid-cols-2 gap-2">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 <Input
                                   type="date"
                                   value={it.reminder_date || ""}

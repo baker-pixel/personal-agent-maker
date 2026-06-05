@@ -241,6 +241,330 @@ async function summarizeOlderMessages(older: any[], apiKey: string): Promise<str
   }
 }
 
+const TEXT_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "send_email",
+      description: "Send an email to a recipient on behalf of the user. Use when user asks to send, write, draft, or reply to an email.",
+      parameters: {
+        type: "object",
+        properties: {
+          to_email: { type: "string", description: "Recipient email address" },
+          to_name: { type: "string", description: "Recipient display name (optional)" },
+          subject: { type: "string", description: "Email subject line" },
+          body: { type: "string", description: "Email body in plain text" },
+          cc: { type: "string", description: "CC recipients comma-separated (optional)" },
+          bcc: { type: "string", description: "BCC recipients comma-separated (optional)" },
+          reply_to_message_id: { type: "string", description: "Nylas message ID to reply to (optional)" },
+        },
+        required: ["to_email", "subject", "body"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_calendar_event",
+      description: "Create a new event on the user's Google Calendar and send invites to attendees.",
+      parameters: {
+        type: "object",
+        properties: {
+          summary: { type: "string", description: "Event title" },
+          start: { type: "string", description: "ISO 8601 datetime in user's local timezone e.g. 2026-06-10T14:00:00" },
+          end: { type: "string", description: "ISO 8601 datetime. Defaults to 1 hour after start if omitted." },
+          description: { type: "string", description: "Event notes (optional)" },
+          location: { type: "string", description: "Event location (optional)" },
+          allDay: { type: "boolean", description: "True for all-day events (use date-only strings for start/end)" },
+          attendees: {
+            type: "array",
+            description: "Attendees to invite",
+            items: { type: "object", properties: { email: { type: "string" }, name: { type: "string" } }, required: ["email"] },
+          },
+        },
+        required: ["summary", "start"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_calendar_event",
+      description: "Update an existing calendar event. Only use eventId values from REAL CALENDAR DATA in the system prompt.",
+      parameters: {
+        type: "object",
+        properties: {
+          eventId: { type: "string", description: "Nylas event ID from REAL CALENDAR DATA" },
+          summary: { type: "string", description: "Event title — required even if unchanged" },
+          start: { type: "string", description: "New ISO 8601 start datetime (optional)" },
+          end: { type: "string", description: "New ISO 8601 end datetime (optional)" },
+          description: { type: "string", description: "Updated notes (optional)" },
+          location: { type: "string", description: "Updated location (optional)" },
+          attendees: {
+            type: "array",
+            items: { type: "object", properties: { email: { type: "string" }, name: { type: "string" } }, required: ["email"] },
+          },
+          notifyAttendees: { type: "boolean", description: "Send update emails to attendees (default true)" },
+        },
+        required: ["eventId", "summary"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_calendar_event",
+      description: "Cancel and delete a calendar event. Only use eventId values from REAL CALENDAR DATA.",
+      parameters: {
+        type: "object",
+        properties: {
+          eventId: { type: "string", description: "Nylas event ID from REAL CALENDAR DATA" },
+          summary: { type: "string", description: "Event title for confirmation message" },
+          notifyAttendees: { type: "boolean", description: "Send cancellation emails to attendees (default true)" },
+        },
+        required: ["eventId", "summary"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_task",
+      description: "Create a new action item / task for the user.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Short task title" },
+          description: { type: "string", description: "Details or context (optional)" },
+          priority: { type: "string", enum: ["high", "medium", "low"], description: "Priority level (default medium)" },
+          due_date: { type: "string", description: "ISO 8601 date e.g. 2026-06-10 (optional)" },
+          assignee: { type: "string", description: "Who is responsible (optional, defaults to user)" },
+        },
+        required: ["title"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_contact",
+      description: "Save a new contact to the user's contact list.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Full name" },
+          email: { type: "string", description: "Email address (optional)" },
+          phone: { type: "string", description: "Phone number (optional)" },
+          company: { type: "string", description: "Company name (optional)" },
+          role: { type: "string", description: "Job title (optional)" },
+          notes: { type: "string", description: "Additional notes (optional)" },
+          is_vip: { type: "boolean", description: "Mark as VIP (default false)" },
+        },
+        required: ["name"],
+      },
+    },
+  },
+];
+
+interface ToolExecutionContext {
+  userId: string;
+  grantId: string | null;
+  nylasApiKey: string;
+  adminClient: any;
+}
+
+async function executeToolCall(
+  name: string,
+  args: Record<string, any>,
+  ctx: ToolExecutionContext
+): Promise<{ success: boolean; message: string; data?: any }> {
+  const { userId, grantId, nylasApiKey, adminClient } = ctx;
+
+  if (name !== "save_contact" && !grantId) {
+    return { success: false, message: "Google account not connected. Please reconnect via Integrations." };
+  }
+
+  try {
+    if (name === "send_email") {
+      const { data: prefs } = await adminClient
+        .from("user_preferences")
+        .select("email_signature")
+        .eq("user_id", userId)
+        .maybeSingle();
+      const sig = (prefs?.email_signature || "").trim();
+      const fullBody = sig ? `${args.body}\n\n${sig}` : args.body;
+
+      const toList = args.to_name
+        ? [{ name: args.to_name, email: args.to_email }]
+        : [{ email: args.to_email }];
+
+      const parseAddr = (raw: string) =>
+        raw.split(",").map((s: string) => s.trim()).filter(Boolean).map((r: string) => {
+          const m = r.match(/^(.+?)\s*<([^>]+)>$/);
+          return m ? { name: m[1].trim(), email: m[2].trim() } : { email: r };
+        });
+
+      const payload: Record<string, any> = { subject: args.subject, body: fullBody, to: toList };
+      if (args.cc) payload.cc = parseAddr(args.cc);
+      if (args.bcc) payload.bcc = parseAddr(args.bcc);
+      if (args.reply_to_message_id) payload.reply_to_message_id = args.reply_to_message_id;
+
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/messages/send`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${nylasApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401) return { success: false, message: "Gmail session expired. User needs to reconnect via Integrations." };
+        return { success: false, message: data.message || "Failed to send email" };
+      }
+
+      await adminClient.from("draft_actions").insert({
+        user_id: userId,
+        type: "email_compose",
+        status: "sent",
+        to_email: args.to_email,
+        subject: args.subject,
+        body: fullBody,
+        gmail_message_id: data.data?.id || null,
+        updated_at: new Date().toISOString(),
+      }).catch(() => {/* non-critical */});
+
+      return { success: true, message: `Email sent to ${args.to_name || args.to_email}`, data: { messageId: data.data?.id } };
+    }
+
+    if (name === "create_calendar_event") {
+      let when: Record<string, any>;
+      if (args.allDay) {
+        const endDate = args.end || (() => {
+          const d = new Date((args.start as string) + "T00:00:00Z");
+          d.setUTCDate(d.getUTCDate() + 1);
+          return d.toISOString().slice(0, 10);
+        })();
+        when = { object: "datespan", start_date: args.start, end_date: endDate };
+      } else {
+        const startUnix = Math.floor(new Date(args.start).getTime() / 1000);
+        const endIso = args.end || new Date(new Date(args.start).getTime() + 3600000).toISOString();
+        const endUnix = Math.floor(new Date(endIso).getTime() / 1000);
+        when = { object: "timespan", start_time: startUnix, end_time: endUnix };
+      }
+
+      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const validAttendees = (args.attendees || []).filter((a: any) => emailRe.test(a.email || ""));
+      const eventBody: Record<string, any> = { title: args.summary, when };
+      if (args.description) eventBody.description = args.description;
+      if (args.location) eventBody.location = args.location;
+      if (validAttendees.length > 0) {
+        eventBody.participants = validAttendees.map((a: any) => ({
+          email: a.email, ...(a.name ? { name: a.name } : {}), status: "noreply",
+        }));
+      }
+
+      const qs = validAttendees.length > 0 ? "&notify_participants=true" : "";
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events?calendar_id=primary${qs}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${nylasApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(eventBody),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401) return { success: false, message: "Google Calendar session expired. User needs to reconnect." };
+        return { success: false, message: data.message || data.error || "Failed to create event" };
+      }
+      const inviteNote = validAttendees.length > 0
+        ? ` — invites sent to ${validAttendees.map((a: any) => a.name || a.email).join(", ")}`
+        : "";
+      return {
+        success: true,
+        message: `Event "${args.summary}" created on Google Calendar${inviteNote}`,
+        data: { eventId: data.data?.id, htmlLink: data.data?.html_link },
+      };
+    }
+
+    if (name === "update_calendar_event") {
+      const updateBody: Record<string, any> = { title: args.summary };
+      if (args.start) {
+        const startUnix = Math.floor(new Date(args.start).getTime() / 1000);
+        const endIso = args.end || new Date(new Date(args.start).getTime() + 3600000).toISOString();
+        updateBody.when = { object: "timespan", start_time: startUnix, end_time: Math.floor(new Date(endIso).getTime() / 1000) };
+      }
+      if (args.description !== undefined) updateBody.description = args.description;
+      if (args.location !== undefined) updateBody.location = args.location;
+      if (args.attendees) {
+        const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const valid = args.attendees.filter((a: any) => emailRe.test(a.email || ""));
+        if (valid.length > 0) updateBody.participants = valid.map((a: any) => ({ email: a.email, ...(a.name ? { name: a.name } : {}), status: "noreply" }));
+      }
+
+      const qs = args.notifyAttendees !== false ? "?notify_participants=true" : "";
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}${qs}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${nylasApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(updateBody),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401) return { success: false, message: "Google Calendar session expired." };
+        if (res.status === 404) return { success: false, message: `Event "${args.summary}" not found — it may have been deleted.` };
+        return { success: false, message: data.message || data.error || "Failed to update event" };
+      }
+      return { success: true, message: `Event "${args.summary}" updated on Google Calendar`, data: { htmlLink: data.data?.html_link } };
+    }
+
+    if (name === "delete_calendar_event") {
+      const qs = args.notifyAttendees !== false ? "?notify_participants=true" : "";
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}${qs}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${nylasApiKey}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) return { success: false, message: "Google Calendar session expired." };
+        if (res.status === 404) return { success: false, message: `Event "${args.summary}" not found.` };
+        return { success: false, message: (data as any).message || "Failed to delete event" };
+      }
+      return { success: true, message: `Event "${args.summary}" cancelled${args.notifyAttendees !== false ? " — attendees notified" : ""}` };
+    }
+
+    if (name === "create_task") {
+      const { error } = await adminClient.from("action_items").insert({
+        user_id: userId,
+        title: args.title,
+        description: args.description || null,
+        priority: args.priority || "medium",
+        status: "open",
+        due_date: args.due_date || null,
+        assignee: args.assignee || null,
+        source: "assistant",
+      });
+      if (error) return { success: false, message: error.message || "Failed to create task" };
+      const due = args.due_date ? ` due ${args.due_date}` : "";
+      return { success: true, message: `Task "${args.title}" created${due}` };
+    }
+
+    if (name === "save_contact") {
+      const { error } = await adminClient.from("contacts").insert({
+        user_id: userId,
+        name: args.name,
+        email: args.email || null,
+        phone: args.phone || null,
+        company: args.company || null,
+        role: args.role || null,
+        notes: args.notes || null,
+        is_vip: args.is_vip || false,
+      });
+      if (error) return { success: false, message: error.message || "Failed to save contact" };
+      return { success: true, message: `Contact "${args.name}" saved` };
+    }
+
+    return { success: false, message: `Unknown tool: ${name}` };
+  } catch (err: any) {
+    console.error(`[tool:${name}] error:`, err);
+    return { success: false, message: err.message || "Tool execution failed" };
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -289,6 +613,11 @@ serve(async (req) => {
     let userDisplayName = "";
     const authHeader = req.headers.get("Authorization");
 
+    // Variables hoisted for tool-calling access after auth block
+    let authedUser: any = null;
+    let authedAdminClient: any = null;
+    let authedPrimaryGrant: { grantId: string; email: string } | null = null;
+
     // Always fetch real data when user is authenticated
     if (authHeader) {
       const supabase = createClient(
@@ -307,6 +636,10 @@ serve(async (req) => {
         const nylasGrants = await getAllNylasGrants(adminForContacts, user.id);
         // One grant covers both Gmail and Calendar in Nylas
         const primaryGrant = nylasGrants.length > 0 ? nylasGrants[0] : null;
+        // Hoist to outer scope for tool-calling access
+        authedUser = user;
+        authedAdminClient = adminForContacts;
+        authedPrimaryGrant = primaryGrant;
         // User's own email for test email / self-send scenarios
         const userOwnEmail = primaryGrant?.email || user.email || "";
 
@@ -957,7 +1290,7 @@ Location: ${e.location || "None"}\n`;
 
         // Tasks capability hint
         realDataContext += "\n\n--- TASKS CAPABILITY ---\n";
-        realDataContext += "The user has a Tasks page at /tasks for managing action items (open + completed, with priorities, due dates, assignees). The OPEN ACTION ITEMS section above is the live list. When the user asks 'what's on my list', 'what do I need to do', 'what's overdue', reference that data directly. When they say 'add a task to <X>' or 'remind me to <X>', tell them you've noted it and direct them to the Tasks page to confirm — do NOT silently insert. When asked to 'find tasks I owe people' or 'what did I commit to', scan recent emails in REAL INBOX DATA for implicit commitments and suggest they hit 'Scan inbox for tasks' on the /tasks page for an AI sweep.\n";
+        realDataContext += "The user has a Tasks page at /tasks for managing action items (open + completed, with priorities, due dates, assignees). The OPEN ACTION ITEMS section above is the live list. When the user asks 'what's on my list', 'what do I need to do', 'what's overdue', reference that data directly. When they say 'add a task', 'remind me to', 'note that', or 'put that on my list' — call create_task immediately. When asked to 'find tasks I owe people' or 'what did I commit to', scan recent emails in REAL INBOX DATA for implicit commitments and suggest they hit 'Scan inbox for tasks' on the /tasks page for an AI sweep.\n";
         realDataContext += "--- END TASKS ---\n";
 
         if (!canFetchNylas && nylasGrants.length > 0) {
@@ -998,138 +1331,55 @@ You are speaking out loud through TTS. Sound like a real human EA on the phone �
 
 When in doubt, stay short and offer more. Never volunteer a long answer the user didn't ask for.
 
-### VOICE ACTIONS — EMAIL, CALENDAR, CONTACTS (read this last, it overrides pacing)
+### VOICE ACTIONS — EMAIL, CALENDAR, CONTACTS
 
-JSON blocks (draft-json, calendar-json, contact-json) are stripped from TTS — the user never hears them. But they are the ONLY mechanism that triggers actions. **Without the block, the action NEVER happens regardless of what you say.** Pacing rules apply to spoken words only. JSON blocks do NOT count as sentences — ALWAYS append the block after your spoken response.
+Your tools execute immediately — no "confirm" step needed. Call the tool, then confirm in 1 spoken sentence. **NEVER output function tags, XML tags, or JSON in your spoken response — plain speech only.**
 
-The user confirms by saying "confirm" (or "go ahead", "do it", "send it", "add it", "book it"). When they say this, the system executes the action automatically. Your job is to prepare the block and tell them to say confirm.
+**EMAIL:** call send_email → say e.g. "Done — sent that to Sarah. Anything else?"
+**CALENDAR:** call create/update/delete tool → say e.g. "Done — your 3pm is set. Anything else?"
+**CONTACTS:** call save_contact → say e.g. "Done — Jay's saved. Anything else?"
+**TASKS:** call create_task → say e.g. "Done — added that to your tasks. Anything else?"
 
-**⚠️ MANDATORY: After your 1-2 spoken sentences, always append the block. Do not stop before emitting it.**
-
-**EMAIL:**
-- Draft/send/reply request → say "That's drafted — say confirm to send it." then emit \`\`\`draft-json\`\`\` block.
-- Modify pending draft → say "Updated — say confirm to send it." then re-emit complete \`\`\`draft-json\`\`\` with all fields.
-- NEVER say "sent", "I sent it", "done — sent". Nothing is sent until they say confirm.
-- Test email / "email myself" → use LOGGED-IN USER email as to_email.
-
-**CALENDAR:**
-- Create/schedule event → say "That's ready — say confirm to add it to your calendar." then emit \`\`\`calendar-json\`\`\` block.
-- Add guest / change time / any update to pending event → say "Updated — say confirm to save it." then re-emit complete \`\`\`calendar-json\`\`\` with ALL original fields plus the change.
-- NEVER say "I've added it", "I've set that up", "it's all set", "invite sent". Nothing is created until they say confirm.
-- Can't resolve attendee email → say "I can't find their email — I'll set it up without them and you can add them in Google Calendar." then emit block without that attendee.
-
-**CONTACTS:**
-- Save/add contact → say "Say confirm to save them to your contacts." then emit \`\`\`contact-json\`\`\` block.
+If you can't resolve someone's email, say "I don't have their email — what is it?" and wait before calling the tool.
 ` : `
-## CRITICAL: Response Style — Be Concise by Default
-- **ALWAYS reply in short, conversational text** — like a real human assistant texting you back. 2-4 sentences max for most replies.
-- **NEVER dump full email contents, raw data, or long lists** unless the user explicitly asks for details (e.g., "show me the full email", "list all my emails", "give me the details").
-- When referencing emails or meetings, mention them briefly by sender/subject — don't paste snippets or bodies.
-- Example good reply: "You have 3 unread emails — one urgent from Sarah about the Q3 budget. Want me to draft a reply?"
-- Example bad reply: listing out every email with From/Subject/Date/Preview fields.
-- If the user asks "what's in my inbox?" give a brief summary with counts and highlights, NOT a full list.
-- Only expand into detail when the user says things like "show me", "tell me more", "what does it say", "give me the full email", or "details".
+## RESPONSE STYLE — CONCISE BY DEFAULT
+- Reply in short, conversational text — 2-4 sentences max for most replies.
+- NEVER dump full email contents, raw data, or long lists unless the user explicitly asks.
+- Brief summary: mention sender/subject, not full content.
+- Expand only when user says "show me", "tell me more", "what does it say", "details", etc.
+
+## TOOLS — USE THEM DIRECTLY (NO CONFIRMATION NEEDED)
+You have tools: **send_email**, **create_calendar_event**, **update_calendar_event**, **delete_calendar_event**, **save_contact**, **create_task**.
+
+**CRITICAL: NEVER output tool call syntax, function tags, XML tags, or JSON payloads in your text response.** Never write angle-bracket function tags or raw JSON in your message. Your response must be plain natural language only. Tools are called silently by the system — you just confirm in words after.
+
+When the user asks to take an action, call the appropriate tool immediately — do not ask for confirmation, do not describe what you're about to do, just call it. After the tool executes, confirm in one short sentence ("Done — email sent to Sarah. Anything else?").
+
+**send_email rules:**
+- Use when user asks to send/write/draft/reply to an email.
+- Resolve recipient from PEOPLE DIRECTORY or LOGGED-IN USER. If no match found, ask for their email — NEVER fabricate one.
+- Always write a real subject and body. Never leave them blank.
+- For "send me a test email" / "email myself" — use the LOGGED-IN USER email as to_email.
+
+**create_calendar_event rules:**
+- Use when user asks to schedule/add/create an event.
+- Always include attendees array (empty [] if no guests) when user mentions inviting someone.
+- Infer the date from context (today is set in the system). "Tomorrow at 3pm" → compute the correct ISO date.
+- start/end must be ISO 8601 in the user's local timezone (e.g. "2026-06-10T14:00:00").
+
+**update_calendar_event rules:**
+- eventId MUST come from REAL CALENDAR DATA in this prompt. Never invent one.
+- If event not found in REAL CALENDAR DATA, tell user you can't see it.
+
+**delete_calendar_event rules:**
+- eventId MUST come from REAL CALENDAR DATA. Never invent one.
+
+**save_contact rules:**
+- Check PEOPLE DIRECTORY first — if they're already there, say so instead of saving again.
+- Never fabricate or guess an email address.
 
 ## NEXT STEPS (CRITICAL)
-At the end of EVERY response, include 2-3 brief action suggestions the user can say "yes" to. Keep them on one line each. Format as a simple list under "**Next Steps:**"
-
-## ⚠️ HOW EMAIL SENDING WORKS — NON-NEGOTIABLE RULES
-
-Email sending works like this: YOU compose the email and emit a \`draft-json\` block. The UI shows a **"Send Now"** button and a **"Save draft"** button. The email is ONLY sent when the user taps "Send Now". Until they tap it, NOTHING has been sent — EVER.
-
-### ABSOLUTE PROHIBITIONS (violation breaks the product):
-- ❌ NEVER say "I've sent the email", "Email sent!", "I sent it", "Sent!", "Done — email sent", "I've emailed them", or ANY phrase implying delivery happened. It has NOT been sent.
-- ❌ NEVER say "I can't send emails", "you'll need to do this yourself", or "copy-paste this" — you CAN compose emails.
-- ❌ NEVER emit a draft-json block without the triple-backtick \`\`\`draft-json fences — the button will not appear.
-- ❌ NEVER use "to" as a field name — it MUST be "to_email" or the button breaks.
-
-### MANDATORY (do this every time):
-- ✅ ALWAYS emit the draft-json block AND end your message with: "Tap **Send Now** below to send this, or **Save draft** to review first."
-- ✅ When user asks to send/write/draft/reply to an email — compose it immediately and emit the block. No stalling, no extra confirmation unless recipient is truly ambiguous.
-- ✅ TEST EMAIL: When the user says "send me a test email", "send a test email", "email myself", or "send to myself" — use their email from the LOGGED-IN USER section above as \`to_email\`, compose a short friendly test message (subject: "Test from your assistant", body: "Hi! This is a test email — everything's working correctly. ✓"), and emit the draft-json block.
-- ✅ MODIFYING A PENDING DRAFT: If the user asks to change the subject, body, recipient, or any other field of a draft that has NOT been sent yet, re-emit a complete new draft-json block with all fields updated. Never respond with text only — always include the updated block.
-
-You MUST use this EXACT format:
-
-\`\`\`draft-json
-{"to_email": "recipient@example.com", "to_name": "Recipient Name", "subject": "Re: Subject line", "body": "Full plain text body of the draft"}
-\`\`\`
-
-Additional rules:
-- Resolve the recipient's email from the PEOPLE DIRECTORY or LOGGED-IN USER section. If no match, ask — NEVER fabricate or guess an email address.
-- Always fill in a real subject and body — never leave them blank or as empty strings. A draft with no body will be rejected.
-- Keep bodies concise and professional.
-- Only emit a draft-json block when the user explicitly asks to send/write/draft/reply to an email.
-
-## HOW CALENDAR EVENTS WORK — READ CAREFULLY
-Calendar events work exactly like email: YOU emit a \`calendar-json\` block, the UI shows an **"Add to Calendar"** button, and the event is created ONLY when the user taps that button. Until they tap it, NOTHING has been added to their calendar and NO invite has been sent.
-
-**MANDATORY RULES — violation breaks the product:**
-- NEVER say "I've added it to your calendar", "Event created!", "Invite sent!", "I've scheduled it", "I've added [person] to the event", "I've updated the guest list", "It's all set", "Done!", or ANYTHING implying the event already exists or was already changed. It does NOT exist and was NOT changed until the user taps the button.
-- ALWAYS emit the calendar-json block + end with exactly: "Tap **Add to Calendar** below to create this event on Google Calendar."
-- When the user asks to schedule/add/create an event, emit the block immediately. Do not ask for confirmation unless the time or attendee is ambiguous.
-
-**CRITICAL — MODIFYING A PENDING EVENT:**
-If the user asks to add guests, change the time, add a location, or make ANY change to an event that has NOT yet been confirmed (they haven't tapped Add to Calendar yet), you MUST re-emit a brand new complete calendar-json block with ALL original fields PLUS the requested changes. Never respond to a modification request with text only — always include the updated block so the button reflects the latest version. Example: user already has a pending event and says "add John as a guest" → re-emit the full calendar-json with John in attendees.
-
-Use this exact format:
-
-\`\`\`calendar-json
-{"summary": "Event title", "start": "2026-05-29T10:00:00", "end": "2026-05-29T11:00:00", "description": "Optional notes", "location": "Optional location", "allDay": false, "attendees": [{"email": "person@example.com", "name": "Person Name"}]}
-\`\`\`
-
-Rules:
-- \`summary\` and \`start\` are required. \`end\` defaults to 1 hour after start if omitted.
-- \`start\` and \`end\` must be ISO 8601 datetime strings in the user's local timezone (e.g. "2026-05-29T14:00:00"). For all-day events set \`allDay\` to true and use date-only strings like "2026-05-29".
-- Always infer the date from context (today is ${new Date().toISOString().slice(0, 10)}). If the user says "tomorrow at 3pm", compute the correct date.
-- **\`attendees\` is critical**: whenever the user mentions inviting someone or scheduling WITH someone, include them in \`attendees\` with their resolved email from the PEOPLE DIRECTORY. This is what sends the Google Calendar invite to their inbox. If you cannot resolve their email, ask before emitting the block.
-- \`attendees\` may be an empty array [] if no guests — do NOT omit the field.
-- Only emit a calendar-json block when the user explicitly asks to create/add/schedule an event. Do NOT emit one just because you mention a date.
-- You may emit both a draft-json and a calendar-json in the same response (e.g. send an invite email + add the event to calendar).
-- **ALWAYS end your message with**: "Tap **Add to Calendar** below to create this event on Google Calendar." — never claim it's already created.
-
-## UPDATE EVENT FORMAT
-When the user asks to reschedule, move, rename, or edit a calendar event, emit this block so it can be updated with one tap:
-
-\`\`\`update-event-json
-{"eventId": "nylas_event_id_here", "summary": "Updated Event Title", "start": "2026-05-29T15:00:00", "end": "2026-05-29T16:00:00", "description": "Updated notes", "location": "Updated location", "attendees": [{"email": "person@example.com", "name": "Person Name"}], "notifyAttendees": true}
-\`\`\`
-
-Rules:
-- \`eventId\` MUST come from REAL CALENDAR DATA — never invent an id.
-- Only include fields you are changing. \`summary\` is always required even if unchanged (shown on the button).
-- \`notifyAttendees\` defaults to true — sends update emails. Set false only if user says "quietly" or "don't notify".
-- If you cannot find the event in REAL CALENDAR DATA, do NOT emit update-event-json — tell the user you can't see it and ask them to check their calendar directly.
-- Tell the user "Tap **Update Event** below to save changes on Google Calendar." — never say it's already updated.
-
-## CANCEL EVENT FORMAT
-When the user asks to cancel, delete, or remove a calendar event, emit this block so it can be cancelled with one tap (attendees get notified automatically):
-
-\`\`\`cancel-event-json
-{"eventId": "nylas_event_id_here", "summary": "Event title", "notifyAttendees": true}
-\`\`\`
-
-Rules:
-- \`eventId\` MUST come from the event data in REAL CALENDAR DATA above — look for the event by title/time and use its id field exactly. Never invent an id.
-- \`summary\` is the human-readable event title shown on the button.
-- \`notifyAttendees\` defaults to true — sends cancellation emails to all attendees. Only set false if the user explicitly says "don't notify" or "quietly remove".
-- If the user says "cancel my 3pm" and you can identify the event from REAL CALENDAR DATA, emit the block immediately. If ambiguous (multiple matches), ask which one before emitting.
-- Do NOT emit cancel-event-json if the event is not found in REAL CALENDAR DATA — tell the user you can't see it.
-- Tell the user "Tap **Cancel Event** below to remove it from Google Calendar." — never say it's already cancelled.
-
-## ADD CONTACT FORMAT
-When the user asks to add, save, or create a contact, emit this block so it can be saved with one tap:
-
-\`\`\`contact-json
-{"name": "Full Name", "email": "person@example.com", "phone": "+1 555 000 0000", "company": "Company Name", "role": "Their Job Title", "notes": "Any notes", "is_vip": false}
-\`\`\`
-
-Rules:
-- \`name\` is required. All other fields are optional — only include what the user provided.
-- Do NOT invent or guess email addresses. Only populate \`email\` if the user stated it or it is clearly in context.
-- Before emitting, check the PEOPLE DIRECTORY — if the person is already listed there, say "They're already in your contacts" instead of emitting a new block.
-- After the block say: "Tap **Add Contact** below to save them." — never say the contact is already saved.
-- Also works in voice mode — emit the block silently and say "Say confirm to save them to your contacts."
+At the end of EVERY response, include 2-3 brief action suggestions the user can say "yes" to. One line each. Simple list under "**Next Steps:**"
 `}
 
 ## Data Relevance Rule
@@ -1162,9 +1412,9 @@ When the user refers to someone by name (e.g., "send Jay Niblick a calendar invi
      "I see a couple of matches for **Jay** — which one?
      • Jay Niblick — Acme (CEO)
      • Jay Patel — Stripe (Eng Lead)"
-   Wait for the user's reply before drafting anything. Do NOT include a draft-json block in the disambiguation turn. If the user replies with another partial ("the one at Acme", "Niblick", "the CEO"), re-match against the candidate list and proceed once exactly one remains.
+   Wait for the user's reply before taking any action. Do NOT call any tool in the disambiguation turn. If the user replies with another partial ("the one at Acme", "Niblick", "the CEO"), re-match against the candidate list and proceed once exactly one remains.
 6. **If no match → ask for the email.** Say so honestly. Do NOT guess or fabricate an email like "jay.niblick@example.com".
-7. When drafting an email or calendar invite (after resolution), populate the to_email and to_name fields in the draft-json block from the chosen directory entry.
+7. When you have resolved exactly one match, use their email in the tool call (send_email or create_calendar_event).
 
 
 ## Core Capabilities
@@ -1173,118 +1423,160 @@ When the user refers to someone by name (e.g., "send Jay Niblick a calendar invi
 - Proactive flagging of overdue replies, back-to-back meetings, VIP contacts
 ${conversationMemoryNote}${realDataContext}`;
 
-    const response = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...effectiveMessages,
-          ],
-          stream: true,
-        }),
-      }
-    );
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "I'm getting too many requests right now — give me a moment and try again." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Add funds in Settings → Workspace → Usage to keep chatting." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status >= 500) {
-        const text = await response.text().catch(() => "");
-        console.error("AI gateway 5xx:", response.status, text);
-        return new Response(
-          JSON.stringify({ error: "The AI service is temporarily unavailable. Please try again in a minute." }),
-          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const text = await response.text().catch(() => "");
-      console.error("AI gateway error:", response.status, text);
-      return new Response(
-        JSON.stringify({ error: "AI service returned an error. Please try again." }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // ---- AGENTIC TOOL LOOP (text + voice) ----
+    // Loops until the model stops calling tools or hits MAX_ROUNDS.
+    // Handles bulk ops: OOO replies, sending to N people, chained tasks, etc.
+    {
+      const toolCtx: ToolExecutionContext = {
+        userId: authedUser?.id ?? "",
+        grantId: authedPrimaryGrant?.grantId ?? null,
+        nylasApiKey,
+        adminClient: authedAdminClient,
+      };
 
-    if (isVoice && response.body) {
-      const lastUserMsg = [...effectiveMessages].reverse().find((m: any) => m?.role === "user");
-      const userText: string = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
-      const EXTENDED_TRIGGERS = /\b(tell me more|more detail|details?|walk me through|explain|read it (to me|aloud)|the full thing|everything|in depth|in-depth|summari[sz]e the whole|what did they say exactly|go deeper|elaborate|long(er)? version)\b/i;
-      const userRequestedExtended = EXTENDED_TRIGGERS.test(userText);
+      const loopMessages: any[] = [
+        { role: "system", content: systemPrompt },
+        ...effectiveMessages,
+      ];
 
-      const [clientStream, metricsStream] = response.body.tee();
+      const MAX_ROUNDS = 10;
+      let rounds = 0;
+      let finalContent: string | null = null;
 
-      (async () => {
-        try {
-          const reader = metricsStream.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
-          let assistantText = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            let idx: number;
-            while ((idx = buffer.indexOf("\n")) !== -1) {
-              const line = buffer.slice(0, idx).replace(/\r$/, "");
-              buffer = buffer.slice(idx + 1);
-              if (!line.startsWith("data: ")) continue;
-              const payload = line.slice(6).trim();
-              if (!payload || payload === "[DONE]") continue;
-              try {
-                const parsed = JSON.parse(payload);
-                const delta = parsed.choices?.[0]?.delta?.content;
-                if (typeof delta === "string") assistantText += delta;
-              } catch { /* ignore partial */ }
-            }
-          }
-          const sentences = assistantText
-            .replace(/\s+/g, " ")
-            .split(/(?<=[.!?])\s+(?=[A-Z0-9"'(])/)
-            .map((s) => s.trim())
-            .filter((s) => s.length > 1);
-          const sentenceCount = sentences.length;
-          const wordCount = assistantText.trim().split(/\s+/).filter(Boolean).length;
-          const extendedProduced = sentenceCount > 2;
-          const triggerMatch = extendedProduced === userRequestedExtended ? "ok"
-            : userRequestedExtended ? "missed-extended"
-            : "over-extended";
-          console.log(`[voice-metrics] ${JSON.stringify({
-            sentences: sentenceCount,
-            words: wordCount,
-            userRequestedExtended,
-            extendedProduced,
-            triggerMatch,
-            userPreview: userText.slice(0, 80),
-          })}`);
-        } catch (err) {
-          console.error("[voice-metrics] failed:", err);
+      while (rounds < MAX_ROUNDS) {
+        rounds++;
+
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "llama-3.3-70b-versatile",
+            messages: loopMessages,
+            tools: TEXT_TOOLS,
+            tool_choice: "auto",
+            stream: false,
+          }),
+        });
+
+        if (!res.ok) {
+          if (res.status === 429) return new Response(
+            JSON.stringify({ error: "I'm getting too many requests right now — give me a moment and try again." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+          if (res.status === 402) return new Response(
+            JSON.stringify({ error: "AI credits exhausted. Add funds in Settings → Workspace → Usage to keep chatting." }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+          const errText = await res.text().catch(() => "");
+          console.error(`[chat] loop round ${rounds} error:`, res.status, errText);
+          return new Response(
+            JSON.stringify({ error: "AI service returned an error. Please try again." }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
-      })();
 
-      return new Response(clientStream, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        const finishReason: string = choice?.finish_reason ?? "stop";
+
+        if (finishReason !== "tool_calls") {
+          // Model is done — capture final text and exit loop
+          finalContent = choice?.message?.content ?? "";
+          break;
+        }
+
+        const toolCalls: any[] = choice.message.tool_calls || [];
+        console.log(`[chat] round ${rounds} tool_calls: ${toolCalls.map((tc: any) => tc.function.name).join(", ")}`);
+
+        const toolResults = await Promise.all(
+          toolCalls.map(async (tc: any) => {
+            let args: Record<string, any> = {};
+            try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* ignore */ }
+            const result = await executeToolCall(tc.function.name, args, toolCtx);
+            console.log(`[tool:${tc.function.name}] round=${rounds} result: ${JSON.stringify(result)}`);
+            return { role: "tool" as const, tool_call_id: tc.id, content: JSON.stringify(result) };
+          })
+        );
+
+        // Append this round's assistant message + tool results for next iteration
+        loopMessages.push(choice.message, ...toolResults);
+      }
+
+      // Helper: return a streaming response with optional voice metrics tee
+      const streamingResponse = async (messages: any[]) => {
+        const streamRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages, stream: true }),
+        });
+        if (!streamRes.ok) {
+          const errText = await streamRes.text().catch(() => "");
+          console.error("[chat] final stream error:", streamRes.status, errText);
+          return new Response(
+            JSON.stringify({ error: "AI service returned an error. Please try again." }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (isVoice && streamRes.body) {
+          const lastUserMsg = [...effectiveMessages].reverse().find((m: any) => m?.role === "user");
+          const userText: string = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
+          const EXTENDED_TRIGGERS = /\b(tell me more|more detail|details?|walk me through|explain|read it (to me|aloud)|the full thing|everything|in depth|in-depth|summari[sz]e the whole|what did they say exactly|go deeper|elaborate|long(er)? version)\b/i;
+          const userRequestedExtended = EXTENDED_TRIGGERS.test(userText);
+          const [clientStream, metricsStream] = streamRes.body.tee();
+          (async () => {
+            try {
+              const reader = metricsStream.getReader();
+              const decoder = new TextDecoder();
+              let buffer = "", assistantText = "";
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                let idx: number;
+                while ((idx = buffer.indexOf("\n")) !== -1) {
+                  const line = buffer.slice(0, idx).replace(/\r$/, "");
+                  buffer = buffer.slice(idx + 1);
+                  if (!line.startsWith("data: ")) continue;
+                  const payload = line.slice(6).trim();
+                  if (!payload || payload === "[DONE]") continue;
+                  try {
+                    const delta = JSON.parse(payload).choices?.[0]?.delta?.content;
+                    if (typeof delta === "string") assistantText += delta;
+                  } catch { /* ignore */ }
+                }
+              }
+              const sentences = assistantText.replace(/\s+/g, " ").split(/(?<=[.!?])\s+(?=[A-Z0-9"'(])/).map((s) => s.trim()).filter((s) => s.length > 1);
+              const extendedProduced = sentences.length > 2;
+              console.log(`[voice-metrics] ${JSON.stringify({ sentences: sentences.length, words: assistantText.trim().split(/\s+/).filter(Boolean).length, userRequestedExtended, extendedProduced, triggerMatch: extendedProduced === userRequestedExtended ? "ok" : userRequestedExtended ? "missed-extended" : "over-extended", userPreview: userText.slice(0, 80) })}`);
+            } catch (err) { console.error("[voice-metrics] failed:", err); }
+          })();
+          return new Response(clientStream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
+        }
+        return new Response(streamRes.body, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
+      };
+
+      // If loop hit MAX_ROUNDS without a stop, ask the model to summarise what it did
+      if (finalContent === null) {
+        console.log(`[chat] hit MAX_ROUNDS=${MAX_ROUNDS}, requesting summary`);
+        return streamingResponse(loopMessages);
+      }
+
+      // Model gave a final text response — emit as word-chunked SSE
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const words = finalContent!.split(/(\s+)/);
+          for (const chunk of words) {
+            if (!chunk) continue;
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: chunk }, finish_reason: null }] })}\n\n`));
+          }
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        },
       });
+      return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
     }
-
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-    });
   } catch (e) {
     console.error("chat error:", e);
     const msg = e instanceof Error ? e.message : "Unknown error";

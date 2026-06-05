@@ -136,6 +136,9 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     ttsStreamBusyRef.current = false;
     postDrainCallbackRef.current = null;
     streamingSpokenUpToRef.current = 0;
+    // Stop mic immediately — prevents noise during LLM thinking from racing into
+    // the next turn. The agentReply effect restarts it after TTS finishes.
+    try { speechRef.current?.stopListening(); } catch { /* ignore */ }
     if (ttsSpeakingRef.current) {
       try { ttsRef.current?.stop(); } catch { /* ignore */ }
     }
@@ -293,7 +296,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
         setTimeout(() => {
           lastStartAttemptRef.current = Date.now();
           try { speechRef.current?.startListening(); } catch { /* ignore */ }
-        }, 200);
+        }, 500);
       }
     };
 

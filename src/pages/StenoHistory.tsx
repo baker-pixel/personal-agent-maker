@@ -519,7 +519,7 @@ export default function StenoHistory() {
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
                           Full transcript
                         </p>
-                        <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                        <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap break-words">
                           {s.transcript}
                         </p>
                       </div>

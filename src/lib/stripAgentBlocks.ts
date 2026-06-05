@@ -60,6 +60,20 @@ function stripBareJsonBlocks(text: string): string {
   return result;
 }
 
+function stripToolCallLeakage(text: string): string {
+  return text
+    // <function/name=...>...</function> and variants
+    .replace(/<function[^>]*>[\s\S]*?<\/function>/gi, "")
+    // <tool_call>...</tool_call>
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "")
+    // <tool_response>...</tool_response>
+    .replace(/<tool_response>[\s\S]*?<\/tool_response>/gi, "")
+    // bare <function/...> self-closing tags
+    .replace(/<function\/[^>]*>/gi, "")
+    // leftover empty lines from stripping
+    .replace(/\n{3,}/g, "\n\n");
+}
+
 export function stripAgentBlocks(text: string): string {
-  return stripBareJsonBlocks(stripFencedBlocks(text)).trim();
+  return stripToolCallLeakage(stripBareJsonBlocks(stripFencedBlocks(text))).trim();
 }

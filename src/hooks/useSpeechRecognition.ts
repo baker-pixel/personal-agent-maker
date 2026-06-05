@@ -176,7 +176,12 @@ export function useSpeechRecognition({
       try {
         const text = await transcribe(blob, langRef.current, abort.signal);
         if (abort.signal.aborted) return;
-        if (text) {
+        // Filter Whisper hallucinations: too short, or common false-positive phrases
+        // that Whisper generates from silence/room noise/TTS echo.
+        const isHallucination =
+          text.length < 4 ||
+          /^(you\.?|thanks?\.?|thank you\.?|ok\.?|okay\.?|hmm+\.?|uh+\.?|ah+\.?|um+\.?|right\.?|sure\.?|yes\.?|no\.?|bye\.?|hi\.?|hey\.?)$/i.test(text.trim());
+        if (text && !isHallucination) {
           setTranscript(text);
           onResultRef.current?.(text);
           armSilenceTimer();

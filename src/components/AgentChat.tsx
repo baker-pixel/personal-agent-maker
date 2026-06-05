@@ -8,9 +8,6 @@ import {
 } from "lucide-react";
 
 import ReactMarkdown from "react-markdown";
-import { DraftJsonParser } from "@/components/chat/DraftJsonParser";
-import { CalendarJsonParser } from "@/components/chat/CalendarJsonParser";
-import { ContactJsonParser } from "@/components/chat/ContactJsonParser";
 import { stripAgentBlocks } from "@/lib/stripAgentBlocks";
 import { toast } from "@/hooks/use-toast";
 
@@ -389,9 +386,6 @@ export const AgentChat = () => {
                       <div className="prose prose-sm max-w-none text-foreground prose-headings:font-display prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-accent prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
                         <ReactMarkdown>{stripAgentBlocks(msg.content)}</ReactMarkdown>
                       </div>
-                      <DraftJsonParser text={msg.content} />
-                      <CalendarJsonParser text={msg.content} />
-                      <ContactJsonParser text={msg.content} />
                     </>
                   ) : (
                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>

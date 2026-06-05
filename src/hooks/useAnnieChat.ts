@@ -31,10 +31,11 @@ async function persistMessage(conversationId: string, role: string, content: str
 export function useAnnieChat(
   agentName: string,
   mode: "text" | "voice" = "text",
-  options?: { conversationTitle?: string; enabled?: boolean }
+  options?: { conversationTitle?: string; enabled?: boolean; skipInitialLoad?: boolean }
 ) {
   const conversationTitle = options?.conversationTitle ?? "Delegate";
   const enabled = options?.enabled ?? true;
+  const skipInitialLoad = options?.skipInitialLoad ?? false;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [thinking, setThinking] = useState(false);
@@ -92,9 +93,9 @@ export function useAnnieChat(
     fetchConversations();
   }, [fetchConversations]);
 
-  // Load most recent conversation on mount (skipped until enabled)
+  // Load most recent conversation on mount (skipped until enabled, or if skipInitialLoad)
   useEffect(() => {
-    if (!enabled) { setLoading(false); return; }
+    if (!enabled || skipInitialLoad) { setLoading(false); return; }
     let cancelled = false;
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -137,7 +138,7 @@ export function useAnnieChat(
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [enabled, conversationTitle, fetchConversations]);
+  }, [enabled, skipInitialLoad, conversationTitle, fetchConversations]);
 
   const send = useCallback(
     async (input: string) => {
