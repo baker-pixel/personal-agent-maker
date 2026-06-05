@@ -364,6 +364,36 @@ const TEXT_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "delete_email",
+      description: "Move an email to trash. Only use messageId values from the ID field in REAL INBOX DATA — never invent one.",
+      parameters: {
+        type: "object",
+        properties: {
+          messageId: { type: "string", description: "Nylas message ID from the ID field in REAL INBOX DATA" },
+          subject: { type: "string", description: "Email subject for confirmation message" },
+        },
+        required: ["messageId", "subject"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_contact",
+      description: "Permanently delete a contact from the contact list. Only use contactId from the id field in CONTACT INTELLIGENCE data — never invent one.",
+      parameters: {
+        type: "object",
+        properties: {
+          contactId: { type: "string", description: "Contact database ID from the id field in CONTACT INTELLIGENCE" },
+          name: { type: "string", description: "Contact name for confirmation message" },
+        },
+        required: ["contactId", "name"],
+      },
+    },
+  },
 ];
 
 interface ToolExecutionContext {
@@ -558,6 +588,31 @@ async function executeToolCall(
       return { success: true, message: `Contact "${args.name}" saved` };
     }
 
+    if (name === "delete_email") {
+      if (!grantId) return { success: false, message: "Google account not connected. Please reconnect via Integrations." };
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/messages/${args.messageId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${nylasApiKey}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) return { success: false, message: "Gmail session expired. Please reconnect via Integrations." };
+        if (res.status === 404) return { success: false, message: `Email "${args.subject}" not found — it may have already been deleted.` };
+        return { success: false, message: (data as any).message || "Failed to delete email" };
+      }
+      return { success: true, message: `Email "${args.subject}" moved to trash` };
+    }
+
+    if (name === "delete_contact") {
+      const { error } = await adminClient
+        .from("contacts")
+        .delete()
+        .eq("id", args.contactId)
+        .eq("user_id", userId);
+      if (error) return { success: false, message: error.message || "Failed to delete contact" };
+      return { success: true, message: `Contact "${args.name}" deleted` };
+    }
+
     return { success: false, message: `Unknown tool: ${name}` };
   } catch (err: any) {
     console.error(`[tool:${name}] error:`, err);
@@ -668,7 +723,7 @@ serve(async (req) => {
           canFetchNylas && primaryGrant ? fetchEvents(primaryGrant.grantId, nylasApiKey, 7) : Promise.resolve({ events: [], error: null }),
           adminForContacts
             .from("contacts")
-            .select("name, email, company, role, notes, is_vip, last_interaction_at, last_interaction_summary, interaction_count, ai_summary, ai_topics, birthday")
+            .select("id, name, email, company, role, notes, is_vip, last_interaction_at, last_interaction_summary, interaction_count, ai_summary, ai_topics, birthday")
             .eq("user_id", user.id)
             .order("is_vip", { ascending: false })
             .order("last_interaction_at", { ascending: false, nullsFirst: false })
@@ -811,6 +866,7 @@ serve(async (req) => {
           realDataContext += `\n\n--- REAL INBOX DATA${accountNote} ---\n`;
           allEmails.slice(0, 16).forEach((e: any, i: number) => {
             realDataContext += `\n[Email ${i + 1}] ${e.isUnread ? "🔵 UNREAD" : ""}${nylasGrants.length > 1 ? ` [${e.account}]` : ""}
+ID: ${e.id}
 From: ${e.from}
 Subject: ${e.subject}
 Date: ${e.date}
@@ -1154,7 +1210,7 @@ Location: ${e.location || "None"}\n`;
             const aiBrief = c.ai_summary ? ` | AI brief: ${c.ai_summary}` : "";
             const topics = c.ai_topics && c.ai_topics.length ? ` | topics: ${c.ai_topics.join(", ")}` : "";
             const bday = c.birthday ? ` | birthday: ${c.birthday}` : "";
-            realDataContext += `• ${c.name}${c.is_vip ? " ⭐VIP" : ""} <${c.email || "no-email"}>${c.role ? ` — ${c.role}` : ""}${c.company ? ` @ ${c.company}` : ""} | last: ${last} (${c.interaction_count}x)${c.notes ? ` | notes: ${c.notes}` : ""}${c.last_interaction_summary ? ` | recent: ${c.last_interaction_summary}` : ""}${aiBrief}${topics}${bday}\n`;
+            realDataContext += `• ${c.name}${c.is_vip ? " ⭐VIP" : ""} <${c.email || "no-email"}>${c.role ? ` — ${c.role}` : ""}${c.company ? ` @ ${c.company}` : ""} | id: ${c.id} | last: ${last} (${c.interaction_count}x)${c.notes ? ` | notes: ${c.notes}` : ""}${c.last_interaction_summary ? ` | recent: ${c.last_interaction_summary}` : ""}${aiBrief}${topics}${bday}\n`;
           });
           realDataContext += "--- END CONTACTS ---\n";
         }
@@ -1336,8 +1392,10 @@ When in doubt, stay short and offer more. Never volunteer a long answer the user
 Your tools execute immediately — no "confirm" step needed. Call the tool, then confirm in 1 spoken sentence. **NEVER output function tags, XML tags, or JSON in your spoken response — plain speech only.**
 
 **EMAIL:** call send_email → say e.g. "Done — sent that to Sarah. Anything else?"
+**DELETE EMAIL:** call delete_email (use ID from REAL INBOX DATA) → say e.g. "Done — moved that to trash."
 **CALENDAR:** call create/update/delete tool → say e.g. "Done — your 3pm is set. Anything else?"
 **CONTACTS:** call save_contact → say e.g. "Done — Jay's saved. Anything else?"
+**DELETE CONTACT:** call delete_contact (use id from CONTACT INTELLIGENCE) → say e.g. "Done — contact removed."
 **TASKS:** call create_task → say e.g. "Done — added that to your tasks. Anything else?"
 
 If you can't resolve someone's email, say "I don't have their email — what is it?" and wait before calling the tool.
@@ -1349,7 +1407,7 @@ If you can't resolve someone's email, say "I don't have their email — what is 
 - Expand only when user says "show me", "tell me more", "what does it say", "details", etc.
 
 ## TOOLS — USE THEM DIRECTLY (NO CONFIRMATION NEEDED)
-You have tools: **send_email**, **create_calendar_event**, **update_calendar_event**, **delete_calendar_event**, **save_contact**, **create_task**.
+You have tools: **send_email**, **delete_email**, **create_calendar_event**, **update_calendar_event**, **delete_calendar_event**, **save_contact**, **delete_contact**, **create_task**.
 
 **CRITICAL: NEVER output tool call syntax, function tags, XML tags, or JSON payloads in your text response.** Never write angle-bracket function tags or raw JSON in your message. Your response must be plain natural language only. Tools are called silently by the system — you just confirm in words after.
 
@@ -1374,9 +1432,17 @@ When the user asks to take an action, call the appropriate tool immediately — 
 **delete_calendar_event rules:**
 - eventId MUST come from REAL CALENDAR DATA. Never invent one.
 
+**delete_email rules:**
+- messageId MUST come from the ID field in REAL INBOX DATA above. Never invent one.
+- If the email is not in REAL INBOX DATA, tell the user you can't see it in the recent inbox.
+
 **save_contact rules:**
 - Check PEOPLE DIRECTORY first — if they're already there, say so instead of saving again.
 - Never fabricate or guess an email address.
+
+**delete_contact rules:**
+- contactId MUST come from the id field in CONTACT INTELLIGENCE above. Never invent one.
+- If the contact is not in CONTACT INTELLIGENCE, tell the user you can't find them.
 
 ## NEXT STEPS (CRITICAL)
 At the end of EVERY response, include 2-3 brief action suggestions the user can say "yes" to. One line each. Simple list under "**Next Steps:**"

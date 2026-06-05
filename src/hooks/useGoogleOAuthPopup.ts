@@ -128,6 +128,12 @@ export const useGoogleOAuthPopup = () => {
 
         if (didSucceed) {
           reloadAfterIntegrationChange();
+          // Kick off background sync so data is ready immediately after connect.
+          // Gmail: triage inbox + sync contacts. Calendar: no extra sync needed.
+          if (service === "gmail") {
+            supabase.functions.invoke("email-triage", { body: {} }).catch(() => {});
+            supabase.functions.invoke("contacts-sync", { body: {} }).catch(() => {});
+          }
         }
       };
 

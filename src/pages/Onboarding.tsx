@@ -58,9 +58,19 @@ export default function Onboarding({ onComplete }: Props) {
       if (!user) {
         toast({ title: "Session expired", description: "Please sign in again.", variant: "destructive" });
         supabase.auth.signOut();
+        return;
       }
+      // If already onboarded (e.g. page was visited directly), skip immediately.
+      supabase
+        .from("user_preferences")
+        .select("onboarding_completed")
+        .eq("user_id", user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.onboarding_completed) onComplete?.();
+        });
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
@@ -129,13 +139,11 @@ export default function Onboarding({ onComplete }: Props) {
         supabase.functions.invoke("email-triage", { body: {} }).catch(() => {});
       }
 
-      // Signal parent (App.tsx) that onboarding is done — this sets isOnboarded = true
-      // so ProtectedRoute stops redirecting to /onboarding before we navigate.
+      // Signal parent (App.tsx) that onboarding is done — sets isOnboarded = true.
+      // The /onboarding route guard then renders <Navigate to="/mode-select" /> automatically.
+      // Do NOT call navigate() here — calling it before React commits setIsOnboarded(true)
+      // causes ProtectedRoute to see isOnboarded=false and redirect back to /onboarding.
       onComplete?.();
-
-      // Navigate after onComplete has been called so the route guard sees
-      // isOnboarded = true on the next render cycle.
-      navigate("/mode-select", { replace: true });
     } catch (err: any) {
       console.error("[Onboarding] finish error", err);
       toast({

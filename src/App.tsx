@@ -175,7 +175,7 @@ const App = () => {
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/onboarding" element={
                 !session ? <Navigate to="/auth" replace /> :
-                isOnboarded ? <Navigate to="/dashboard" replace /> :
+                isOnboarded ? <Navigate to="/mode-select" replace /> :
                 <Onboarding onComplete={() => setIsOnboarded(true)} />
               } />
               <Route path="/mode-select" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><ModeSelect /></ProtectedRoute>} />
