@@ -176,11 +176,21 @@ export function useSpeechRecognition({
       try {
         const text = await transcribe(blob, langRef.current, abort.signal);
         if (abort.signal.aborted) return;
-        // Filter Whisper hallucinations: too short, or common false-positive phrases
-        // that Whisper generates from silence/room noise/TTS echo.
+        // Filter Whisper hallucinations: silence, room noise, and TTS echo all
+        // produce recognizable false-positive phrases. Drop them before onResult.
+        const normalized = text.trim().toLowerCase().replace(/[.!?,;…\s]+$/, "").replace(/^[.!?,;…\s]+/, "");
         const isHallucination =
+          // Too short to be real speech
           text.length < 4 ||
-          /^(you\.?|thanks?\.?|thank you\.?|ok\.?|okay\.?|hmm+\.?|uh+\.?|ah+\.?|um+\.?|right\.?|sure\.?|yes\.?|no\.?|bye\.?|hi\.?|hey\.?)$/i.test(text.trim());
+          // No alphabetic content at all (pure punctuation / digits)
+          !/[a-zA-Z]/.test(text) ||
+          // Whisper metadata tags: [Music], [Applause], [BLANK_AUDIO], (silence), etc.
+          /^\[.*\]$/.test(text.trim()) ||
+          /^\(.*\)$/.test(text.trim()) ||
+          // Single filler words / backchannels
+          /^(you|thanks?|thank you|ok|okay|hmm+|uh+|ah+|um+|er+|oh|hm+|ah|eh|right|sure|yes|no|bye|hi|hey|alright|yep|nope|cool|great|wow|well|so|and|the|a)$/i.test(normalized) ||
+          // Common Whisper silence hallucinations
+          /^(thank you for watching|thanks for watching|please subscribe|like and subscribe|don'?t forget to subscribe|see you next time|see you in the next video|have a nice day|you'?re welcome|take care|good luck|goodbye|good bye|i'?ll see you|until next time|this video|that'?s all|stay tuned|keep watching|music playing|background music)$/i.test(normalized);
         if (text && !isHallucination) {
           setTranscript(text);
           onResultRef.current?.(text);

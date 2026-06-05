@@ -164,6 +164,10 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     onResult: (text) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+      // Drop transcripts that arrive while TTS is playing or streaming — the mic
+      // should be off but echoes can still arrive during the stop↔speak transition.
+      // This is the primary defence against the TTS feedback loop.
+      if (ttsSpeakingRef.current || ttsStreamBusyRef.current || ttsStreamQueueRef.current.length > 0) return;
       pendingTranscriptRef.current = (
         pendingTranscriptRef.current ? pendingTranscriptRef.current + " " : ""
       ) + trimmed;
