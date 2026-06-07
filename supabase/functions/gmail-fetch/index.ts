@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
         `${NYLAS_BASE}/v3/grants/${grantId}/messages/${messageId}`,
         { headers: { Authorization: `Bearer ${nylasApiKey}` } }
       );
-      if (msgRes.status === 401) {
+      if (msgRes.status === 401 || msgRes.status === 404) {
         return new Response(
           JSON.stringify({
             error: "Your Gmail session has expired. Please reconnect your account.",
@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
       { headers: { Authorization: `Bearer ${nylasApiKey}` } }
     );
 
-    if (listRes.status === 401) {
+    if (listRes.status === 401 || listRes.status === 404) {
       return new Response(
         JSON.stringify({
           error: "Your Gmail session has expired. Please reconnect your account.",

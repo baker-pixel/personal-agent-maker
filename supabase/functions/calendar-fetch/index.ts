@@ -123,8 +123,8 @@ Deno.serve(async (req) => {
       const errorText = await calRes.text();
       console.error("Calendar fetch failed:", calRes.status, errorText);
 
-      // 401 / 400 — token expired or revoked; user must reconnect
-      if (calRes.status === 401 || calRes.status === 400) {
+      // 401 / 400 / 404 — token expired, revoked, or grant deleted; user must reconnect
+      if (calRes.status === 401 || calRes.status === 400 || calRes.status === 404) {
         return new Response(
           JSON.stringify({
             error: "Your Google Calendar session has expired. Please reconnect your account.",
