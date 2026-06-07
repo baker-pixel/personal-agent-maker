@@ -10,10 +10,15 @@ import { RefreshCw } from "lucide-react";
 export function UpdatePrompt() {
   const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW({
     onRegisteredSW(swUrl, reg) {
-      // Poll for updates every hour so long-lived sessions catch deploys.
-      if (reg) {
-        setInterval(() => reg.update(), 60 * 60 * 1000);
-      }
+      if (!reg) return;
+      // Check immediately on registration (catches deploys that happened while app was closed)
+      reg.update();
+      // Re-check every 5 minutes for long-lived sessions
+      setInterval(() => reg.update(), 5 * 60 * 1000);
+      // Re-check when user returns to the tab after being away
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) reg.update();
+      });
     },
   });
 
