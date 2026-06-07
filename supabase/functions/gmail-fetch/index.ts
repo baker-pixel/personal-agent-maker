@@ -104,7 +104,11 @@ Deno.serve(async (req) => {
     }
 
     const url = new URL(req.url);
-    const messageId = url.searchParams.get("messageId");
+    let bodyParams: Record<string, any> = {};
+    if (req.method === "POST") {
+      try { bodyParams = await req.json(); } catch { /* no body */ }
+    }
+    const messageId = url.searchParams.get("messageId") ?? bodyParams.messageId ?? null;
 
     // Single message full-body fetch
     if (messageId) {
@@ -152,9 +156,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // List emails — parse q param to extract newer_than filter
-    const maxResults = url.searchParams.get("maxResults") || "50";
-    const query = url.searchParams.get("q") || "in:inbox newer_than:2d";
+    // List emails — parse q param to extract newer_than filter (URL params or POST body)
+    const maxResults = url.searchParams.get("maxResults") ?? String(bodyParams.maxResults ?? "50");
+    const query = url.searchParams.get("q") ?? bodyParams.q ?? "in:inbox newer_than:2d";
 
     // Parse "newer_than:Nd" → received_after unix timestamp
     const newerMatch = query.match(/newer_than:(\d+)d/);

@@ -117,26 +117,16 @@ Deno.serve(async (req) => {
     return new Response("unknown grant", { status: 200 });
   }
 
-  // Enqueue — ON CONFLICT DO NOTHING prevents duplicates on Nylas retries
+  // Enqueue — ignoreDuplicates silently skips if message already queued (Nylas retries)
   const { error: queueErr } = await admin
     .from("email_processing_queue")
-    .insert({
-      user_id: grant.user_id,
-      nylas_message_id: messageId,
-      grant_id: grantId,
-      status: "pending",
-    })
-    .throwOnError()
-    // Supabase doesn't expose ON CONFLICT via insert; use upsert with ignoreDuplicates
-    ;
+    .upsert(
+      { user_id: grant.user_id, nylas_message_id: messageId, grant_id: grantId, status: "pending" },
+      { onConflict: "nylas_message_id", ignoreDuplicates: true }
+    );
 
   if (queueErr) {
-    // Duplicate key = already queued, which is fine
-    if (queueErr.code === "23505") {
-      return new Response("already queued", { status: 200 });
-    }
     console.error("nylas-webhook queue insert error:", queueErr);
-    // Return 500 so Nylas retries
     return new Response("queue error", { status: 500 });
   }
 

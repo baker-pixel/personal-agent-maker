@@ -71,29 +71,30 @@ export const DashboardBriefing = ({ onAskAssistant }: { onAskAssistant: (prompt:
         return;
       }
 
-      const headers = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      };
+      const [emailResult, calResult] = await Promise.allSettled([
+        supabase.functions.invoke("gmail-fetch", { body: { maxResults: 6, q: "is:inbox" } }),
+        supabase.functions.invoke("calendar-fetch", {
+          body: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+        }),
+      ]);
 
-      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-fetch?maxResults=6&q=is:inbox`, { headers })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.error) setEmailError(data.error);
-          else setEmails(data.emails || []);
-        })
-        .catch(() => setEmailError("Could not load emails"))
-        .finally(() => setLoadingEmails(false));
+      if (emailResult.status === "fulfilled") {
+        const { data, error } = emailResult.value;
+        if (error || data?.error) setEmailError(data?.error || "Could not load emails");
+        else setEmails(data?.emails || []);
+      } else {
+        setEmailError("Could not load emails");
+      }
+      setLoadingEmails(false);
 
-      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-fetch`, { headers })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.error) setEventError(data.error);
-          else setEvents((data.events || []).slice(0, 6));
-        })
-        .catch(() => setEventError("Could not load calendar"))
-        .finally(() => setLoadingEvents(false));
+      if (calResult.status === "fulfilled") {
+        const { data, error } = calResult.value;
+        if (error || data?.error) setEventError(data?.error || "Could not load calendar");
+        else setEvents((data?.events || []).slice(0, 6));
+      } else {
+        setEventError("Could not load calendar");
+      }
+      setLoadingEvents(false);
     };
 
     fetchData();

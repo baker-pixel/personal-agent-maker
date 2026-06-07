@@ -210,6 +210,16 @@ function needsRealData(latestMessage: string): { emails: boolean; calendar: bool
 const RECENT_TURNS_KEEP = 30;
 const SUMMARY_TRIGGER = 40;
 
+async function groqFetch(url: string, init: RequestInit, retries = 1): Promise<Response> {
+  const res = await fetch(url, init);
+  if (!res.ok && retries > 0 && (res.status === 429 || res.status >= 500)) {
+    const delay = res.status === 429 ? 2000 : 1000;
+    await new Promise(r => setTimeout(r, delay));
+    return groqFetch(url, init, retries - 1);
+  }
+  return res;
+}
+
 async function summarizeOlderMessages(older: any[], apiKey: string): Promise<string> {
   if (older.length === 0) return "";
   const transcript = older
@@ -1571,7 +1581,7 @@ ${conversationMemoryNote}${realDataContext}`;
 
       // Helper: return a streaming response with optional voice metrics tee
       const streamingResponse = async (messages: any[]) => {
-        const streamRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        const streamRes = await groqFetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           headers: { Authorization: `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages, stream: true }),
