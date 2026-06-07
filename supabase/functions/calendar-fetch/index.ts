@@ -17,6 +17,15 @@ function participantStatus(status: string): string {
   return m[status] ?? "needsAction";
 }
 
+async function nylasFetch(url: string, headers: Record<string, string>, retries = 2): Promise<Response> {
+  const res = await fetch(url, { headers });
+  if (!res.ok && retries > 0 && res.status >= 500) {
+    await new Promise(r => setTimeout(r, 800));
+    return nylasFetch(url, headers, retries - 1);
+  }
+  return res;
+}
+
 async function getNylasGrant(adminClient: any, userId: string): Promise<{ grantId: string; email: string | null }> {
   const { data: grant, error } = await adminClient
     .from("nylas_grants")
@@ -105,9 +114,9 @@ Deno.serve(async (req) => {
       limit: "100",
     });
 
-    const calRes = await fetch(
+    const calRes = await nylasFetch(
       `${NYLAS_BASE}/v3/grants/${grantId}/events?${params.toString()}`,
-      { headers: { Authorization: `Bearer ${nylasApiKey}` } }
+      { Authorization: `Bearer ${nylasApiKey}` }
     );
 
     if (!calRes.ok) {
