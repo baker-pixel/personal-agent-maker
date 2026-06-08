@@ -139,18 +139,18 @@ export default function ModeSelect() {
           <div className="flex gap-3 w-full max-w-xs mt-8">
             <button
               onClick={() => navigate("/decision/text")}
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold text-accent-foreground active:scale-[0.97] transition-all shadow-md shadow-accent/20"
+              className="flex-1 flex items-center justify-center gap-2 h-12 rounded-2xl text-sm font-semibold text-accent-foreground active:scale-[0.97] transition-all shadow-md shadow-accent/20 whitespace-nowrap"
               style={{ background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 32%))" }}
             >
-              <MessageSquare className="w-4 h-4" />
+              <MessageSquare className="w-4 h-4 shrink-0" />
               Text {displayName}
             </button>
             <button
               onClick={handleMicTap}
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold text-accent-foreground active:scale-[0.97] transition-all shadow-md shadow-accent/20"
+              className="flex-1 flex items-center justify-center gap-2 h-12 rounded-2xl text-sm font-semibold text-accent-foreground active:scale-[0.97] transition-all shadow-md shadow-accent/20 whitespace-nowrap"
               style={{ background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 32%))" }}
             >
-              <Mic className="w-4 h-4" />
+              <Mic className="w-4 h-4 shrink-0" />
               Talk to {displayName}
             </button>
           </div>

@@ -77,6 +77,7 @@ export default function Settings() {
   const { agentName, setAgentName } = useAgent();
   const [settings, setSettings] = useState<AgentSettings>({ ...defaults, agentName });
   const [activeTab, setActiveTab] = useState<SettingsTab>("home");
+  const [retakingAssessment, setRetakingAssessment] = useState(false);
   const { permission: pushPermission, requestPermission: requestPushPermission } = usePushNotifications();
   const tabBarRef = useRef<HTMLDivElement>(null);
 
@@ -472,8 +473,36 @@ export default function Settings() {
               <Sparkles className="w-5 h-5 text-accent" />
               <label className="text-sm font-semibold">Personality Syncing</label>
             </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">Retake the Bintly assessment to update {settings.agentName}'s behavioral profile.</p>
-            <Button className="w-full bg-accent text-accent-foreground hover:bg-accent/90">Retake Assessment <ArrowRight className="w-4 h-4 ml-1" /></Button>
+            <p className="text-sm text-muted-foreground leading-relaxed">Retake the personality assessment to update {settings.agentName}'s behavioral profile.</p>
+            <Button
+              disabled={retakingAssessment}
+              className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
+              onClick={async () => {
+                setRetakingAssessment(true);
+                try {
+                  const nameParts = (settings.userDisplayName || "").trim().split(/\s+/);
+                  const firstName = nameParts[0] || "User";
+                  const lastName = nameParts.slice(1).join(" ") || "-";
+                  const { data, error } = await supabase.functions.invoke("assessment-proxy", {
+                    body: { first_name: firstName, last_name: lastName, email: userEmail },
+                  });
+                  if (error) throw new Error(error.message);
+                  if (data?.already_completed) {
+                    toast({ title: "Assessment already completed", description: "Your personality profile is up to date." });
+                    return;
+                  }
+                  if (data?.error) throw new Error(data.error);
+                  if (!data?.assessment_url) throw new Error("No assessment URL returned");
+                  window.location.href = data.assessment_url;
+                } catch (err: any) {
+                  toast({ title: "Couldn't start assessment", description: err?.message || "Please try again.", variant: "destructive" });
+                } finally {
+                  setRetakingAssessment(false);
+                }
+              }}
+            >
+              {retakingAssessment ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />Starting…</> : <>Retake Assessment <ArrowRight className="w-4 h-4 ml-1" /></>}
+            </Button>
           </div>
         </section>}
 
