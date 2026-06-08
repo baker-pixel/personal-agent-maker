@@ -47,6 +47,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const origin = (body.origin || Deno.env.get("SITE_URL") || "").replace(/\/$/, "");
     const service: string = body.service ?? "gmail";
+    const isPopupFlow: boolean = body.isPopupFlow ?? false;
     const redirectUri = `${origin}/auth/google/callback`;
 
     const clientId = Deno.env.get("NYLAS_CLIENT_ID");
@@ -56,8 +57,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // State is the service id so the callback page knows which integration was connected
-    const state = service;
+    // Encode popup flag in state so GoogleCallback knows the flow type even
+    // after COOP headers from Google sever window.opener.
+    const state = isPopupFlow ? `${service}|popup` : service;
 
     const params = new URLSearchParams({
       client_id: clientId,

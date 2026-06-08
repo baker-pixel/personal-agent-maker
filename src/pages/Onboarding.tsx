@@ -128,6 +128,8 @@ export default function Onboarding({ onComplete }: Props) {
           supabase.auth.signOut();
           return;
         }
+        // Fill email immediately from server-verified user — don't wait for DB query
+        if (user.email) setState(s => ({ ...s, assessEmail: s.assessEmail || user.email }));
         supabase
           .from("user_preferences")
           .select("onboarding_completed, assessment_status, user_display_name, onboarding_step, agent_name, tone, email_length, priority_visibility, decision_style, tts_elevenlabs_voice_id")
@@ -192,10 +194,9 @@ export default function Onboarding({ onComplete }: Props) {
     }
   }, [gmailConnected, step]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Direct DB check once user identity is known — guards against the race where
-  // IntegrationsContext resolves before localStorage restores step=4, causing
-  // the effect above to fire with step=0 and miss. This fires whenever step
-  // settles at 4 with a known user, and advances to 5 if the grant exists.
+  // DB check on step 4 — fires on mount (catch already-connected users) and
+  // again whenever gmailConnected flips (catch the case where refreshConnections
+  // updated IntegrationsContext but the initial mount check already ran empty).
   useEffect(() => {
     if (step !== 4 || !storageKey) return;
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -213,7 +214,7 @@ export default function Onboarding({ onComplete }: Props) {
           }
         });
     });
-  }, [step, storageKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, storageKey, gmailConnected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = <K extends keyof OnboardingState>(key: K, val: OnboardingState[K]) =>
     setState(s => ({ ...s, [key]: val }));

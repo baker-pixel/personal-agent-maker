@@ -130,6 +130,29 @@ const App = () => {
         if (event === "SIGNED_OUT") {
           setIsOnboarded(null);
           onboardedFetchedRef.current = false;
+          // Clear user-specific localStorage so a re-registration starts fresh.
+          // performSignOut handles this for manual sign-outs; this covers
+          // server-side account deletion where performSignOut is never called.
+          try {
+            const keysToRemove: string[] = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (!k) continue;
+              if (
+                k === "agent-name" ||
+                k === "normy_agent" ||
+                k === "integrations-state" ||
+                k.startsWith("normy_")
+              ) keysToRemove.push(k);
+            }
+            keysToRemove.forEach(k => localStorage.removeItem(k));
+          } catch { /* ignore storage errors */ }
+        }
+        if (event === "SIGNED_IN") {
+          // Reset before fetching so the never-regress guard in fetchOnboardingState
+          // doesn't carry a previous user's true value into the new session.
+          setIsOnboarded(null);
+          onboardedFetchedRef.current = false;
         }
         if (newSession?.user && (
           event === "SIGNED_IN" ||

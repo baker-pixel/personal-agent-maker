@@ -5,28 +5,18 @@ import { useToast } from "@/hooks/use-toast";
 import { reloadAfterIntegrationChange } from "@/lib/integrationReload";
 
 export const useGoogleOAuthPopup = () => {
-  // `connecting` holds the service id currently in-flight (e.g. "gmail" or
-  // "google-calendar"), or null when idle. We expose it as the single source
-  // of truth so the UI can disable sibling buttons until the flow settles.
   const [connecting, setConnecting] = useState<string | null>(null);
   const popupRef = useRef<Window | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
-  // Hard guard: holds the service id of the in-flight OAuth flow (or null when
-  // idle). Tracking the SERVICE — not just a boolean — means Gmail's teardown
-  // can never accidentally clear Calendar's loading state (or vice versa) when
-  // two flows interleave.
   const inFlightRef = useRef<string | null>(null);
   const { refreshConnections, integrations } = useIntegrations();
   const { toast } = useToast();
 
-  // Keep a ref of integrations so the `connect` callback identity is stable
-  // and doesn't get recreated mid-OAuth (which would orphan listeners).
   const integrationsRef = useRef(integrations);
   useEffect(() => {
     integrationsRef.current = integrations;
   }, [integrations]);
 
-  // Ensure any in-flight listener/timer is torn down on unmount.
   useEffect(() => {
     return () => {
       cleanupRef.current?.();
@@ -36,10 +26,6 @@ export const useGoogleOAuthPopup = () => {
   }, []);
 
   const connect = useCallback(async (service: string) => {
-    // If another flow is still mid-air (popup open, awaiting callback), tear
-    // it down deterministically before starting the new one. This prevents
-    // the "Gmail → Calendar" sequence from getting stuck behind a stale
-    // listener/loader and guarantees a fresh OAuth request every time.
     if (inFlightRef.current || cleanupRef.current) {
       cleanupRef.current?.();
       cleanupRef.current = null;
@@ -51,10 +37,11 @@ export const useGoogleOAuthPopup = () => {
     setConnecting(service);
 
     try {
-      // Always request a freshly-generated OAuth URL (new state param) — we
-      // never reuse a cached URL across attempts or services.
+      // isPopupFlow=true causes nylas-auth to encode "|popup" in the OAuth state
+      // param. GoogleCallback reads this to detect popup mode even after COOP
+      // headers from Google sever window.opener.
       const response = await supabase.functions.invoke("nylas-auth", {
-        body: { service, origin: window.location.origin },
+        body: { service, origin: window.location.origin, isPopupFlow: true },
       });
       if (response.error) throw response.error;
       const { url } = response.data;
@@ -65,8 +52,6 @@ export const useGoogleOAuthPopup = () => {
       const w = 500, h = 650;
       const left = window.screenX + (window.outerWidth - w) / 2;
       const top = window.screenY + (window.outerHeight - h) / 2;
-      // Unique window name per attempt so we never get a stale (already-
-      // closed) window reference from a prior flow.
       const windowName = `google-oauth-${service}-${Date.now()}`;
       const popup = window.open(
         url,
@@ -75,9 +60,8 @@ export const useGoogleOAuthPopup = () => {
       );
       popupRef.current = popup;
 
-      // If the browser blocked the popup (common on mobile), fall back to a
-      // full-page redirect so the flow still completes without popups.
       if (!popup) {
+        // Popup fully blocked — fall back to full-page redirect.
         inFlightRef.current = null;
         setConnecting(null);
         sessionStorage.setItem("oauth-return-to", window.location.pathname + window.location.search);
@@ -92,6 +76,7 @@ export const useGoogleOAuthPopup = () => {
         window.removeEventListener("message", onMessage);
         clearInterval(closedPoll);
         clearTimeout(fallback);
+        try { bc.close(); } catch {}
         popupRef.current = null;
         cleanupRef.current = null;
       };
@@ -101,18 +86,11 @@ export const useGoogleOAuthPopup = () => {
         completed = true;
         teardown();
 
-        // ALWAYS re-fetch authoritative server state after a flow ends —
-        // success OR failure. This is the "hard reset" that ensures the next
-        // sibling connect (e.g. Calendar after Gmail) sees fresh integration
-        // state instead of stale cached values.
         try {
           await refreshConnections();
         } catch (e) {
           console.warn("refreshConnections after OAuth failed:", e);
         } finally {
-          // Clear flags LAST — and ONLY if this flow is still the in-flight
-          // owner. Prevents Gmail's finally block from wiping Calendar's
-          // loading state when Calendar started while Gmail was finishing.
           if (inFlightRef.current === service) {
             inFlightRef.current = null;
             setConnecting(null);
@@ -128,8 +106,6 @@ export const useGoogleOAuthPopup = () => {
 
         if (didSucceed) {
           reloadAfterIntegrationChange();
-          // Kick off background sync so data is ready immediately after connect.
-          // Gmail: triage inbox + sync contacts. Calendar: no extra sync needed.
           if (service === "gmail") {
             supabase.functions.invoke("email-triage", { body: {} }).catch(() => {});
             supabase.functions.invoke("contacts-sync", { body: {} }).catch(() => {});
@@ -137,35 +113,34 @@ export const useGoogleOAuthPopup = () => {
         }
       };
 
+      // Legacy postMessage listener (works when window.opener is intact)
       const onMessage = (event: MessageEvent) => {
         if (event.origin !== window.location.origin || event.data?.type !== "normy-google-oauth-complete") return;
-        // The callback page now reports success/failure explicitly. If the
-        // payload is missing (older callback), assume success for back-compat.
         const succeeded = event.data?.success !== false;
         if (!succeeded && event.data?.error) {
-          toast({
-            title: "Connection failed",
-            description: String(event.data.error),
-            variant: "destructive",
-          });
+          toast({ title: "Connection failed", description: String(event.data.error), variant: "destructive" });
         }
         void completeConnection(succeeded);
       };
 
-      // Poll for popup-closed: if the user closes the popup without
-      // finishing OAuth, clear loading so they can retry / connect sibling.
-      const closedPoll = window.setInterval(() => {
-        if (popup && popup.closed) {
-          void completeConnection(false);
+      // BroadcastChannel listener — works even when COOP headers sever window.opener
+      const bc = new BroadcastChannel("normy-oauth");
+      bc.onmessage = (event: MessageEvent) => {
+        if (event.data?.type !== "normy-google-oauth-complete") return;
+        const succeeded = event.data?.success !== false;
+        if (!succeeded && event.data?.error) {
+          toast({ title: "Connection failed", description: String(event.data.error), variant: "destructive" });
         }
+        void completeConnection(succeeded);
+      };
+
+      const closedPoll = window.setInterval(() => {
+        if (popup && popup.closed) void completeConnection(false);
       }, 500);
 
-      // Hard timeout fallback — if no message and popup never closes within
-      // 2 minutes, exit the loader and allow retry.
       const fallback = window.setTimeout(() => void completeConnection(false), 120000);
       window.addEventListener("message", onMessage);
 
-      // Expose teardown so a subsequent connect() call can cancel this one.
       cleanupRef.current = () => {
         if (!completed) {
           completed = true;

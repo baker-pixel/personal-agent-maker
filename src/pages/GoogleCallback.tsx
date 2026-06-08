@@ -11,35 +11,45 @@ const GoogleCallback = () => {
   const { refreshConnections } = useIntegrations();
 
   useEffect(() => {
-    const isPopup = window.opener && window.opener !== window;
+    // Parse popup flag from state param — encoded by nylas-auth as "service|popup".
+    // This is the only reliable indicator because Google/Nylas set COOP headers that
+    // sever window.opener after cross-origin navigation, making it unreliable.
+    const urlParams = new URLSearchParams(window.location.search);
+    const rawState = urlParams.get("state") ?? "";
+    const isPopupFlow = rawState.endsWith("|popup");
 
-    // Always notify the parent on terminal outcomes so the Settings page
-    // never sits on a "Connecting..." spinner waiting for a message that
-    // never arrives. Both success and error paths post to the opener.
-    const notifyParent = (payload: Record<string, unknown>) => {
-      if (!isPopup) return;
+    // window.opener may be non-null for full-page flows too, so we use isPopupFlow
+    // as the primary signal and window.opener as a belt-and-braces fallback.
+    const hasOpener = !!(window.opener && window.opener !== window);
+
+    const broadcast = (payload: Record<string, unknown>) => {
+      // BroadcastChannel works even when window.opener is null (COOP).
       try {
-        window.opener.postMessage(payload, window.location.origin);
-      } catch (e) {
-        console.warn("postMessage to opener failed:", e);
+        const bc = new BroadcastChannel("normy-oauth");
+        bc.postMessage(payload);
+        bc.close();
+      } catch {}
+      // Legacy postMessage for browsers without BroadcastChannel
+      if (hasOpener) {
+        try { window.opener.postMessage(payload, window.location.origin); } catch {}
       }
     };
 
     const fail = (msg: string) => {
       setStatus("error");
       setMessage(msg);
-      notifyParent({ type: "normy-google-oauth-complete", success: false, error: msg });
-      // Auto-close after a short beat so the parent's popup-closed poll
-      // also fires as a belt-and-braces fallback.
-      if (isPopup) setTimeout(() => window.close(), 2000);
+      broadcast({ type: "normy-google-oauth-complete", success: false, error: msg });
+      if (isPopupFlow || hasOpener) setTimeout(() => window.close(), 2000);
     };
 
     const handleCallback = async () => {
       try {
         const params = new URLSearchParams(window.location.search);
         const code = params.get("code");
-        const provider = params.get("state"); // we stored provider in state
         const oauthError = params.get("error");
+
+        // Strip "|popup" suffix to get the actual service id
+        const provider = isPopupFlow ? rawState.slice(0, rawState.lastIndexOf("|")) : rawState;
 
         if (oauthError) {
           fail(`Authorization was denied (${oauthError}).`);
@@ -68,7 +78,7 @@ const GoogleCallback = () => {
         setStatus("success");
         setMessage(`Connected ${provider === "gmail" ? "Gmail" : "Google Calendar"} as ${data.email}`);
 
-        // Mark provider as connected in local cache (legacy).
+        // Update local integration cache (legacy)
         try {
           const saved = localStorage.getItem("integrations-state");
           const connectedIds: string[] = saved ? JSON.parse(saved) : [];
@@ -78,19 +88,18 @@ const GoogleCallback = () => {
           }
         } catch {}
 
-        notifyParent({
+        broadcast({
           type: "normy-google-oauth-complete",
           success: true,
           service: provider,
           email: data.email,
         });
 
-        if (isPopup) {
+        if (isPopupFlow || hasOpener) {
+          // Popup flow: parent already received the broadcast, just close.
           setTimeout(() => window.close(), 1200);
         } else {
-          // Full-page redirect flow (popup blocked on mobile/PWA).
-          // The IntegrationsContext fetched on app mount BEFORE the grant was stored —
-          // re-sync now so the rest of the session sees connected: true.
+          // Full-page redirect flow (popup was blocked entirely).
           refreshConnections().catch(() => {});
           const returnTo = sessionStorage.getItem("oauth-return-to") || "/dashboard";
           sessionStorage.removeItem("oauth-return-to");
@@ -105,7 +114,8 @@ const GoogleCallback = () => {
     handleCallback();
   }, [navigate]);
 
-  const isPopup = window.opener && window.opener !== window;
+  const isPopupFlow = new URLSearchParams(window.location.search).get("state")?.endsWith("|popup");
+  const isPopupLike = isPopupFlow || !!(window.opener && window.opener !== window);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -121,7 +131,7 @@ const GoogleCallback = () => {
             <CheckCircle2 className="w-10 h-10 text-success mx-auto mb-4" />
             <p className="text-foreground font-medium">{message}</p>
             <p className="text-sm text-muted-foreground mt-2">
-              {isPopup ? "This window will close…" : "Redirecting..."}
+              {isPopupLike ? "This window will close…" : "Redirecting..."}
             </p>
           </>
         )}
@@ -130,10 +140,10 @@ const GoogleCallback = () => {
             <XCircle className="w-10 h-10 text-destructive mx-auto mb-4" />
             <p className="text-foreground font-medium">{message}</p>
             <button
-              onClick={() => isPopup ? window.close() : navigate("/")}
+              onClick={() => isPopupLike ? window.close() : navigate("/")}
               className="mt-4 px-4 py-2 rounded-xl bg-accent text-accent-foreground text-sm font-medium hover:opacity-90 transition-opacity"
             >
-              {isPopup ? "Close" : "Back to app"}
+              {isPopupLike ? "Close" : "Back to app"}
             </button>
           </>
         )}
