@@ -61,6 +61,25 @@ export default function Onboarding({ onComplete }: Props) {
   const [assessmentLastName, setAssessmentLastName] = useState("");
   const [assessmentEmail, setAssessmentEmail] = useState("");
 
+  // Resume at step 4 when returning from assessment redirect
+  const resumeStep = parseInt(searchParams.get("resumeStep") ?? "0", 10);
+
+  // Step and form state start at defaults — restored from user-scoped localStorage after auth loads
+  const [step, setStep] = useState<number>(resumeStep > 0 ? resumeStep : 0);
+  const [dir, setDir] = useState(1);
+  const [state, setState] = useState<OnboardingState>(defaults);
+  const [saving, setSaving] = useState(false);
+  const [storageKey, setStorageKey] = useState<string | null>(null);
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const previewAbortRef = useRef<AbortController | null>(null);
+
+  // Wait for IntegrationsContext to finish loading before reading connection state.
+  // Without this, step 4 would flash "not connected" even for already-connected accounts.
+  const gmailConnected = !integrationsLoading && integrations.find(i => i.id === "gmail")?.connected;
+  const calendarConnected = !integrationsLoading && integrations.find(i => i.id === "google-calendar")?.connected;
+
   useEffect(() => {
     // Fast pre-fill from local session cache — no network, instant
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -75,20 +94,40 @@ export default function Onboarding({ onComplete }: Props) {
       }
     });
 
-    // Security check + DB prefs in background
+    // Security check + DB prefs — also loads user-scoped progress from localStorage
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) {
         toast({ title: "Session expired", description: "Please sign in again.", variant: "destructive" });
         supabase.auth.signOut();
         return;
       }
+
+      const key = `onboarding_progress_${user.id}`;
+      setStorageKey(key);
+
+      // Restore saved progress for this specific user
+      if (resumeStep === 0) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const saved = JSON.parse(raw) as { step?: number; state?: Partial<OnboardingState> };
+            if (typeof saved.step === "number") setStep(saved.step);
+            if (saved.state) setState(s => ({ ...s, ...saved.state }));
+          }
+        } catch { /* ignore malformed data */ }
+      }
+
       supabase
         .from("user_preferences")
         .select("onboarding_completed, assessment_status, user_display_name")
         .eq("user_id", user.id)
         .maybeSingle()
         .then(({ data }) => {
-          if (data?.onboarding_completed) { onComplete?.(); return; }
+          if (data?.onboarding_completed) {
+            localStorage.removeItem(key);
+            onComplete?.();
+            return;
+          }
           if (data?.assessment_status === "success") setAssessmentDone(true);
           // Override name with DB value if set (more accurate than OAuth metadata)
           const fullName = (data?.user_display_name || "").trim();
@@ -101,36 +140,19 @@ export default function Onboarding({ onComplete }: Props) {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Resume at step 4 when returning from assessment redirect
-  const resumeStep = parseInt(searchParams.get("resumeStep") ?? "0", 10);
-
-  const STORAGE_KEY = "onboarding_progress";
-  const loadSaved = (): { step: number; state: OnboardingState } | null => {
-    try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null; } catch { return null; }
-  };
-  const saved = loadSaved();
-
-  const [step, setStep] = useState<number>(() => {
-    if (resumeStep > 0) return resumeStep;
-    return saved?.step ?? 0;
-  });
-  const [dir, setDir] = useState(1);
-  const [state, setState] = useState<OnboardingState>(() => ({ ...defaults, ...(saved?.state ?? {}) }));
-  const [saving, setSaving] = useState(false);
-  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
-  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
-  const previewUrlRef = useRef<string | null>(null);
-  const previewAbortRef = useRef<AbortController | null>(null);
-
-  // Wait for IntegrationsContext to finish loading before reading connection state.
-  // Without this, step 1 would flash "not connected" even for already-connected accounts.
-  const gmailConnected = !integrationsLoading && integrations.find(i => i.id === "gmail")?.connected;
-  const calendarConnected = !integrationsLoading && integrations.find(i => i.id === "google-calendar")?.connected;
-
-  // Persist progress so refresh restores the current step + form data
+  // Persist step + form data under the user-scoped key
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, state }));
-  }, [step, state]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!storageKey) return;
+    localStorage.setItem(storageKey, JSON.stringify({ step, state }));
+  }, [step, state, storageKey]);
+
+  // Auto-advance past step 4 once Google connects — no manual "Continue" needed
+  useEffect(() => {
+    if (step === 4 && gmailConnected) {
+      setDir(1);
+      setStep(5);
+    }
+  }, [gmailConnected, step]);
 
   const update = <K extends keyof OnboardingState>(key: K, val: OnboardingState[K]) =>
     setState(s => ({ ...s, [key]: val }));
@@ -185,7 +207,7 @@ export default function Onboarding({ onComplete }: Props) {
         supabase.functions.invoke("email-triage", { body: {} }).catch(() => {});
       }
 
-      localStorage.removeItem(STORAGE_KEY);
+      if (storageKey) localStorage.removeItem(storageKey);
 
       // Signal parent (App.tsx) that onboarding is done — sets isOnboarded = true.
       // The /onboarding route guard then renders <Navigate to="/mode-select" /> automatically.
