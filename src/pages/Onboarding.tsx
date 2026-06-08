@@ -106,7 +106,7 @@ export default function Onboarding({ onComplete }: Props) {
       }
 
       // 2. Pre-fill assessment fields from auth — only if not already saved
-      const authEmail = u.email ?? "";
+      const authEmail = u.email ?? u.user_metadata?.email ?? "";
       const fullName = (u.user_metadata?.full_name || u.user_metadata?.name || "").trim();
       const idx = fullName.indexOf(" ");
       const authFirst = idx > 0 ? fullName.slice(0, idx) : fullName;
@@ -193,6 +193,17 @@ export default function Onboarding({ onComplete }: Props) {
       setStep(5);
     }
   }, [gmailConnected, step]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ensure assessEmail is populated when the user reaches step 3.
+  // getSession() in the main effect can return a session where user.email is
+  // temporarily undefined (race between signUp() and JWT persistence).
+  useEffect(() => {
+    if (step !== 3) return;
+    if (state.assessEmail) return; // already filled
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email) setState(s => ({ ...s, assessEmail: s.assessEmail || user.email! }));
+    });
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // DB check on step 4 — fires on mount (catch already-connected users) and
   // again whenever gmailConnected flips (catch the case where refreshConnections
@@ -579,6 +590,7 @@ export default function Onboarding({ onComplete }: Props) {
                             value={state.assessEmail}
                             onChange={e => update("assessEmail", e.target.value)}
                             type="email"
+                            placeholder="your@email.com"
                             className="rounded-xl bg-muted/40"
                           />
                         </div>
