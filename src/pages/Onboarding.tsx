@@ -24,6 +24,9 @@ interface OnboardingState {
   emailLength: string;
   priorityVisibility: string;
   decisionStyle: string;
+  assessFirstName: string;
+  assessLastName: string;
+  assessEmail: string;
 }
 
 const defaults: OnboardingState = {
@@ -33,6 +36,9 @@ const defaults: OnboardingState = {
   emailLength: "balanced",
   priorityVisibility: "important",
   decisionStyle: "careful",
+  assessFirstName: "",
+  assessLastName: "",
+  assessEmail: "",
 };
 
 const slideVariants = {
@@ -57,9 +63,6 @@ export default function Onboarding({ onComplete }: Props) {
 
   const [assessmentDone, setAssessmentDone] = useState(false);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
-  const [assessmentFirstName, setAssessmentFirstName] = useState("");
-  const [assessmentLastName, setAssessmentLastName] = useState("");
-  const [assessmentEmail, setAssessmentEmail] = useState("");
 
   // Resume at step 4 when returning from assessment redirect
   const resumeStep = parseInt(searchParams.get("resumeStep") ?? "0", 10);
@@ -81,62 +84,85 @@ export default function Onboarding({ onComplete }: Props) {
   const calendarConnected = !integrationsLoading && integrations.find(i => i.id === "google-calendar")?.connected;
 
   useEffect(() => {
-    // Fast pre-fill from local session cache — no network, instant
+    // getSession reads from localStorage — fast, no network
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user) return;
       const u = session.user;
-      setAssessmentEmail(u.email ?? "");
-      const fullName = (u.user_metadata?.full_name || u.user_metadata?.name || "").trim();
-      if (fullName) {
-        const idx = fullName.indexOf(" ");
-        setAssessmentFirstName(idx > 0 ? fullName.slice(0, idx) : fullName);
-        setAssessmentLastName(idx > 0 ? fullName.slice(idx + 1) : "");
-      }
-    });
-
-    // Security check + DB prefs — also loads user-scoped progress from localStorage
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) {
-        toast({ title: "Session expired", description: "Please sign in again.", variant: "destructive" });
-        supabase.auth.signOut();
-        return;
-      }
-
-      const key = `onboarding_progress_${user.id}`;
+      const key = `onboarding_progress_${u.id}`;
       setStorageKey(key);
 
-      // Restore saved progress for this specific user
+      // 1. Restore localStorage progress for this user
+      let savedStep = resumeStep > 0 ? resumeStep : 0;
+      let savedState: Partial<OnboardingState> = {};
       if (resumeStep === 0) {
         try {
           const raw = localStorage.getItem(key);
           if (raw) {
-            const saved = JSON.parse(raw) as { step?: number; state?: Partial<OnboardingState> };
-            if (typeof saved.step === "number") setStep(saved.step);
-            if (saved.state) setState(s => ({ ...s, ...saved.state }));
+            const parsed = JSON.parse(raw) as { step?: number; state?: Partial<OnboardingState> };
+            if (typeof parsed.step === "number") savedStep = parsed.step;
+            if (parsed.state) savedState = parsed.state;
           }
-        } catch { /* ignore malformed data */ }
+        } catch { /* ignore */ }
       }
 
-      supabase
-        .from("user_preferences")
-        .select("onboarding_completed, assessment_status, user_display_name")
-        .eq("user_id", user.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data?.onboarding_completed) {
-            localStorage.removeItem(key);
-            onComplete?.();
-            return;
-          }
-          if (data?.assessment_status === "success") setAssessmentDone(true);
-          // Override name with DB value if set (more accurate than OAuth metadata)
-          const fullName = (data?.user_display_name || "").trim();
-          if (fullName) {
-            const idx = fullName.indexOf(" ");
-            setAssessmentFirstName(idx > 0 ? fullName.slice(0, idx) : fullName);
-            setAssessmentLastName(idx > 0 ? fullName.slice(idx + 1) : "");
-          }
-        });
+      // 2. Pre-fill assessment fields from auth — only if not already saved
+      const authEmail = u.email ?? "";
+      const fullName = (u.user_metadata?.full_name || u.user_metadata?.name || "").trim();
+      const idx = fullName.indexOf(" ");
+      const authFirst = idx > 0 ? fullName.slice(0, idx) : fullName;
+      const authLast  = idx > 0 ? fullName.slice(idx + 1) : "";
+
+      setState({
+        ...defaults,
+        ...savedState,
+        assessEmail:     savedState.assessEmail     || authEmail,
+        assessFirstName: savedState.assessFirstName || authFirst,
+        assessLastName:  savedState.assessLastName  || authLast,
+      });
+      if (savedStep > 0) setStep(savedStep);
+
+      // 3. Security check (getUser = server-side JWT verify) + DB prefs
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (!user) {
+          toast({ title: "Session expired", description: "Please sign in again.", variant: "destructive" });
+          supabase.auth.signOut();
+          return;
+        }
+        supabase
+          .from("user_preferences")
+          .select("onboarding_completed, assessment_status, user_display_name, onboarding_step, agent_name, tone, email_length, priority_visibility, decision_style, tts_elevenlabs_voice_id")
+          .eq("user_id", user.id)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.onboarding_completed) {
+              localStorage.removeItem(key);
+              onComplete?.();
+              return;
+            }
+            if (data?.assessment_status === "success") setAssessmentDone(true);
+
+            // DB step as floor — never go backwards from what was saved
+            const dbStep = data?.onboarding_step ?? 0;
+            if (resumeStep === 0 && dbStep > 0) setStep(s => Math.max(s, dbStep));
+
+            // Fill DB values as fallback for fields not yet in localStorage
+            setState(s => {
+              const dbName = (data?.user_display_name || "").trim();
+              const di = dbName.indexOf(" ");
+              return {
+                ...s,
+                agentName:        s.agentName        || data?.agent_name || "",
+                voiceId:          s.voiceId          || data?.tts_elevenlabs_voice_id || DEFAULT_GROQ_VOICE,
+                tone:             s.tone             || data?.tone              || "friendly",
+                emailLength:      s.emailLength      || data?.email_length      || "balanced",
+                priorityVisibility: s.priorityVisibility || data?.priority_visibility || "important",
+                decisionStyle:    s.decisionStyle    || data?.decision_style    || "careful",
+                assessFirstName:  s.assessFirstName  || (di > 0 ? dbName.slice(0, di) : dbName),
+                assessLastName:   s.assessLastName   || (di > 0 ? dbName.slice(di + 1) : ""),
+              };
+            });
+          });
+      });
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -178,11 +204,40 @@ export default function Onboarding({ onComplete }: Props) {
 
   const goToStep = (n: number) => { setStep(n); };
 
-  const next = () => {
-    // Step 0: if no name entered, use default but show brief confirmation
-    if (step === 0 && !state.agentName.trim()) {
-      setState(s => ({ ...s, agentName: "Normy Agent" }));
+  const saveStepToDB = async (completedStep: number, currentState: OnboardingState) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const agentName = currentState.agentName.trim() || "Normy Agent";
+      const updates: Record<string, any> = {
+        user_id: session.user.id,
+        onboarding_step: completedStep + 1,
+        updated_at: new Date().toISOString(),
+      };
+      if (completedStep >= 0) updates.agent_name = agentName;
+      if (completedStep >= 1) {
+        updates.tts_elevenlabs_voice_id = currentState.voiceId;
+        updates.tts_provider = "groq";
+        updates.tts_enabled = true;
+      }
+      if (completedStep >= 2) {
+        updates.tone = currentState.tone;
+        updates.email_length = currentState.emailLength;
+        updates.priority_visibility = currentState.priorityVisibility;
+        updates.decision_style = currentState.decisionStyle;
+      }
+      await supabase.from("user_preferences").upsert(updates, { onConflict: "user_id" });
+    } catch (err) {
+      console.warn("[Onboarding] saveStepToDB failed:", err);
     }
+  };
+
+  const next = () => {
+    const resolvedState = step === 0 && !state.agentName.trim()
+      ? { ...state, agentName: "Normy Agent" }
+      : state;
+    if (step === 0 && !state.agentName.trim()) setState(resolvedState);
+    saveStepToDB(step, resolvedState); // fire-and-forget DB save
     setDir(1);
     goToStep(Math.min(step + 1, TOTAL_STEPS - 1));
   };
@@ -485,8 +540,8 @@ export default function Onboarding({ onComplete }: Props) {
                           <div className="space-y-1.5">
                             <label className="text-xs font-medium text-foreground">First name</label>
                             <Input
-                              value={assessmentFirstName}
-                              onChange={e => setAssessmentFirstName(e.target.value)}
+                              value={state.assessFirstName}
+                              onChange={e => update("assessFirstName", e.target.value)}
                               placeholder="Jane"
                               className="rounded-xl"
                             />
@@ -494,8 +549,8 @@ export default function Onboarding({ onComplete }: Props) {
                           <div className="space-y-1.5">
                             <label className="text-xs font-medium text-foreground">Last name <span className="text-destructive">*</span></label>
                             <Input
-                              value={assessmentLastName}
-                              onChange={e => setAssessmentLastName(e.target.value)}
+                              value={state.assessLastName}
+                              onChange={e => update("assessLastName", e.target.value)}
                               placeholder="Doe"
                               className="rounded-xl"
                             />
@@ -504,8 +559,8 @@ export default function Onboarding({ onComplete }: Props) {
                         <div className="space-y-1.5">
                           <label className="text-xs font-medium text-foreground">Email</label>
                           <Input
-                            value={assessmentEmail}
-                            onChange={e => setAssessmentEmail(e.target.value)}
+                            value={state.assessEmail}
+                            onChange={e => update("assessEmail", e.target.value)}
                             type="email"
                             className="rounded-xl bg-muted/40"
                           />
@@ -513,9 +568,9 @@ export default function Onboarding({ onComplete }: Props) {
                       </div>
 
                       <Button
-                        disabled={assessmentLoading || !assessmentLastName.trim()}
+                        disabled={assessmentLoading || !state.assessLastName.trim()}
                         onClick={async () => {
-                          if (!assessmentLastName.trim()) {
+                          if (!state.assessLastName.trim()) {
                             toast({ title: "Last name required", description: "Please enter your last name.", variant: "destructive" });
                             return;
                           }
@@ -523,9 +578,9 @@ export default function Onboarding({ onComplete }: Props) {
                           try {
                             const { data, error } = await supabase.functions.invoke("assessment-proxy", {
                               body: {
-                                first_name: assessmentFirstName.trim(),
-                                last_name: assessmentLastName.trim(),
-                                email: assessmentEmail.trim(),
+                                first_name: state.assessFirstName.trim(),
+                                last_name: state.assessLastName.trim(),
+                                email: state.assessEmail.trim(),
                               },
                             });
                             if (error) throw new Error(error.message);
