@@ -98,14 +98,19 @@ const App = () => {
 
       if (error) {
         console.warn("[App] fetchOnboardingState error/timeout:", error.message);
-        setIsOnboarded(false); // default to onboarding — safe for both new and returning users
+        // Don't downgrade an already-confirmed session — only default to false on first load
+        setIsOnboarded(prev => prev === null ? false : prev);
         return;
       }
 
-      setIsOnboarded(data?.onboarding_completed ?? false);
+      // Once confirmed onboarded, never regress — guards against TOKEN_REFRESHED race conditions
+      setIsOnboarded(prev => {
+        if (prev === true) return true;
+        return data?.onboarding_completed ?? false;
+      });
     } catch (err) {
       console.warn("[App] fetchOnboardingState threw:", err);
-      setIsOnboarded(false);
+      setIsOnboarded(prev => prev === null ? false : prev);
     }
   }, []);
 

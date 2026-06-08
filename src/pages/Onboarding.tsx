@@ -175,10 +175,19 @@ export default function Onboarding({ onComplete }: Props) {
   // Auto-advance when IntegrationsContext confirms connected (live connection case)
   useEffect(() => {
     if (step === 4 && gmailConnected) {
+      // Persist the advance to DB so a refresh doesn't show step 4 again
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session?.user) return;
+        supabase.from("user_preferences").upsert({
+          user_id: session.user.id,
+          onboarding_step: 5,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" }).catch(() => {});
+      });
       setDir(1);
       setStep(5);
     }
-  }, [gmailConnected, step]);
+  }, [gmailConnected, step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Direct DB check once user identity is known — guards against the race where
   // IntegrationsContext resolves before localStorage restores step=4, causing
@@ -186,17 +195,38 @@ export default function Onboarding({ onComplete }: Props) {
   // settles at 4 with a known user, and advances to 5 if the grant exists.
   useEffect(() => {
     if (step !== 4 || !storageKey) return;
-    supabase
-      .from("nylas_grants")
-      .select("id")
-      .eq("provider", "google")
-      .limit(1)
-      .then(({ data }) => {
-        if (data?.length) {
-          setDir(1);
-          setStep(5);
-        }
-      });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.user) return;
+      supabase
+        .from("nylas_grants")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .eq("provider", "google")
+        .limit(1)
+        .then(({ data }) => {
+          if (data?.length) {
+            setDir(1);
+            setStep(5);
+          }
+        });
+    });
+  }, [step, storageKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When step 5 is reached, immediately save onboarding_completed = true.
+  // This ensures closing the tab before "Go to my dashboard" doesn't send
+  // the user back to onboarding on next open.
+  useEffect(() => {
+    if (step !== 5 || !storageKey) return;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      await supabase.from("user_preferences").upsert({
+        user_id: session.user.id,
+        onboarding_completed: true,
+        onboarding_step: 5,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+    })().catch(() => {});
   }, [step, storageKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = <K extends keyof OnboardingState>(key: K, val: OnboardingState[K]) =>
