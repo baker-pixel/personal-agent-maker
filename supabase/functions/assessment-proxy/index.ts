@@ -70,8 +70,17 @@ Deno.serve(async (req) => {
     try { data = JSON.parse(rawText); } catch { /* non-JSON body */ }
 
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: data?.error || data?.message || `Upstream ${res.status}` }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const errorMsg = data?.error || data?.message || `Upstream ${res.status}`;
+      const alreadyDone = errorMsg === "Assessment already completed";
+      if (alreadyDone) {
+        // Mark as completed in DB so the UI reflects it
+        await admin.from("user_preferences").upsert(
+          { user_id: user.id, assessment_status: "success", updated_at: new Date().toISOString() },
+          { onConflict: "user_id" }
+        );
+      }
+      return new Response(JSON.stringify({ error: errorMsg, already_completed: alreadyDone }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 

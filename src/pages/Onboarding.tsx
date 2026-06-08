@@ -191,7 +191,7 @@ export default function Onboarding({ onComplete }: Props) {
 
   const agentDisplay = state.agentName.trim() || "your agent";
 
-  const getContinueLabel = () => "Continue";
+  const getContinueLabel = () => step === 3 ? "Skip" : "Continue";
 
   const previewVoice = async (voiceId: string) => {
     // Abort any in-flight request so we don't fire multiple concurrent fetches
@@ -396,15 +396,20 @@ export default function Onboarding({ onComplete }: Props) {
                       {assessmentDone ? "Assessment complete!" : `Teach ${agentDisplay} your personality!`}
                     </h1>
                     {assessmentDone && (
-                      <p className="text-muted-foreground text-sm">Your results have been saved. Continue to finish setup.</p>
+                      <p className="text-muted-foreground text-sm">Assessment already completed. Continue to finish setup.</p>
                     )}
                   </div>
 
                   {!assessmentDone && (
                     <>
-                      <p className="text-muted-foreground leading-relaxed text-sm">
-                        Take our proprietary personality assessment (3–5 minutes) so {agentDisplay} can understand your communication style and work preferences.
-                      </p>
+                      <div className="space-y-4 text-muted-foreground leading-relaxed text-sm">
+                        <p>
+                          One of the most innovative aspects of {agentDisplay} is that we've built in the ability to understand your personality, your communication style, work preferences, your tone, pace. Just like any good personal assistant, getting to "know" you is vital for a strong relationship.
+                        </p>
+                        <p>
+                          Take our proprietary personality assessment now (3–5 minutes) and help {agentDisplay} work your way.
+                        </p>
+                      </div>
 
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
@@ -454,7 +459,14 @@ export default function Onboarding({ onComplete }: Props) {
                                 email: assessmentEmail.trim(),
                               },
                             });
-                            if (error || !data?.assessment_url) throw new Error(error?.message || "No assessment URL returned");
+                            if (error) throw new Error(error.message);
+                            if (data?.already_completed) {
+                              setAssessmentDone(true);
+                              setAssessmentLoading(false);
+                              return;
+                            }
+                            if (data?.error) throw new Error(data.error);
+                            if (!data?.assessment_url) throw new Error("No assessment URL returned");
                             window.location.href = data.assessment_url;
                           } catch (err: any) {
                             toast({ title: "Couldn't start assessment", description: err?.message || "Please try again.", variant: "destructive" });
