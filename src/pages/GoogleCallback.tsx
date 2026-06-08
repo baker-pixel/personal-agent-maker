@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 const GoogleCallback = () => {
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("Completing Google sign-in...");
   const navigate = useNavigate();
+  const { refreshConnections } = useIntegrations();
 
   useEffect(() => {
     const isPopup = window.opener && window.opener !== window;
@@ -86,6 +88,10 @@ const GoogleCallback = () => {
         if (isPopup) {
           setTimeout(() => window.close(), 1200);
         } else {
+          // Full-page redirect flow (popup blocked on mobile/PWA).
+          // The IntegrationsContext fetched on app mount BEFORE the grant was stored —
+          // re-sync now so the rest of the session sees connected: true.
+          refreshConnections().catch(() => {});
           const returnTo = sessionStorage.getItem("oauth-return-to") || "/dashboard";
           sessionStorage.removeItem("oauth-return-to");
           setTimeout(() => navigate(returnTo), 1500);

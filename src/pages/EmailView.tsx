@@ -148,7 +148,7 @@ export default function EmailView() {
   const annieChat = useAnnieChat(agentName);
 
   const gmailConnected = isConnected("gmail");
-  const { integrationsLoading } = useIntegrations();
+  const { integrationsLoading, refreshConnections } = useIntegrations();
   const {
     emails: allEmails,
     byCategory,
@@ -297,6 +297,11 @@ export default function EmailView() {
       setTriaging(false);
     }
   }, [refetch]);
+
+  // Re-sync integration state on mount — guards against stale context after
+  // full-page OAuth redirect (mobile/PWA) where the grant was stored after the
+  // initial IntegrationsContext fetch ran on app load.
+  useEffect(() => { refreshConnections().catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Only auto-triage once per mount if inbox is genuinely empty (no cached data).
   // Guard with a ref so refetch() toggling dbLoading false→true→false doesn't
