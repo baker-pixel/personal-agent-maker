@@ -103,9 +103,19 @@ export default function Onboarding({ onComplete }: Props) {
 
   // Resume at step 4 when returning from assessment redirect
   const resumeStep = parseInt(searchParams.get("resumeStep") ?? "0", 10);
-  const [step, setStep] = useState(resumeStep > 0 ? resumeStep : 0);
+
+  const STORAGE_KEY = "onboarding_progress";
+  const loadSaved = (): { step: number; state: OnboardingState } | null => {
+    try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null; } catch { return null; }
+  };
+  const saved = loadSaved();
+
+  const [step, setStep] = useState<number>(() => {
+    if (resumeStep > 0) return resumeStep;
+    return saved?.step ?? 0;
+  });
   const [dir, setDir] = useState(1);
-  const [state, setState] = useState<OnboardingState>(defaults);
+  const [state, setState] = useState<OnboardingState>(() => ({ ...defaults, ...(saved?.state ?? {}) }));
   const [saving, setSaving] = useState(false);
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -116,6 +126,11 @@ export default function Onboarding({ onComplete }: Props) {
   // Without this, step 1 would flash "not connected" even for already-connected accounts.
   const gmailConnected = !integrationsLoading && integrations.find(i => i.id === "gmail")?.connected;
   const calendarConnected = !integrationsLoading && integrations.find(i => i.id === "google-calendar")?.connected;
+
+  // Persist progress so refresh restores the current step + form data
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, state }));
+  }, [step, state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = <K extends keyof OnboardingState>(key: K, val: OnboardingState[K]) =>
     setState(s => ({ ...s, [key]: val }));
@@ -169,6 +184,8 @@ export default function Onboarding({ onComplete }: Props) {
       if (gmailConnected) {
         supabase.functions.invoke("email-triage", { body: {} }).catch(() => {});
       }
+
+      localStorage.removeItem(STORAGE_KEY);
 
       // Signal parent (App.tsx) that onboarding is done — sets isOnboarded = true.
       // The /onboarding route guard then renders <Navigate to="/mode-select" /> automatically.
