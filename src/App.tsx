@@ -79,30 +79,33 @@ const App = () => {
 
   // null = not yet fetched; false = not onboarded; true = onboarded
   const [isOnboarded, setIsOnboarded] = useState<boolean | null>(null);
+  const onboardedFetchedRef = useRef(false);
 
   const fetchOnboardingState = useCallback(async (userId: string) => {
+    const timeout = new Promise<{ data: null; error: Error }>(resolve =>
+      setTimeout(() => resolve({ data: null, error: new Error("timeout") }), 5000)
+    );
     try {
-      const { data, error } = await supabase
-        .from("user_preferences")
-        .select("onboarding_completed")
-        .eq("user_id", userId)
-        .maybeSingle();
+      const result = await Promise.race([
+        supabase
+          .from("user_preferences")
+          .select("onboarding_completed")
+          .eq("user_id", userId)
+          .maybeSingle(),
+        timeout,
+      ]);
+      const { data, error } = result as { data: any; error: any };
 
       if (error) {
-        // DB error (network blip, etc.) — don't treat as "not onboarded".
-        // Default to true if we can't confirm either way, to avoid redirect loop.
-        // The worst case is a returning user sees the app; the onboarding guard
-        // only matters for genuinely new accounts.
-        console.warn("[App] fetchOnboardingState error:", error.message);
-        setIsOnboarded(true); // fail open — don't trap users in onboarding
+        console.warn("[App] fetchOnboardingState error/timeout:", error.message);
+        setIsOnboarded(false); // default to onboarding — safe for both new and returning users
         return;
       }
 
-      // No row in user_preferences → genuinely new user → needs onboarding
       setIsOnboarded(data?.onboarding_completed ?? false);
     } catch (err) {
       console.warn("[App] fetchOnboardingState threw:", err);
-      setIsOnboarded(true); // fail open
+      setIsOnboarded(false);
     }
   }, []);
 
@@ -121,8 +124,14 @@ const App = () => {
         }
         if (event === "SIGNED_OUT") {
           setIsOnboarded(null);
+          onboardedFetchedRef.current = false;
         }
-        if (newSession?.user && (event === "SIGNED_IN" || event === "PASSWORD_RECOVERY")) {
+        if (newSession?.user && (
+          event === "SIGNED_IN" ||
+          event === "INITIAL_SESSION" ||
+          event === "TOKEN_REFRESHED" ||
+          event === "PASSWORD_RECOVERY"
+        )) {
           fetchOnboardingState(newSession.user.id);
         }
       }

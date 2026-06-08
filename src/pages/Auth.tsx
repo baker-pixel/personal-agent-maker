@@ -24,7 +24,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (!error) { navigate("/mode-select"); return; }
+    if (!error) return; // App.tsx route guard navigates once session + isOnboarded resolve
     toast({ title: "Login failed", description: error.message, variant: "destructive" });
   };
 
@@ -45,9 +45,8 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
       toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
     } else if (data.user?.identities?.length === 0) {
       toast({ title: "Account already exists", description: "An account with this email already exists. Try signing in instead.", variant: "destructive" });
-    } else {
-      navigate("/onboarding");
     }
+    // App.tsx route guard navigates to /onboarding once session + isOnboarded resolve
   };
 
   const handleForgot = async (e: React.FormEvent) => {
