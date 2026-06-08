@@ -146,13 +146,32 @@ export default function Onboarding({ onComplete }: Props) {
     localStorage.setItem(storageKey, JSON.stringify({ step, state }));
   }, [step, state, storageKey]);
 
-  // Auto-advance past step 4 once Google connects — no manual "Continue" needed
+  // Auto-advance when IntegrationsContext confirms connected (live connection case)
   useEffect(() => {
     if (step === 4 && gmailConnected) {
       setDir(1);
       setStep(5);
     }
   }, [gmailConnected, step]);
+
+  // Direct DB check once user identity is known — guards against the race where
+  // IntegrationsContext resolves before localStorage restores step=4, causing
+  // the effect above to fire with step=0 and miss. This fires whenever step
+  // settles at 4 with a known user, and advances to 5 if the grant exists.
+  useEffect(() => {
+    if (step !== 4 || !storageKey) return;
+    supabase
+      .from("nylas_grants")
+      .select("id")
+      .eq("provider", "google")
+      .limit(1)
+      .then(({ data }) => {
+        if (data?.length) {
+          setDir(1);
+          setStep(5);
+        }
+      });
+  }, [step, storageKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = <K extends keyof OnboardingState>(key: K, val: OnboardingState[K]) =>
     setState(s => ({ ...s, [key]: val }));
