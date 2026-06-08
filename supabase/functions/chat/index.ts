@@ -1432,6 +1432,7 @@ When the user asks to take an action, call the appropriate tool immediately — 
 - Resolve recipient from PEOPLE DIRECTORY or LOGGED-IN USER. If no match found, ask for their email — NEVER fabricate one.
 - Always write a real subject and body. Never leave them blank.
 - For "send me a test email" / "email myself" — use the LOGGED-IN USER email as to_email.
+- CRITICAL: Call send_email EXACTLY ONCE per user request. Never issue multiple send_email calls for the same email. Once a send_email call succeeds, do not call it again.
 
 **create_calendar_event rules:**
 - Use when user asks to schedule/add/create an event.
@@ -1569,8 +1570,25 @@ ${conversationMemoryNote}${realDataContext}`;
         const toolCalls: any[] = choice.message.tool_calls || [];
         console.log(`[chat] round ${rounds} tool_calls: ${toolCalls.map((tc: any) => tc.function.name).join(", ")}`);
 
+        // Deduplicate send_email calls within a single batch — the LLM occasionally
+        // emits two parallel send_email calls for the same recipient+subject, causing
+        // duplicate emails. Keep only the first occurrence per to_email+subject pair.
+        const seenEmailKeys = new Set<string>();
+        const dedupedToolCalls = toolCalls.filter((tc: any) => {
+          if (tc.function.name !== "send_email") return true;
+          let a: any = {};
+          try { a = JSON.parse(tc.function.arguments || "{}"); } catch { /* ignore */ }
+          const key = `${String(a.to_email || "").toLowerCase()}|${String(a.subject || "").toLowerCase()}`;
+          if (seenEmailKeys.has(key)) {
+            console.warn(`[chat] dedup: dropping duplicate send_email to=${a.to_email} subject="${a.subject}"`);
+            return false;
+          }
+          seenEmailKeys.add(key);
+          return true;
+        });
+
         const toolResults = await Promise.all(
-          toolCalls.map(async (tc: any) => {
+          dedupedToolCalls.map(async (tc: any) => {
             let args: Record<string, any> = {};
             try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* ignore */ }
             const result = await executeToolCall(tc.function.name, args, toolCtx);

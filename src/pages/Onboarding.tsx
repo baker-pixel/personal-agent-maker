@@ -215,23 +215,6 @@ export default function Onboarding({ onComplete }: Props) {
     });
   }, [step, storageKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When step 5 is reached, immediately save onboarding_completed = true.
-  // This ensures closing the tab before "Go to my dashboard" doesn't send
-  // the user back to onboarding on next open.
-  useEffect(() => {
-    if (step !== 5 || !storageKey) return;
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
-      await supabase.from("user_preferences").upsert({
-        user_id: session.user.id,
-        onboarding_completed: true,
-        onboarding_step: 5,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id" });
-    })().catch(() => {});
-  }, [step, storageKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const update = <K extends keyof OnboardingState>(key: K, val: OnboardingState[K]) =>
     setState(s => ({ ...s, [key]: val }));
 
@@ -662,11 +645,11 @@ export default function Onboarding({ onComplete }: Props) {
                       return (
                         <button
                           onClick={() => { if (!connected && !integrationsLoading) connect("gmail").catch(() => {}); }}
-                          disabled={connected || connecting_ || integrationsLoading}
+                          disabled={connected || connecting_}
                           className={`w-full flex items-center gap-4 rounded-2xl px-5 py-4 border transition-all text-left ${
                             connected
                               ? "bg-green-500/5 border-green-500/20 cursor-default"
-                              : connecting_ || integrationsLoading
+                              : connecting_
                               ? "bg-card border-accent/30 opacity-80 cursor-wait"
                               : "bg-card border-border hover:border-accent/50 hover:bg-accent/[0.02] cursor-pointer active:scale-[0.99]"
                           }`}
@@ -676,7 +659,7 @@ export default function Onboarding({ onComplete }: Props) {
                           }`}>
                             {connected
                               ? <Check className="w-5 h-5 text-green-600" />
-                              : (connecting_ || integrationsLoading)
+                              : connecting_
                               ? <Loader2 className="w-5 h-5 text-accent animate-spin" />
                               : <Mail className="w-5 h-5 text-muted-foreground" />}
                           </div>
