@@ -62,15 +62,26 @@ export default function Onboarding({ onComplete }: Props) {
   const [assessmentEmail, setAssessmentEmail] = useState("");
 
   useEffect(() => {
+    // Fast pre-fill from local session cache — no network, instant
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.user) return;
+      const u = session.user;
+      setAssessmentEmail(u.email ?? "");
+      const fullName = (u.user_metadata?.full_name || u.user_metadata?.name || "").trim();
+      if (fullName) {
+        const idx = fullName.indexOf(" ");
+        setAssessmentFirstName(idx > 0 ? fullName.slice(0, idx) : fullName);
+        setAssessmentLastName(idx > 0 ? fullName.slice(idx + 1) : "");
+      }
+    });
+
+    // Security check + DB prefs in background
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) {
         toast({ title: "Session expired", description: "Please sign in again.", variant: "destructive" });
         supabase.auth.signOut();
         return;
       }
-      // Pre-fill email
-      setAssessmentEmail(user.email ?? "");
-
       supabase
         .from("user_preferences")
         .select("onboarding_completed, assessment_status, user_display_name")
@@ -79,12 +90,12 @@ export default function Onboarding({ onComplete }: Props) {
         .then(({ data }) => {
           if (data?.onboarding_completed) { onComplete?.(); return; }
           if (data?.assessment_status === "success") setAssessmentDone(true);
-          // Pre-fill name from display name or Google metadata
-          const fullName = (data?.user_display_name || user.user_metadata?.full_name || user.user_metadata?.name || "").trim();
+          // Override name with DB value if set (more accurate than OAuth metadata)
+          const fullName = (data?.user_display_name || "").trim();
           if (fullName) {
-            const spaceIdx = fullName.indexOf(" ");
-            setAssessmentFirstName(spaceIdx > 0 ? fullName.slice(0, spaceIdx) : fullName);
-            setAssessmentLastName(spaceIdx > 0 ? fullName.slice(spaceIdx + 1) : "");
+            const idx = fullName.indexOf(" ");
+            setAssessmentFirstName(idx > 0 ? fullName.slice(0, idx) : fullName);
+            setAssessmentLastName(idx > 0 ? fullName.slice(idx + 1) : "");
           }
         });
     });
