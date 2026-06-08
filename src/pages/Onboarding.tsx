@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,14 +44,22 @@ const slideVariants = {
 interface Props { onComplete?: () => void; }
 
 const TOTAL_STEPS = 6;
+const ASSESSMENT_RETURN_STEP = 4;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Onboarding({ onComplete }: Props) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setAgentName } = useAgent();
   const { integrations, integrationsLoading } = useIntegrations();
   const { connecting, connect } = useGoogleOAuthPopup();
+
+  const [assessmentDone, setAssessmentDone] = useState(false);
+  const [assessmentLoading, setAssessmentLoading] = useState(false);
+  const [assessmentFirstName, setAssessmentFirstName] = useState("");
+  const [assessmentLastName, setAssessmentLastName] = useState("");
+  const [assessmentEmail, setAssessmentEmail] = useState("");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -60,19 +68,31 @@ export default function Onboarding({ onComplete }: Props) {
         supabase.auth.signOut();
         return;
       }
-      // If already onboarded (e.g. page was visited directly), skip immediately.
+      // Pre-fill email
+      setAssessmentEmail(user.email ?? "");
+
       supabase
         .from("user_preferences")
-        .select("onboarding_completed")
+        .select("onboarding_completed, assessment_status, user_display_name")
         .eq("user_id", user.id)
         .maybeSingle()
         .then(({ data }) => {
-          if (data?.onboarding_completed) onComplete?.();
+          if (data?.onboarding_completed) { onComplete?.(); return; }
+          if (data?.assessment_status === "success") setAssessmentDone(true);
+          // Pre-fill name from display name or Google metadata
+          const fullName = (data?.user_display_name || user.user_metadata?.full_name || user.user_metadata?.name || "").trim();
+          if (fullName) {
+            const spaceIdx = fullName.indexOf(" ");
+            setAssessmentFirstName(spaceIdx > 0 ? fullName.slice(0, spaceIdx) : fullName);
+            setAssessmentLastName(spaceIdx > 0 ? fullName.slice(spaceIdx + 1) : "");
+          }
         });
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [step, setStep] = useState(0);
+  // Resume at step 4 when returning from assessment redirect
+  const resumeStep = parseInt(searchParams.get("resumeStep") ?? "0", 10);
+  const [step, setStep] = useState(resumeStep > 0 ? resumeStep : 0);
   const [dir, setDir] = useState(1);
   const [state, setState] = useState<OnboardingState>(defaults);
   const [saving, setSaving] = useState(false);
@@ -327,10 +347,13 @@ export default function Onboarding({ onComplete }: Props) {
                       const selected = state.voiceId === v.id;
                       const previewing = previewingVoiceId === v.id;
                       return (
-                        <button
+                        <div
                           key={v.id}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => update("voiceId", v.id)}
-                          className={`relative text-left rounded-2xl border p-3.5 transition-all ${
+                          onKeyDown={e => e.key === "Enter" && update("voiceId", v.id)}
+                          className={`relative text-left rounded-2xl border p-3.5 transition-all cursor-pointer ${
                             selected
                               ? "border-accent bg-accent/10 shadow-sm"
                               : "border-border bg-card hover:border-accent/40 hover:bg-accent/[0.02]"
@@ -349,7 +372,7 @@ export default function Onboarding({ onComplete }: Props) {
                             <Volume2 className={`w-3 h-3 ${previewing ? "animate-pulse" : ""}`} />
                             {previewing ? "Playing…" : "Preview"}
                           </button>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -364,34 +387,92 @@ export default function Onboarding({ onComplete }: Props) {
               {step === 3 && (
                 <div className="space-y-8">
                   <div className="text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-6">
-                      <Brain className="w-8 h-8 text-accent" />
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 ${assessmentDone ? "bg-green-500/10" : "bg-accent/10"}`}>
+                      {assessmentDone
+                        ? <CheckCircle2 className="w-8 h-8 text-green-600" />
+                        : <Brain className="w-8 h-8 text-accent" />}
                     </div>
                     <h1 className="font-display text-3xl font-bold mb-2">
-                      Teach {agentDisplay} your personality!
+                      {assessmentDone ? "Assessment complete!" : `Teach ${agentDisplay} your personality!`}
                     </h1>
+                    {assessmentDone && (
+                      <p className="text-muted-foreground text-sm">Your results have been saved. Continue to finish setup.</p>
+                    )}
                   </div>
 
-                  <div className="space-y-4 text-muted-foreground leading-relaxed text-sm">
-                    <p>
-                      One of the most innovative aspects of {agentDisplay} is that we've built in the ability to understand your personality, your communication style, work preferences, your tone, pace. Just like any good personal assistant, getting to "know" you is vital for a strong relationship.
-                    </p>
-                    <p>
-                      Take our proprietary personality assessment now (3–5 minutes) and help {agentDisplay} work your way.
-                    </p>
-                  </div>
+                  {!assessmentDone && (
+                    <>
+                      <p className="text-muted-foreground leading-relaxed text-sm">
+                        Take our proprietary personality assessment (3–5 minutes) so {agentDisplay} can understand your communication style and work preferences.
+                      </p>
 
-                  <Button
-                    onClick={() => window.open("https://assessment.normyagent.com", "_blank", "noopener")}
-                    className="w-full bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl h-12 text-sm font-semibold shadow-lg shadow-accent/25"
-                  >
-                    Take the Personality Assessment
-                    <ArrowRight className="w-4 h-4 ml-1.5" />
-                  </Button>
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground">First name</label>
+                            <Input
+                              value={assessmentFirstName}
+                              onChange={e => setAssessmentFirstName(e.target.value)}
+                              placeholder="Jane"
+                              className="rounded-xl"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-foreground">Last name <span className="text-destructive">*</span></label>
+                            <Input
+                              value={assessmentLastName}
+                              onChange={e => setAssessmentLastName(e.target.value)}
+                              placeholder="Doe"
+                              className="rounded-xl"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground">Email</label>
+                          <Input
+                            value={assessmentEmail}
+                            onChange={e => setAssessmentEmail(e.target.value)}
+                            type="email"
+                            className="rounded-xl bg-muted/40"
+                          />
+                        </div>
+                      </div>
 
-                  <p className="text-xs text-muted-foreground text-center">
-                    Opens in a new tab — come back here when you're done to continue setup.
-                  </p>
+                      <Button
+                        disabled={assessmentLoading || !assessmentLastName.trim()}
+                        onClick={async () => {
+                          if (!assessmentLastName.trim()) {
+                            toast({ title: "Last name required", description: "Please enter your last name.", variant: "destructive" });
+                            return;
+                          }
+                          setAssessmentLoading(true);
+                          try {
+                            const { data, error } = await supabase.functions.invoke("assessment-proxy", {
+                              body: {
+                                first_name: assessmentFirstName.trim(),
+                                last_name: assessmentLastName.trim(),
+                                email: assessmentEmail.trim(),
+                              },
+                            });
+                            if (error || !data?.assessment_url) throw new Error(error?.message || "No assessment URL returned");
+                            window.location.href = data.assessment_url;
+                          } catch (err: any) {
+                            toast({ title: "Couldn't start assessment", description: err?.message || "Please try again.", variant: "destructive" });
+                            setAssessmentLoading(false);
+                          }
+                        }}
+                        className="w-full bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl h-12 text-sm font-semibold shadow-lg shadow-accent/25"
+                      >
+                        {assessmentLoading
+                          ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Starting assessment…</>
+                          : <>Take the Personality Assessment <ArrowRight className="w-4 h-4 ml-1.5" /></>}
+                      </Button>
+
+                      <p className="text-xs text-muted-foreground text-center">
+                        3–5 minutes — you'll be brought back here automatically when done.
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 

@@ -871,6 +871,10 @@ serve(async (req) => {
           realDataContext += `\n\n--- LOGGED-IN USER ---\nEmail: ${userOwnEmail}\nUse this email when the user says "send me a test email", "email myself", "send to myself", or similar.\n--- END LOGGED-IN USER ---\n`;
         }
 
+        if (nylasGrants.length === 0) {
+          realDataContext += `\n\n[⚠️ NO EMAIL/CALENDAR CONNECTED: This user has not connected their Google account yet. If they ask to send email, check calendar, or do anything email/calendar related, tell them clearly: "To do that I need access to your Google account. Please go to Settings → Integrations and connect your Google account." Do NOT say the service is temporarily unavailable — it is simply not connected yet.]\n`;
+        }
+
         if (allEmails.length > 0) {
           const accountNote = nylasGrants.length > 1 ? ` (across ${nylasGrants.length} connected accounts)` : "";
           realDataContext += `\n\n--- REAL INBOX DATA${accountNote} ---\n`;

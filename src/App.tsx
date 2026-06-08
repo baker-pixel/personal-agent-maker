@@ -44,6 +44,7 @@ import Investors from "./pages/Investors";
 import InvestorContact from "./pages/InvestorContact";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
+import AssessmentDone from "./pages/AssessmentDone";
 
 const queryClient = new QueryClient();
 
@@ -173,6 +174,8 @@ const App = () => {
               <Route path="/investors/contact" element={<InvestorContact />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/assessment-done" element={<AssessmentDone />} />
+              <Route path="/done" element={<AssessmentDone />} />
               <Route path="/onboarding" element={
                 !session ? <Navigate to="/auth" replace /> :
                 isOnboarded ? <Navigate to="/mode-select" replace /> :
