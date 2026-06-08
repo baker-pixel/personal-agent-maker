@@ -427,7 +427,7 @@ export default function Onboarding({ onComplete }: Props) {
       </div>
 
       {/* Step dots */}
-      <div className="flex items-center justify-center gap-2 pt-6 pb-2 shrink-0">
+      <div className="flex items-center justify-center gap-2 pt-3 sm:pt-6 pb-2 shrink-0">
         {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
           <div
             key={i}
@@ -443,7 +443,7 @@ export default function Onboarding({ onComplete }: Props) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex items-center justify-center p-6 pt-4">
+      <div className="flex-1 flex items-start sm:items-center justify-center p-4 sm:p-6 pt-3 sm:pt-4 overflow-y-auto">
         <div className="w-full max-w-lg">
           <AnimatePresence mode="wait" custom={dir}>
             <motion.div
@@ -457,12 +457,12 @@ export default function Onboarding({ onComplete }: Props) {
             >
               {/* ── Step 0: Name ─────────────────────────────────────────── */}
               {step === 0 && (
-                <div className="space-y-8">
+                <div className="space-y-6 sm:space-y-8">
                   <div className="text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-6">
-                      <Sparkles className="w-8 h-8 text-accent" />
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-4 sm:mb-6">
+                      <Sparkles className="w-7 h-7 sm:w-8 sm:h-8 text-accent" />
                     </div>
-                    <h1 className="font-display text-3xl font-bold mb-2">Meet your AI assistant</h1>
+                    <h1 className="font-display text-2xl sm:text-3xl font-bold mb-2">Meet your AI assistant</h1>
                     <p className="text-muted-foreground leading-relaxed">
                       Give your agent a name — they'll use it when they introduce themselves in emails and messages.
                     </p>
@@ -473,7 +473,7 @@ export default function Onboarding({ onComplete }: Props) {
                       onChange={e => update("agentName", e.target.value)}
                       onKeyDown={e => e.key === "Enter" && next()}
                       placeholder="e.g. Alex, Sage, Max…"
-                      className="text-center text-2xl font-display font-semibold h-16 rounded-2xl"
+                      className="text-center text-xl sm:text-2xl font-display font-semibold h-14 sm:h-16 rounded-2xl"
                       autoFocus
                     />
                     <p className="text-sm text-muted-foreground text-center">
@@ -485,18 +485,18 @@ export default function Onboarding({ onComplete }: Props) {
 
               {/* ── Step 1: Voice selection ───────────────────────────────── */}
               {step === 1 && (
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                   <div className="text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-6">
-                      <Volume2 className="w-8 h-8 text-accent" />
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-4 sm:mb-6">
+                      <Volume2 className="w-7 h-7 sm:w-8 sm:h-8 text-accent" />
                     </div>
-                    <h1 className="font-display text-3xl font-bold mb-2">Pick {agentDisplay}'s voice</h1>
+                    <h1 className="font-display text-2xl sm:text-3xl font-bold mb-2">Pick {agentDisplay}'s voice</h1>
                     <p className="text-muted-foreground leading-relaxed">
                       Choose how your agent sounds. Hit play to preview.
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-2.5 max-h-[200px] sm:max-h-[320px] overflow-y-auto pr-1">
                     {GROQ_VOICES.map(v => {
                       const selected = state.voiceId === v.id;
                       const previewing = previewingVoiceId === v.id;
@@ -539,14 +539,14 @@ export default function Onboarding({ onComplete }: Props) {
 
               {/* ── Step 3: Personality assessment ───────────────────────── */}
               {step === 3 && (
-                <div className="space-y-8">
+                <div className="space-y-5 sm:space-y-8">
                   <div className="text-center">
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 ${assessmentDone ? "bg-green-500/10" : "bg-accent/10"}`}>
+                    <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 sm:mb-6 ${assessmentDone ? "bg-green-500/10" : "bg-accent/10"}`}>
                       {assessmentDone
-                        ? <CheckCircle2 className="w-8 h-8 text-green-600" />
-                        : <Brain className="w-8 h-8 text-accent" />}
+                        ? <CheckCircle2 className="w-7 h-7 sm:w-8 sm:h-8 text-green-600" />
+                        : <Brain className="w-7 h-7 sm:w-8 sm:h-8 text-accent" />}
                     </div>
-                    <h1 className="font-display text-3xl font-bold mb-2">
+                    <h1 className="font-display text-2xl sm:text-3xl font-bold mb-2">
                       {assessmentDone ? "Assessment complete!" : `Teach ${agentDisplay} your personality!`}
                     </h1>
                     {assessmentDone && (
@@ -556,7 +556,7 @@ export default function Onboarding({ onComplete }: Props) {
 
                   {!assessmentDone && (
                     <>
-                      <div className="space-y-4 text-muted-foreground leading-relaxed text-sm">
+                      <div className="space-y-3 text-muted-foreground leading-relaxed text-sm">
                         <p>
                           One of the most innovative aspects of {agentDisplay} is that we've built in the ability to understand your personality, your communication style, work preferences, your tone, pace. Just like any good personal assistant, getting to "know" you is vital for a strong relationship.
                         </p>
@@ -644,9 +644,9 @@ export default function Onboarding({ onComplete }: Props) {
 
               {/* ── Step 4: Connect accounts ──────────────────────────────── */}
               {step === 4 && (
-                <div className="space-y-8">
+                <div className="space-y-5 sm:space-y-8">
                   <div className="text-center">
-                    <h1 className="font-display text-3xl font-bold mb-2">Connect your accounts</h1>
+                    <h1 className="font-display text-2xl sm:text-3xl font-bold mb-2">Connect your accounts</h1>
                     <p className="text-muted-foreground">
                       {agentDisplay.charAt(0).toUpperCase() + agentDisplay.slice(1)} needs access to your email and calendar to get to work.
                     </p>
@@ -722,14 +722,14 @@ export default function Onboarding({ onComplete }: Props) {
 
               {/* ── Step 2: Preferences ──────────────────────────────────── */}
               {step === 2 && (
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                   <div className="text-center">
-                    <h1 className="font-display text-3xl font-bold mb-2">How should {agentDisplay} work?</h1>
+                    <h1 className="font-display text-2xl sm:text-3xl font-bold mb-2">How should {agentDisplay} work?</h1>
                     <p className="text-muted-foreground">Fine-tune how your agent communicates and prioritizes.</p>
                   </div>
 
-                  <div className="space-y-5">
-                    <div className="bg-card border rounded-2xl p-5 space-y-4">
+                  <div className="space-y-3 sm:space-y-5">
+                    <div className="bg-card border rounded-2xl p-4 sm:p-5 space-y-4">
                       <div>
                         <label className="text-sm font-semibold mb-1.5 block">Tone when drafting</label>
                         <p className="text-xs text-muted-foreground mb-2">How should your agent write emails on your behalf?</p>
@@ -767,7 +767,7 @@ export default function Onboarding({ onComplete }: Props) {
                       </div>
                     </div>
 
-                    <div className="bg-card border rounded-2xl p-5 space-y-4">
+                    <div className="bg-card border rounded-2xl p-4 sm:p-5 space-y-4">
                       <div>
                         <label className="text-sm font-semibold mb-1.5 block">Show me emails that are…</label>
                         <div className="flex gap-2 flex-wrap">
@@ -812,17 +812,17 @@ export default function Onboarding({ onComplete }: Props) {
 
               {/* ── Step 5: Done ──────────────────────────────────────────── */}
               {step === 5 && (
-                <div className="space-y-8">
+                <div className="space-y-5 sm:space-y-8">
                   <div className="text-center">
                     <motion.div
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ type: "spring", damping: 16, stiffness: 200, delay: 0.1 }}
-                      className="w-20 h-20 rounded-3xl bg-accent flex items-center justify-center mx-auto mb-6 shadow-lg shadow-accent/30"
+                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-accent flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-accent/30"
                     >
-                      <Zap className="w-10 h-10 text-accent-foreground" />
+                      <Zap className="w-8 h-8 sm:w-10 sm:h-10 text-accent-foreground" />
                     </motion.div>
-                    <h1 className="font-display text-3xl font-bold mb-2">
+                    <h1 className="font-display text-2xl sm:text-3xl font-bold mb-2">
                       {agentDisplay.charAt(0).toUpperCase() + agentDisplay.slice(1)} is ready
                     </h1>
                     <p className="text-muted-foreground">
@@ -830,7 +830,7 @@ export default function Onboarding({ onComplete }: Props) {
                     </p>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-2 sm:space-y-3">
                     {[
                       {
                         icon: Mail,
@@ -880,8 +880,8 @@ export default function Onboarding({ onComplete }: Props) {
           </AnimatePresence>
 
           {/* Navigation */}
-          <div className="flex items-center justify-between mt-8">
-            {step > 0 ? (
+          <div className="flex items-center justify-between mt-5 sm:mt-8">
+            {step > 0 && step < TOTAL_STEPS - 1 ? (
               <Button variant="ghost" onClick={prev} size="sm" disabled={saving} className="text-muted-foreground">
                 <ArrowLeft className="w-4 h-4 mr-1" />
                 Back

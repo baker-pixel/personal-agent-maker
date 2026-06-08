@@ -419,7 +419,7 @@ export default function EmailView() {
       <div className="min-h-screen bg-background flex flex-col pt-[var(--header-h)]">
         <div className="border-b bg-background sticky top-[var(--header-h)] z-50">
           <div className="container flex items-center h-12 px-3 gap-2">
-            <button onClick={() => navigate("/dashboard")} className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+            <button onClick={() => navigate("/mode-select")} className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
               <ArrowLeft className="w-4 h-4" />
             </button>
             <h1 className="font-display font-semibold text-sm">Email</h1>
@@ -444,7 +444,7 @@ export default function EmailView() {
       <div className="border-b bg-background sticky top-[var(--header-h)] z-50">
         <div className="container px-3 flex items-center gap-2 h-12">
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate("/mode-select")}
             className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

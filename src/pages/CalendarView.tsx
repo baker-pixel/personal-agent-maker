@@ -348,7 +348,7 @@ export default function CalendarView() {
       <div className="min-h-screen bg-background flex flex-col pt-[var(--header-h)]">
         <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
           <div className="container flex items-center justify-between h-14 px-4">
-            <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+            <button onClick={() => navigate("/mode-select")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <ArrowLeft className="w-4 h-4" />
               <span className="text-sm font-medium">Admin</span>
             </button>
@@ -365,7 +365,7 @@ export default function CalendarView() {
     <div className="min-h-screen bg-background flex flex-col pt-[var(--header-h)]">
       <nav className="border-b bg-background sticky top-[var(--header-h)] z-50">
         <div className="container flex items-center justify-between h-14 px-4">
-          <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => navigate("/mode-select")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm font-medium">Admin</span>
           </button>
