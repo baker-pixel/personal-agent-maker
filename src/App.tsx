@@ -147,7 +147,7 @@ const App = () => {
                             ? <Navigate to="/auth" replace />
                             : isOnboarded === true
                             ? <Navigate to="/mode-select" replace />
-                            : <Onboarding onComplete={markOnboardingComplete} />
+                            : <Onboarding onComplete={markOnboardingComplete} initialEmail={state.session?.user?.email ?? ""} />
                         }
                       />
 

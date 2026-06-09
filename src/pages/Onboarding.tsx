@@ -47,14 +47,14 @@ const slideVariants = {
   exit: (dir: number) => ({ x: dir > 0 ? -60 : 60, opacity: 0 }),
 };
 
-interface Props { onComplete?: () => void; }
+interface Props { onComplete?: () => void; initialEmail?: string; }
 
 const TOTAL_STEPS = 6;
 const ASSESSMENT_RETURN_STEP = 4;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function Onboarding({ onComplete }: Props) {
+export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { setAgentName } = useAgent();
@@ -126,7 +126,7 @@ export default function Onboarding({ onComplete }: Props) {
       setState(s => ({
         ...defaults,
         ...savedState,
-        assessEmail:     s.assessEmail     || savedState.assessEmail || u.email || "",
+        assessEmail:     s.assessEmail     || savedState.assessEmail || u.email || initialEmail || "",
         assessFirstName: savedState.assessFirstName || authFirst,
         assessLastName:  savedState.assessLastName  || authLast,
       }));
@@ -216,6 +216,7 @@ export default function Onboarding({ onComplete }: Props) {
   // already set in state. The functional setState below guards safely instead.
   useEffect(() => {
     if (step !== 3) return;
+    if (initialEmail) setState(s => ({ ...s, assessEmail: s.assessEmail || initialEmail }));
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) setState(s => ({ ...s, assessEmail: s.assessEmail || user.email! }));
     });
