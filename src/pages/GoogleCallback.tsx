@@ -1,153 +1,113 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useIntegrations } from "@/contexts/IntegrationsContext";
-import { Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, XCircle } from "lucide-react";
+
+// Pure transport layer — no success logic, no toasts, no integration state.
+//
+// Popup mode:
+//   1. Calls nylas-callback (backend marks the grant in DB).
+//   2. Broadcasts a hint to the parent: { type: "normy-oauth-hint", error? }.
+//   3. Does NOT call window.close() — parent closes the popup via popup.close().
+//
+// Full-page mode (popup was blocked):
+//   1. Calls nylas-callback.
+//   2. Navigates back to the app — IntegrationsContext re-fetches on mount.
 
 const GoogleCallback = () => {
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
-  const [message, setMessage] = useState("Completing Google sign-in...");
+  const [displayError, setDisplayError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { refreshConnections } = useIntegrations();
 
   useEffect(() => {
-    // Parse popup flag from state param — encoded by nylas-auth as "service|popup".
-    // This is the only reliable indicator because Google/Nylas set COOP headers that
-    // sever window.opener after cross-origin navigation, making it unreliable.
-    const urlParams = new URLSearchParams(window.location.search);
-    const rawState = urlParams.get("state") ?? "";
-    const isPopupFlow = rawState.endsWith("|popup");
+    const params   = new URLSearchParams(window.location.search);
+    const code      = params.get("code");
+    const rawState  = params.get("state") ?? "";
+    const oauthErr  = params.get("error") ?? null;
 
-    // window.opener may be non-null for full-page flows too, so we use isPopupFlow
-    // as the primary signal and window.opener as a belt-and-braces fallback.
+    const isPopup   = rawState.endsWith("|popup");
     const hasOpener = !!(window.opener && window.opener !== window);
 
-    const broadcast = (payload: Record<string, unknown>) => {
-      // BroadcastChannel works even when window.opener is null (COOP).
-      try {
-        const bc = new BroadcastChannel("normy-oauth");
-        bc.postMessage(payload);
-        bc.close();
-      } catch {}
-      // Legacy postMessage for browsers without BroadcastChannel
-      if (hasOpener) {
-        try { window.opener.postMessage(payload, window.location.origin); } catch {}
-      }
+    const sendHint = (error: string | null) => {
+      const payload = { type: "normy-oauth-hint", error };
+      try { const bc = new BroadcastChannel("normy-oauth"); bc.postMessage(payload); bc.close(); } catch {}
+      if (hasOpener) try { window.opener.postMessage(payload, window.location.origin); } catch {}
     };
 
-    const fail = (msg: string) => {
-      setStatus("error");
-      setMessage(msg);
-      broadcast({ type: "normy-google-oauth-complete", success: false, error: msg });
-      if (isPopupFlow || hasOpener) setTimeout(() => window.close(), 2000);
-    };
-
-    const handleCallback = async () => {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get("code");
-        const oauthError = params.get("error");
-
-        // Strip "|popup" suffix to get the actual service id
-        const provider = isPopupFlow ? rawState.slice(0, rawState.lastIndexOf("|")) : rawState;
-
-        if (oauthError) {
-          fail(`Authorization was denied (${oauthError}).`);
-          return;
-        }
-        if (!code || !provider) {
-          fail("Missing authorization code or provider.");
-          return;
-        }
+    if (isPopup || hasOpener) {
+      // ── Popup transport ─────────────────────────────────────────────────
+      const run = async () => {
+        if (oauthErr) { sendHint(`Authorization denied (${oauthErr}).`); return; }
+        if (!code)    { sendHint("Missing authorization code.");         return; }
 
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          fail("You must be signed in to connect integrations.");
-          return;
-        }
+        if (!session) { sendHint("You must be signed in."); return; }
+
+        // Strip "|popup" to get the actual provider/service id
+        const provider = rawState.slice(0, rawState.lastIndexOf("|"));
 
         const { data, error } = await supabase.functions.invoke("nylas-callback", {
           body: { code, provider, redirectUrl: window.location.origin },
         });
 
-        if (error || data?.error) {
-          fail(data?.error || error?.message || "Failed to connect.");
-          return;
-        }
+        // Backend is the sole authority — pass result as hint, parent reads DB
+        sendHint(data?.error || error?.message || null);
+      };
+      run().catch(err => sendHint(err?.message || "Unexpected error."));
 
-        setStatus("success");
-        setMessage(`Connected ${provider === "gmail" ? "Gmail" : "Google Calendar"} as ${data.email}`);
-
-        // Update local integration cache (legacy)
+    } else {
+      // ── Full-page redirect (popup was blocked) ───────────────────────────
+      const run = async () => {
         try {
-          const saved = localStorage.getItem("integrations-state");
-          const connectedIds: string[] = saved ? JSON.parse(saved) : [];
-          if (!connectedIds.includes(provider)) {
-            connectedIds.push(provider);
-            localStorage.setItem("integrations-state", JSON.stringify(connectedIds));
+          if (oauthErr)       { setDisplayError(`Authorization denied (${oauthErr}).`); return; }
+          if (!code || !rawState) { setDisplayError("Missing authorization code."); return; }
+
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) { setDisplayError("You must be signed in to connect integrations."); return; }
+
+          const { data, error } = await supabase.functions.invoke("nylas-callback", {
+            body: { code, provider: rawState, redirectUrl: window.location.origin },
+          });
+
+          if (error || data?.error) {
+            setDisplayError(data?.error || error?.message || "Failed to connect.");
+            return;
           }
-        } catch {}
 
-        broadcast({
-          type: "normy-google-oauth-complete",
-          success: true,
-          service: provider,
-          email: data.email,
-        });
-
-        if (isPopupFlow || hasOpener) {
-          // Popup flow: parent already received the broadcast, just close.
-          setTimeout(() => window.close(), 1200);
-        } else {
-          // Full-page redirect flow (popup was blocked entirely).
-          refreshConnections().catch(() => {});
+          // IntegrationsContext re-fetches on mount when we navigate back
           const returnTo = sessionStorage.getItem("oauth-return-to") || "/dashboard";
           sessionStorage.removeItem("oauth-return-to");
-          setTimeout(() => navigate(returnTo), 1500);
+          navigate(returnTo, { replace: true });
+        } catch (err: any) {
+          setDisplayError(err?.message || "Something went wrong.");
         }
-      } catch (err) {
-        console.error("GoogleCallback error:", err);
-        fail((err as Error)?.message || "Something went wrong completing sign-in.");
-      }
-    };
-
-    handleCallback();
+      };
+      run();
+    }
   }, [navigate]);
 
-  const isPopupFlow = new URLSearchParams(window.location.search).get("state")?.endsWith("|popup");
-  const isPopupLike = isPopupFlow || !!(window.opener && window.opener !== window);
+  if (displayError) {
+    const isPopupLike =
+      (new URLSearchParams(window.location.search).get("state") ?? "").endsWith("|popup")
+      || !!(window.opener && window.opener !== window);
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="glass-card rounded-2xl p-8 max-w-sm w-full text-center">
+          <XCircle className="w-10 h-10 text-destructive mx-auto mb-4" />
+          <p className="text-foreground font-medium">{displayError}</p>
+          <button
+            onClick={() => isPopupLike ? window.close() : navigate("/")}
+            className="mt-4 px-4 py-2 rounded-xl bg-accent text-accent-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            {isPopupLike ? "Close" : "Back to app"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="glass-card rounded-2xl p-8 max-w-sm w-full text-center">
-        {status === "loading" && (
-          <>
-            <Loader2 className="w-10 h-10 text-accent animate-spin mx-auto mb-4" />
-            <p className="text-foreground font-medium">{message}</p>
-          </>
-        )}
-        {status === "success" && (
-          <>
-            <CheckCircle2 className="w-10 h-10 text-success mx-auto mb-4" />
-            <p className="text-foreground font-medium">{message}</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              {isPopupLike ? "This window will close…" : "Redirecting..."}
-            </p>
-          </>
-        )}
-        {status === "error" && (
-          <>
-            <XCircle className="w-10 h-10 text-destructive mx-auto mb-4" />
-            <p className="text-foreground font-medium">{message}</p>
-            <button
-              onClick={() => isPopupLike ? window.close() : navigate("/")}
-              className="mt-4 px-4 py-2 rounded-xl bg-accent text-accent-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-            >
-              {isPopupLike ? "Close" : "Back to app"}
-            </button>
-          </>
-        )}
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <Loader2 className="w-8 h-8 text-accent animate-spin" />
     </div>
   );
 };

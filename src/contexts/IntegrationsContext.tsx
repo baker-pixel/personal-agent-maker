@@ -17,7 +17,7 @@ interface IntegrationsContextType {
   integrations: Integration[];
   toggleConnection: (id: string) => void;
   isConnected: (id: string) => boolean;
-  refreshConnections: () => Promise<void>;
+  refreshConnections: () => Promise<{ googleConnected: boolean }>;
   removeAccount: (provider: string, email: string) => Promise<void>;
   /** True while the integration list is being re-fetched from the server. */
   refreshing: boolean;
@@ -115,7 +115,7 @@ const IntegrationsContext = createContext<IntegrationsContextType>({
   integrations: defaultIntegrations,
   toggleConnection: () => {},
   isConnected: () => false,
-  refreshConnections: async () => {},
+  refreshConnections: async () => ({ googleConnected: false }),
   removeAccount: async () => {},
   refreshing: false,
   integrationsLoading: true,
@@ -130,42 +130,39 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [integrationsLoading, setIntegrationsLoading] = useState(true);
   const [tokensError, setTokensError] = useState<string | null>(null);
 
-  const fetchConnected = useCallback(async () => {
+  const fetchConnected = useCallback(async (): Promise<{ googleConnected: boolean }> => {
     setRefreshing(true);
     try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return { googleConnected: false };
 
-    const { data: grants, error: grantsQueryError } = await supabase
-      .from("nylas_grants")
-      .select("email, provider");
+      const { data: grants, error: grantsQueryError } = await supabase
+        .from("nylas_grants")
+        .select("email, provider");
 
-    if (grantsQueryError) {
-      console.error("Failed to load nylas_grants:", grantsQueryError);
-      setTokensError(grantsQueryError.message ?? "Failed to load integrations");
-      return;
-    }
-    setTokensError(null);
-
-    // One Nylas Google grant covers both Gmail and Calendar.
-    // Collect unique emails from google grants and apply to both services.
-    const googleEmails: string[] = [];
-    for (const g of grants ?? []) {
-      if (g.provider === "google" && g.email && !googleEmails.includes(g.email)) {
-        googleEmails.push(g.email);
+      if (grantsQueryError) {
+        console.error("Failed to load nylas_grants:", grantsQueryError);
+        setTokensError(grantsQueryError.message ?? "Failed to load integrations");
+        return { googleConnected: false };
       }
-    }
+      setTokensError(null);
 
-    setIntegrations((prev) =>
-      prev.map((i) => {
-        if (i.id !== "gmail" && i.id !== "google-calendar") return i;
-        return {
-          ...i,
-          connected: googleEmails.length > 0,
-          connectedAccounts: googleEmails,
-        };
-      })
-    );
+      // One Nylas Google grant covers both Gmail and Calendar.
+      const googleEmails: string[] = [];
+      for (const g of grants ?? []) {
+        if (g.provider === "google" && g.email && !googleEmails.includes(g.email)) {
+          googleEmails.push(g.email);
+        }
+      }
+
+      setIntegrations((prev) =>
+        prev.map((i) => {
+          if (i.id !== "gmail" && i.id !== "google-calendar") return i;
+          return { ...i, connected: googleEmails.length > 0, connectedAccounts: googleEmails };
+        })
+      );
+
+      return { googleConnected: googleEmails.length > 0 };
     } finally {
       setRefreshing(false);
       setIntegrationsLoading(false);

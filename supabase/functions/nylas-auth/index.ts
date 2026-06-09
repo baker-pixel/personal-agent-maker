@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
 
     // Nylas v3 Connect — only supported params. No Google-native scope/access_type;
     // those trigger ECC fallback routing and return not_found_error.
-    const provider = service === "gmail" ? "google" : "google";
+    const provider = "google"; // Nylas Google grant covers Gmail + Calendar
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
