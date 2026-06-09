@@ -841,6 +841,69 @@ export type Database = {
         }
         Relationships: []
       }
+      nylas_grants: {
+        Row: {
+          created_at: string
+          email: string | null
+          grant_id: string | null
+          id: string
+          provider: string
+          scopes: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          grant_id?: string | null
+          id?: string
+          provider: string
+          scopes?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          grant_id?: string | null
+          id?: string
+          provider?: string
+          scopes?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       referral_codes: {
         Row: {
           code: string
@@ -1153,16 +1216,22 @@ export type Database = {
       user_preferences: {
         Row: {
           agent_name: string
+          assessment_status: string | null
           created_at: string
           dashboard_mode: string
+          decision_style: string | null
           digest_mode: boolean
+          email_length: string | null
           id: string
           lead_escalate_drafted_minutes: number
           lead_escalate_to_slack: boolean
           lead_escalate_to_sms: boolean
           lead_nudge_enabled: boolean
           lead_nudge_minutes: number
+          onboarding_completed: boolean
+          onboarding_step: number
           phone_number: string | null
+          priority_visibility: string | null
           quiet_hours_enabled: boolean
           quiet_hours_end: string
           quiet_hours_start: string
@@ -1171,6 +1240,7 @@ export type Database = {
           slack_notification_channel_id: string | null
           slack_notification_channel_name: string | null
           stt_language: string | null
+          tone: string | null
           travel_mode_active: boolean
           travel_mode_message: string | null
           travel_mode_until: string | null
@@ -1184,6 +1254,7 @@ export type Database = {
           tts_stability: number | null
           tts_voice_uri: string | null
           updated_at: string
+          user_display_name: string | null
           user_id: string
           vip_override_quiet: boolean
           voice_conversation_enabled: boolean | null
@@ -1192,16 +1263,22 @@ export type Database = {
         }
         Insert: {
           agent_name?: string
+          assessment_status?: string | null
           created_at?: string
           dashboard_mode?: string
+          decision_style?: string | null
           digest_mode?: boolean
+          email_length?: string | null
           id?: string
           lead_escalate_drafted_minutes?: number
           lead_escalate_to_slack?: boolean
           lead_escalate_to_sms?: boolean
           lead_nudge_enabled?: boolean
           lead_nudge_minutes?: number
+          onboarding_completed?: boolean
+          onboarding_step?: number
           phone_number?: string | null
+          priority_visibility?: string | null
           quiet_hours_enabled?: boolean
           quiet_hours_end?: string
           quiet_hours_start?: string
@@ -1210,6 +1287,7 @@ export type Database = {
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
           stt_language?: string | null
+          tone?: string | null
           travel_mode_active?: boolean
           travel_mode_message?: string | null
           travel_mode_until?: string | null
@@ -1223,6 +1301,7 @@ export type Database = {
           tts_stability?: number | null
           tts_voice_uri?: string | null
           updated_at?: string
+          user_display_name?: string | null
           user_id: string
           vip_override_quiet?: boolean
           voice_conversation_enabled?: boolean | null
@@ -1231,16 +1310,22 @@ export type Database = {
         }
         Update: {
           agent_name?: string
+          assessment_status?: string | null
           created_at?: string
           dashboard_mode?: string
+          decision_style?: string | null
           digest_mode?: boolean
+          email_length?: string | null
           id?: string
           lead_escalate_drafted_minutes?: number
           lead_escalate_to_slack?: boolean
           lead_escalate_to_sms?: boolean
           lead_nudge_enabled?: boolean
           lead_nudge_minutes?: number
+          onboarding_completed?: boolean
+          onboarding_step?: number
           phone_number?: string | null
+          priority_visibility?: string | null
           quiet_hours_enabled?: boolean
           quiet_hours_end?: string
           quiet_hours_start?: string
@@ -1249,6 +1334,7 @@ export type Database = {
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
           stt_language?: string | null
+          tone?: string | null
           travel_mode_active?: boolean
           travel_mode_message?: string | null
           travel_mode_until?: string | null
@@ -1262,6 +1348,7 @@ export type Database = {
           tts_stability?: number | null
           tts_voice_uri?: string | null
           updated_at?: string
+          user_display_name?: string | null
           user_id?: string
           vip_override_quiet?: boolean
           voice_conversation_enabled?: boolean | null
