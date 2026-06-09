@@ -12,15 +12,6 @@ const corsHeaders = {
 
 const NYLAS_BASE = "https://api.us.nylas.com";
 
-// Gmail + Calendar scopes via Nylas
-const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/gmail.compose",
-  "https://www.googleapis.com/auth/calendar",
-  "https://www.googleapis.com/auth/contacts.readonly",
-].join(" ");
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -61,17 +52,19 @@ Deno.serve(async (req) => {
     // after COOP headers from Google sever window.opener.
     const state = isPopupFlow ? `${service}|popup` : service;
 
+    // Nylas v3 Connect — only supported params. No Google-native scope/access_type;
+    // those trigger ECC fallback routing and return not_found_error.
+    const provider = service === "gmail" ? "google" : "google";
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
       response_type: "code",
-      access_type: "offline",
-      provider: "google",
-      scope: GOOGLE_SCOPES,
+      provider,
       state,
     });
 
     const url = `${NYLAS_BASE}/v3/connect/auth?${params.toString()}`;
+    console.log("NYLAS_OAUTH_URL:", url);
 
     return new Response(JSON.stringify({ url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
