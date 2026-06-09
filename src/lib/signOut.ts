@@ -8,13 +8,13 @@ import { clearStoredPasswordRecoveryParams } from "@/lib/passwordRecovery";
  * sessions and are only removed when the user explicitly disconnects from
  * Integrations settings.
  */
-export async function performSignOut(redirectTo: string = "/") {
-
-  try {
-    await supabase.auth.signOut();
-  } catch (err) {
-    console.warn("Sign-out request failed, clearing local state anyway", err);
-  }
+export function performSignOut(redirectTo: string = "/") {
+  // Fire-and-forget — don't block on the network call. Local state is cleared
+  // below and window.location.replace navigates away regardless of whether
+  // Supabase's server-side token invalidation completes.
+  supabase.auth.signOut().catch((err) => {
+    console.warn("Sign-out request failed (local state cleared anyway)", err);
+  });
 
   try {
     clearStoredPasswordRecoveryParams();
