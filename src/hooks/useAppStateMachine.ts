@@ -33,6 +33,10 @@ export function useAppStateMachine() {
   // Prevents duplicate fetches from INITIAL_SESSION + TOKEN_REFRESHED.
   const profileFetchedForRef = useRef<string | null>(null);
 
+  // True only when fetchProfile resolved from DB (not from fallback/timeout).
+  // Used by TOKEN_REFRESHED to retry if the initial load failed.
+  const profileLoadedFromDBRef = useRef(false);
+
   // ── Integrations ────────────────────────────────────────────────────────────
   const fetchIntegrations = useCallback(async (): Promise<IntegrationState> => {
     const empty: IntegrationState = {
@@ -92,7 +96,8 @@ export function useAppStateMachine() {
         ]);
 
         if (!winner) {
-          // Timed out
+          // Timed out — fall back to localStorage cache.
+          profileLoadedFromDBRef.current = false;
           dispatch({ type: "PROFILE_FAILED" });
           return;
         }
@@ -100,6 +105,7 @@ export function useAppStateMachine() {
         const { data, error } = winner as { data: any; error: any };
 
         if (error) {
+          profileLoadedFromDBRef.current = false;
           dispatch({ type: "PROFILE_FAILED" });
           return;
         }
@@ -126,8 +132,10 @@ export function useAppStateMachine() {
           localStorage.setItem(`normy_profile_${userId}`, JSON.stringify(profile));
         } catch { /* storage full or private mode */ }
 
+        profileLoadedFromDBRef.current = true;
         dispatch({ type: "PROFILE_LOADED", profile });
       } catch {
+        profileLoadedFromDBRef.current = false;
         dispatch({ type: "PROFILE_FAILED" });
       }
     },
@@ -156,6 +164,7 @@ export function useAppStateMachine() {
       switch (event) {
         case "SIGNED_OUT":
           profileFetchedForRef.current = null;
+          profileLoadedFromDBRef.current = false;
           dispatch({ type: "SIGNED_OUT" });
           try {
             const toRemove: string[] = [];
@@ -176,14 +185,23 @@ export function useAppStateMachine() {
           break;
 
         case "TOKEN_REFRESHED":
-          // Session token rotated — update session object, no re-hydration needed.
-          if (session) dispatch({ type: "SESSION_REFRESHED", session });
+          // Session token rotated — update session object.
+          // If the initial profile fetch failed (timeout/error), retry now that
+          // the token is fresh — the DB query may succeed this time.
+          if (session) {
+            dispatch({ type: "SESSION_REFRESHED", session });
+            if (!profileLoadedFromDBRef.current) {
+              profileFetchedForRef.current = null;
+              fetchProfile(session.user.id);
+            }
+          }
           break;
 
         case "SIGNED_IN":
           if (session) {
             // Force re-fetch on new sign-in (different user may have logged in).
             profileFetchedForRef.current = null;
+            profileLoadedFromDBRef.current = false;
             dispatch({ type: "AUTH_RESOLVED", session });
             fetchProfile(session.user.id);
             fetchIntegrations();

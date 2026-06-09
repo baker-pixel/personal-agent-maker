@@ -104,8 +104,10 @@ export function useSpeechRecognition({
   const abortRef = useRef<AbortController | null>(null);
   const stopListeningRef = useRef<() => void>(() => {});
 
-  // stoppingRef: true only during an explicit stopListening() call — guards onstop from restarting.
+  // stoppingRef: true during explicit stopListening() until next startListening() — guards onstop from processing stale audio.
   const stoppingRef = useRef(false);
+  // recorderGenRef: incremented on each stopListening() so stale onstop handlers from old recorder sessions are dropped.
+  const recorderGenRef = useRef(0);
   const isListeningRef = useRef(false);
 
   const isSupported =
@@ -150,6 +152,7 @@ export function useSpeechRecognition({
         ? "audio/mp4"
         : "";
 
+    const myGen = recorderGenRef.current;
     const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     mediaRecorderRef.current = mr;
 
@@ -161,7 +164,8 @@ export function useSpeechRecognition({
       const chunks = chunksRef.current.splice(0);
       const mT = mr.mimeType || "audio/webm";
 
-      if (stoppingRef.current) return;
+      // Drop if stopListening() was called (stale session) or a newer recorder gen exists.
+      if (stoppingRef.current || recorderGenRef.current !== myGen) return;
 
       const blob = new Blob(chunks, { type: mT });
       if (blob.size < 1000) {
@@ -176,6 +180,8 @@ export function useSpeechRecognition({
       try {
         const text = await transcribe(blob, langRef.current, abort.signal);
         if (abort.signal.aborted) return;
+        // Re-check after async gap: stopListening() or a new session may have started.
+        if (stoppingRef.current || recorderGenRef.current !== myGen) return;
         // Filter Whisper hallucinations: silence, room noise, and TTS echo all
         // produce recognizable false-positive phrases. Drop them before onResult.
         const normalized = text.trim().toLowerCase().replace(/[.!?,;…\s]+$/, "").replace(/^[.!?,;…\s]+/, "");
@@ -203,7 +209,7 @@ export function useSpeechRecognition({
       } finally {
         if (!continuousRef.current) {
           stopListeningRef.current();
-        } else if (isListeningRef.current && streamRef.current && !stoppingRef.current) {
+        } else if (isListeningRef.current && streamRef.current && !stoppingRef.current && recorderGenRef.current === myGen) {
           startRecorder(streamRef.current);
         }
       }
@@ -214,6 +220,7 @@ export function useSpeechRecognition({
 
   const stopListening = useCallback(() => {
     stoppingRef.current = true;
+    recorderGenRef.current++;   // invalidate all pending onstop handlers
     isListeningRef.current = false;
     setIsListening(false);
     setIsSpeechActive(false);
@@ -240,9 +247,8 @@ export function useSpeechRecognition({
     }
 
     setTranscript("");
-    setTimeout(() => { stoppingRef.current = false; }, 0);
-    // Only fire onEnd for unexpected terminations (not explicit stops), matching
-    // the old Web Speech API behaviour where stoppingRef suppressed onend.
+    // stoppingRef stays true until startListening() resets it — ensures any onstop
+    // that fires async after this call drops its audio instead of submitting it.
   }, [clearTimers]);
 
   useEffect(() => { stopListeningRef.current = stopListening; }, [stopListening]);

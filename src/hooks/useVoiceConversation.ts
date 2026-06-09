@@ -300,7 +300,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
         setTimeout(() => {
           lastStartAttemptRef.current = Date.now();
           try { speechRef.current?.startListening(); } catch { /* ignore */ }
-        }, 500);
+        }, 800);
       }
     };
 
