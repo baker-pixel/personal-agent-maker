@@ -11,7 +11,7 @@ import {
   hasStoredPasswordRecovery,
 } from "@/lib/passwordRecovery";
 
-const PROFILE_TIMEOUT_MS = 1500;
+const PROFILE_TIMEOUT_MS = 5000;
 
 export function useAppStateMachine() {
   const [state, dispatch] = useReducer(appStateReducer, INITIAL_STATE);
@@ -122,6 +122,10 @@ export function useAppStateMachine() {
             .then(() => {});
         }
 
+        try {
+          localStorage.setItem(`normy_profile_${userId}`, JSON.stringify(profile));
+        } catch { /* storage full or private mode */ }
+
         dispatch({ type: "PROFILE_LOADED", profile });
       } catch {
         dispatch({ type: "PROFILE_FAILED" });
@@ -132,8 +136,15 @@ export function useAppStateMachine() {
 
   // ── Mark onboarding done (called by Onboarding page) ────────────────────────
   const markOnboardingComplete = useCallback(() => {
+    const userId = state.session?.user?.id;
+    if (userId) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(`normy_profile_${userId}`) ?? "{}");
+        localStorage.setItem(`normy_profile_${userId}`, JSON.stringify({ ...cached, onboardingCompleted: true, onboardingStep: 5 }));
+      } catch { /* ignore */ }
+    }
     dispatch({ type: "ONBOARDING_COMPLETE" });
-  }, []);
+  }, [state.session]);
 
   // ── Single auth subscription ─────────────────────────────────────────────────
   // This is the ONLY place in the app that subscribes to auth events.

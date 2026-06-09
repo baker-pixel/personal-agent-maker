@@ -106,17 +106,28 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
     }
 
     case "PROFILE_FAILED": {
-      // On timeout/error: default to NOT onboarded.
-      // New users (no DB row yet) must see onboarding — wrong default here
-      // would silently skip it. Existing users with a flaky connection will
-      // hit onboarding and can navigate away; that's the safer failure mode.
+      // On timeout/error: read from localStorage cache written on last successful
+      // profile load. This prevents a slow mobile cold-start from sending an
+      // already-onboarded user back to /onboarding.
+      const userId = state.session?.user?.id ?? null;
+      const cached =
+        typeof localStorage !== "undefined" && userId
+          ? (() => {
+              try {
+                return JSON.parse(localStorage.getItem(`normy_profile_${userId}`) ?? "null");
+              } catch {
+                return null;
+              }
+            })()
+          : null;
       const fallback: ProfileState = {
         agentName:
-          typeof localStorage !== "undefined"
+          cached?.agentName ??
+          (typeof localStorage !== "undefined"
             ? (localStorage.getItem("agent-name") ?? "Normy Agent")
-            : "Normy Agent",
-        onboardingCompleted: false,
-        onboardingStep: 0,
+            : "Normy Agent"),
+        onboardingCompleted: cached?.onboardingCompleted ?? false,
+        onboardingStep: cached?.onboardingStep ?? 0,
       };
       return {
         ...state,
