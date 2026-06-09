@@ -683,6 +683,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                       const connecting_ = connecting === "gmail";
                       const checking = integrationsLoading;
                       return (
+                        <>
                         <button
                           onClick={() => { if (!connected && !checking && !connecting_) connect("gmail").catch(() => {}); }}
                           disabled={connected || connecting_ || checking}
@@ -722,6 +723,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                             Loading your account details — just a moment…
                           </p>
                         )}
+                        </>
                       );
                     })()}
                   </div>
