@@ -221,5 +221,7 @@ export function useAppStateMachine() {
     return () => subscription.unsubscribe();
   }, [fetchProfile, fetchIntegrations]);
 
-  return { state, fetchIntegrations, markOnboardingComplete, isRecovery };
+  const clearRecovery = useCallback(() => setIsRecovery(false), []);
+
+  return { state, fetchIntegrations, markOnboardingComplete, isRecovery, clearRecovery };
 }

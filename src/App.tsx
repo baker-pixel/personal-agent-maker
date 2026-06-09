@@ -77,7 +77,7 @@ const ProtectedRoute = ({
 
 // ── App root ───────────────────────────────────────────────────────────────────
 const App = () => {
-  const { state, fetchIntegrations, markOnboardingComplete, isRecovery } = useAppStateMachine();
+  const { state, fetchIntegrations, markOnboardingComplete, isRecovery, clearRecovery } = useAppStateMachine();
 
   const authenticated = !!state.session;
 
@@ -97,7 +97,7 @@ const App = () => {
     <ErrorBoundary variant="page">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <AppStateContext.Provider value={{ state, fetchIntegrations, markOnboardingComplete }}>
+          <AppStateContext.Provider value={{ state, fetchIntegrations, markOnboardingComplete, clearRecovery }}>
             <IntegrationsProvider>
               <AgentProvider>
                 <Toaster />

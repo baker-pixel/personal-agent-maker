@@ -8,6 +8,7 @@ interface AppStateContextType {
   state: AppState;
   fetchIntegrations: () => Promise<IntegrationState>;
   markOnboardingComplete: () => void;
+  clearRecovery: () => void;
 }
 
 export const AppStateContext = createContext<AppStateContextType | null>(null);

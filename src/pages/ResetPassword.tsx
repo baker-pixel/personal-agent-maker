@@ -12,11 +12,13 @@ import {
   PASSWORD_RESET_REDIRECT_URL,
   savePasswordRecoveryParams,
 } from "@/lib/passwordRecovery";
+import { useAppState } from "@/contexts/AppStateContext";
 import normyLogo from "@/assets/normy-logo.png";
 
 type RecoveryStatus = "checking" | "ready" | "needs-link";
 
 const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, ref) {
+  const { clearRecovery } = useAppState();
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -194,6 +196,7 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       clearStoredPasswordRecoveryParams();
+      clearRecovery();
       await supabase.auth.signOut();
       setResetComplete(true);
       toast({ title: "Password updated", description: "You can now sign in with your new password." });
