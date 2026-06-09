@@ -78,8 +78,10 @@ Deno.serve(async (req) => {
       let errorMsg = "Failed to connect your Gmail account. Please try again.";
       try {
         const errJson = JSON.parse(errText);
-        const code: string = (errJson.error || errJson.code || "").toLowerCase();
-        const desc: string = (errJson.error_description || errJson.message || "").toLowerCase();
+        // Nylas v3 errors: { error: { type: "...", message: "..." } }
+        // OAuth 2.0 errors: { error: "...", error_description: "..." }
+        const code: string = (errJson.error?.type || errJson.error || errJson.code || "").toLowerCase();
+        const desc: string = (errJson.error?.message || errJson.error_description || errJson.message || "").toLowerCase();
 
         if (code === "invalid_grant") {
           if (desc.includes("suspended") || desc.includes("disabled") || desc.includes("blocked") || desc.includes("deactivated")) {
