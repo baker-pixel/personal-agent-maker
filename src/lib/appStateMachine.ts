@@ -106,15 +106,17 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
     }
 
     case "PROFILE_FAILED": {
-      // On timeout/error: assume onboarded so we never loop on onboarding.
-      // The user can always reach /onboarding manually if needed.
+      // On timeout/error: default to NOT onboarded.
+      // New users (no DB row yet) must see onboarding — wrong default here
+      // would silently skip it. Existing users with a flaky connection will
+      // hit onboarding and can navigate away; that's the safer failure mode.
       const fallback: ProfileState = {
         agentName:
           typeof localStorage !== "undefined"
             ? (localStorage.getItem("agent-name") ?? "Normy Agent")
             : "Normy Agent",
-        onboardingCompleted: true,
-        onboardingStep: 5,
+        onboardingCompleted: false,
+        onboardingStep: 0,
       };
       return {
         ...state,

@@ -96,9 +96,11 @@ const App = () => {
   if (state.phase === "UNAUTHENTICATED") isOnboarded = null;
   // HYDRATING → null (protected routes render optimistically, no redirect yet)
 
-  // Only block on BOOTING (before first auth event).
-  // HYDRATING shows the app immediately — no spinner for profile/integrations.
-  const booting = state.phase === "BOOTING";
+  // Block on BOOTING and HYDRATING.
+  // HYDRATING is brief (< 200ms for a live session, 1.5s worst-case timeout).
+  // Blocking here is the only safe way to prevent new users from seeing a
+  // protected page before we know their onboarding status.
+  const booting = state.phase === "BOOTING" || state.phase === "HYDRATING";
 
   // Providers are mounted outside the booting gate so their state-wiring
   // starts immediately on the first auth event.
