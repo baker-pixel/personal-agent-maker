@@ -83,7 +83,7 @@ const App = () => {
 
   const fetchOnboardingState = useCallback(async (userId: string) => {
     const timeout = new Promise<{ data: null; error: Error }>(resolve =>
-      setTimeout(() => resolve({ data: null, error: new Error("timeout") }), 5000)
+      setTimeout(() => resolve({ data: null, error: new Error("timeout") }), 3000)
     );
     try {
       const result = await Promise.race([
@@ -196,14 +196,11 @@ const App = () => {
   // doesn't need isOnboarded — skip that wait so no spinner flashes mid-flow.
   const loading = authLoading || (!isRecovery && session !== null && isOnboarded === null);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
+  // Providers are mounted BEFORE the loading gate so their data-fetching starts
+  // in parallel with fetchOnboardingState — IntegrationsProvider's fetchConnected()
+  // runs immediately on INITIAL_SESSION/SIGNED_IN instead of waiting for the
+  // loading spinner to resolve first. This prevents integrationsLoading from being
+  // true when the user reaches the connect-accounts step in onboarding.
   return (
     <ErrorBoundary variant="page">
     <QueryClientProvider client={queryClient}>
@@ -213,47 +210,53 @@ const App = () => {
           <Toaster />
           <Sonner />
           <UpdatePrompt />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={isRecovery ? <Navigate to="/reset-password" replace /> : session ? <Navigate to="/mode-select" replace /> : <Landing />} />
-              <Route path="/auth" element={!session ? <Auth /> : isRecovery ? <Navigate to="/reset-password" replace /> : <Navigate to="/mode-select" replace />} />
-              <Route path="/auth/google/callback" element={<GoogleCallback />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/pricing" element={<Pricing />} />
-              <Route path="/investors" element={<Investors />} />
-              <Route path="/investors/contact" element={<InvestorContact />} />
-              <Route path="/privacy" element={<PrivacyPolicy />} />
-              <Route path="/terms" element={<TermsOfService />} />
-              <Route path="/assessment-done" element={<AssessmentDone />} />
-              <Route path="/done" element={<AssessmentDone />} />
-              <Route path="/onboarding" element={
-                !session ? <Navigate to="/auth" replace /> :
-                isOnboarded ? <Navigate to="/mode-select" replace /> :
-                <Onboarding onComplete={() => setIsOnboarded(true)} />
-              } />
-              <Route path="/mode-select" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><ModeSelect /></ProtectedRoute>} />
-              <Route path="/office" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Office /></ProtectedRoute>} />
-              <Route path="/office-3d" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin" /></div>}><Office3D /></Suspense></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><DashboardPage /></ProtectedRoute>} />
-              <Route path="/decision/text" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><DecisionText /></ProtectedRoute>} />
-              <Route path="/decision/voice" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><DecisionVoice /></ProtectedRoute>} />
-              <Route path="/email" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><EmailView /></ProtectedRoute>} />
-              <Route path="/calendar" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><CalendarView /></ProtectedRoute>} />
-              <Route path="/eod-wrapup" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><EodWrapup /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><SettingsPage /></ProtectedRoute>} />
-              <Route path="/sms-log" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><SmsLog /></ProtectedRoute>} />
-              <Route path="/steno" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Steno /></ProtectedRoute>} />
-              <Route path="/steno/history" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><StenoHistory /></ProtectedRoute>} />
-              <Route path="/contacts" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Contacts /></ProtectedRoute>} />
-              <Route path="/files" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Files /></ProtectedRoute>} />
-              <Route path="/leads" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Leads /></ProtectedRoute>} />
-              <Route path="/tasks" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Tasks /></ProtectedRoute>} />
-              <Route path="/inbox" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><InboxPage /></ProtectedRoute>} />
-              <Route path="/beta-crm" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><BetaCrm /></ProtectedRoute>} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            {session && isOnboarded && <InstallBanner />}
-          </BrowserRouter>
+          {loading ? (
+            <div className="min-h-screen flex items-center justify-center bg-background">
+              <div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={isRecovery ? <Navigate to="/reset-password" replace /> : session ? <Navigate to="/mode-select" replace /> : <Landing />} />
+                <Route path="/auth" element={!session ? <Auth /> : isRecovery ? <Navigate to="/reset-password" replace /> : <Navigate to="/mode-select" replace />} />
+                <Route path="/auth/google/callback" element={<GoogleCallback />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/pricing" element={<Pricing />} />
+                <Route path="/investors" element={<Investors />} />
+                <Route path="/investors/contact" element={<InvestorContact />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<TermsOfService />} />
+                <Route path="/assessment-done" element={<AssessmentDone />} />
+                <Route path="/done" element={<AssessmentDone />} />
+                <Route path="/onboarding" element={
+                  !session ? <Navigate to="/auth" replace /> :
+                  isOnboarded ? <Navigate to="/mode-select" replace /> :
+                  <Onboarding onComplete={() => setIsOnboarded(true)} />
+                } />
+                <Route path="/mode-select" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><ModeSelect /></ProtectedRoute>} />
+                <Route path="/office" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Office /></ProtectedRoute>} />
+                <Route path="/office-3d" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin" /></div>}><Office3D /></Suspense></ProtectedRoute>} />
+                <Route path="/dashboard" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><DashboardPage /></ProtectedRoute>} />
+                <Route path="/decision/text" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><DecisionText /></ProtectedRoute>} />
+                <Route path="/decision/voice" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><DecisionVoice /></ProtectedRoute>} />
+                <Route path="/email" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><EmailView /></ProtectedRoute>} />
+                <Route path="/calendar" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><CalendarView /></ProtectedRoute>} />
+                <Route path="/eod-wrapup" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><EodWrapup /></ProtectedRoute>} />
+                <Route path="/settings" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><SettingsPage /></ProtectedRoute>} />
+                <Route path="/sms-log" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><SmsLog /></ProtectedRoute>} />
+                <Route path="/steno" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Steno /></ProtectedRoute>} />
+                <Route path="/steno/history" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><StenoHistory /></ProtectedRoute>} />
+                <Route path="/contacts" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Contacts /></ProtectedRoute>} />
+                <Route path="/files" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Files /></ProtectedRoute>} />
+                <Route path="/leads" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Leads /></ProtectedRoute>} />
+                <Route path="/tasks" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><Tasks /></ProtectedRoute>} />
+                <Route path="/inbox" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><InboxPage /></ProtectedRoute>} />
+                <Route path="/beta-crm" element={<ProtectedRoute session={session} isOnboarded={isOnboarded}><BetaCrm /></ProtectedRoute>} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+              {session && isOnboarded && <InstallBanner />}
+            </BrowserRouter>
+          )}
           </AgentProvider>
         </IntegrationsProvider>
       </TooltipProvider>
