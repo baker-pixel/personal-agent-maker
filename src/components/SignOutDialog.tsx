@@ -29,7 +29,7 @@ const SignOutDialog = ({ children }: SignOutDialogProps) => {
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            onClick={() => { void performSignOut("/"); }}
+            onClick={() => performSignOut("/")}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             Sign out

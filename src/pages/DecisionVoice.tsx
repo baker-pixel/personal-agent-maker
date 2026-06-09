@@ -21,6 +21,8 @@ export default function DecisionVoice() {
   const { isConnected, integrationsLoading } = useIntegrations();
   const gmailConnected = isConnected("gmail");
   const [input, setInput] = useState("");
+  const [voiceJustFilled, setVoiceJustFilled] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [firstName, setFirstName] = useState<string>("");
   const [hasGreeted, setHasGreeted] = useState(false);
@@ -80,7 +82,10 @@ export default function DecisionVoice() {
 
   const voice = useVoiceConversation({
     onUserUtterance: (text) => {
-      chat.send(text);
+      setInput(text);
+      setVoiceJustFilled(true);
+      setTimeout(() => setVoiceJustFilled(false), 1500);
+      setTimeout(() => inputRef.current?.focus(), 50);
     },
     agentReply: pendingGreeting ?? (chat.thinking ? null : latestAgentReply),
     streamingText: pendingGreeting ? null : streamingAgentText,
@@ -328,11 +333,12 @@ export default function DecisionVoice() {
 
           <div className="container max-w-lg flex items-center gap-2 py-3 px-4">
             <Input
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               placeholder={voice.conversationActive ? "Or type instead…" : "Type a message…"}
-              className="flex-1"
+              className={`flex-1 transition-all duration-300 ${voiceJustFilled ? "ring-2 ring-primary/60 border-primary/50 bg-primary/5" : ""}`}
             />
             <VoiceWaveform isActive={voice.isListening} />
 

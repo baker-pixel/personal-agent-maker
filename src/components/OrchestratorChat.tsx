@@ -83,24 +83,16 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       loaded: prefsLoaded,
     },
   });
-  const pendingSendRef = useRef(false);
+  const [voiceJustFilled, setVoiceJustFilled] = useState(false);
 
   const handleVoiceResult = useCallback((text: string) => {
     setInput((prev) => (prev ? prev + " " + text : text));
-    pendingSendRef.current = true;
+    setVoiceJustFilled(true);
+    setTimeout(() => setVoiceJustFilled(false), 1500);
+    setTimeout(() => inputRef.current?.focus(), 0);
   }, []);
 
   const { isListening, isSupported: voiceSupported, startListening, stopAndSubmit } = useVoiceInput(handleVoiceResult);
-
-  // Auto-send after PTT: isListening goes false before transcription completes,
-  // so also watch input — when onResult fires and sets input, this re-runs and sends.
-  useEffect(() => {
-    if (!isListening && pendingSendRef.current && input.trim()) {
-      pendingSendRef.current = false;
-      handleSend();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isListening, input]);
 
   const uploadAttachments = async (files: Attachment[]): Promise<any[]> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -178,6 +170,11 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       });
     };
 
+    const controller = new AbortController();
+    // Timer kept alive until stream fully consumed — clearing early (after headers)
+    // left the body reader with no timeout, causing permanent stuck state on Groq stalls.
+    const safetyTimer = setTimeout(() => controller.abort(), 60000);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -189,9 +186,6 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
         }
         return { role: m.role, content };
       });
-
-      const controller = new AbortController();
-      const safetyTimer = setTimeout(() => controller.abort(), 60000);
 
       const resp = await fetch(CHAT_URL, {
         method: "POST",
@@ -207,12 +201,10 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
         }),
         signal: controller.signal,
       });
-      clearTimeout(safetyTimer);
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: "Request failed" }));
         upsertAssistant(`⚠️ ${err.error || "Something went wrong. Please try again."}`);
-        setIsLoading(false);
         return;
       }
 
@@ -246,6 +238,11 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
           }
         }
       }
+
+      if (currentConvId && assistantSoFar) {
+        await onSaveMessage(currentConvId, { role: "assistant", content: assistantSoFar });
+      }
+      if (assistantSoFar) tts.speak(assistantSoFar);
     } catch (e: any) {
       if (e?.name === "AbortError") {
         upsertAssistant("⚠️ Request timed out. Please try again.");
@@ -253,16 +250,10 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
         console.error(e);
         upsertAssistant("⚠️ Connection error. Please try again.");
       }
+    } finally {
+      clearTimeout(safetyTimer);
+      setIsLoading(false);
     }
-
-    if (currentConvId && assistantSoFar) {
-      await onSaveMessage(currentConvId, { role: "assistant", content: assistantSoFar });
-    }
-
-    // Speak response aloud if TTS enabled
-    if (assistantSoFar) tts.speak(assistantSoFar);
-
-    setIsLoading(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -349,7 +340,7 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
           <Shield className="w-3 h-3 text-success" />
           <span className="text-[10px] text-success/80 font-medium">Approval required before any action is executed</span>
         </div>
-        <div className="bg-card border border-border/50 rounded-2xl shadow-sm input-glow transition-all duration-300">
+        <div className={`bg-card border rounded-2xl shadow-sm input-glow transition-all duration-300 ${voiceJustFilled ? "border-primary/60 ring-2 ring-primary/20 bg-primary/5" : "border-border/50"}`}>
           <AttachmentPreview attachments={attachments} onRemove={handleRemoveAttachment} />
           <div className="flex items-end gap-1 p-2">
             <FileAttachmentButton onAdd={handleAddFiles} />
@@ -361,7 +352,7 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
                     ? "text-destructive bg-destructive/10 animate-pulse"
                     : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/40"
                 }`}
-                title={isListening ? "Tap to send" : "Tap to speak"}
+                title={isListening ? "Tap to stop recording" : "Tap to speak"}
                 type="button"
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}

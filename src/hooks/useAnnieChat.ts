@@ -188,6 +188,12 @@ export function useAnnieChat(
         });
       };
 
+      const controller = new AbortController();
+      abortRef.current = controller;
+      // Hoisted outside try so finally can clearTimeout — keeping timer alive
+      // through stream read prevents stuck thinking state on Groq stalls.
+      const safetyTimer = setTimeout(() => controller.abort(), 60000);
+
       try {
         const authHeaders: Record<string, string> = {
           "Content-Type": "application/json",
@@ -201,12 +207,6 @@ export function useAnnieChat(
 
         if (convIdRef.current) setTurnConversationId(convIdRef.current);
         markStage("llm_start");
-
-        const controller = new AbortController();
-        abortRef.current = controller;
-        // Safety: if the request hangs >60s, abort so 'thinking' resolves.
-        const safetyTimer = setTimeout(() => controller.abort(), 60000);
-
         const resp = await fetch(CHAT_URL, {
           method: "POST",
           headers: authHeaders,
@@ -218,7 +218,7 @@ export function useAnnieChat(
             clientNowIso: new Date().toISOString(),
           }),
           signal: controller.signal,
-        }).finally(() => clearTimeout(safetyTimer));
+        });
 
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({ error: "Request failed" }));
@@ -281,6 +281,7 @@ export function useAnnieChat(
         toast({ title: "Oops", description: errorMsg, variant: "destructive" });
         upsertAssistant("Sorry, I had trouble connecting. Try again?");
       } finally {
+        clearTimeout(safetyTimer);
         abortRef.current = null;
         setThinking(false);
       }

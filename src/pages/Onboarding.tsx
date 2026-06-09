@@ -708,13 +708,20 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                               {connected ? "Google Account connected" : checking ? "Checking connection…" : connecting_ ? "Connecting…" : "Connect Google Account (Gmail & Calendar)"}
                             </p>
                             <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                              {connected ? "Gmail + Calendar access granted" : "Grants access to Gmail + Calendar in one step"}
+                              {connected ? "Gmail + Calendar access granted" : checking ? "Verifying your account status…" : "Grants access to Gmail + Calendar in one step"}
                             </p>
                           </div>
                           {connected
                             ? <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                            : checking || connecting_
+                            ? <Loader2 className="w-4 h-4 text-accent/40 shrink-0 animate-spin" />
                             : <ArrowRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />}
                         </button>
+                        {checking && (
+                          <p className="text-xs text-muted-foreground text-center mt-1">
+                            Loading your account details — just a moment…
+                          </p>
+                        )}
                       );
                     })()}
                   </div>
