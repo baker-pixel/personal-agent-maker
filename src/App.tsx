@@ -89,7 +89,7 @@ const App = () => {
       const result = await Promise.race([
         supabase
           .from("user_preferences")
-          .select("onboarding_completed")
+          .select("onboarding_completed, onboarding_step")
           .eq("user_id", userId)
           .maybeSingle(),
         timeout,
@@ -98,15 +98,28 @@ const App = () => {
 
       if (error) {
         console.warn("[App] fetchOnboardingState error/timeout:", error.message);
-        // Don't downgrade an already-confirmed session — only default to false on first load
         setIsOnboarded(prev => prev === null ? false : prev);
         return;
+      }
+
+      // step >= 5 means they reached the final screen — treat as onboarded
+      // even if onboarding_completed was never flipped (e.g. closed before clicking the button)
+      const stepDone = (data?.onboarding_step ?? 0) >= 5;
+      const isNowOnboarded = (data?.onboarding_completed ?? false) || stepDone;
+
+      // Heal stale DB rows: step says done but flag was never set
+      if (stepDone && !data?.onboarding_completed) {
+        supabase
+          .from("user_preferences")
+          .update({ onboarding_completed: true, updated_at: new Date().toISOString() })
+          .eq("user_id", userId)
+          .then(() => {});
       }
 
       // Once confirmed onboarded, never regress — guards against TOKEN_REFRESHED race conditions
       setIsOnboarded(prev => {
         if (prev === true) return true;
-        return data?.onboarding_completed ?? false;
+        return isNowOnboarded;
       });
     } catch (err) {
       console.warn("[App] fetchOnboardingState threw:", err);

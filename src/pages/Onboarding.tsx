@@ -186,6 +186,7 @@ export default function Onboarding({ onComplete }: Props) {
         supabase.from("user_preferences").upsert({
           user_id: session.user.id,
           onboarding_step: 5,
+          onboarding_completed: true,
           updated_at: new Date().toISOString(),
         }, { onConflict: "user_id" }).catch(() => {});
       });
@@ -195,11 +196,12 @@ export default function Onboarding({ onComplete }: Props) {
   }, [gmailConnected, step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ensure assessEmail is populated when the user reaches step 3.
-  // getSession() in the main effect can return a session where user.email is
-  // temporarily undefined (race between signUp() and JWT persistence).
+  // getSession() can return a session where user.email is temporarily empty
+  // (race between signUp() and JWT persistence). Don't guard on state.assessEmail
+  // here — it's a stale closure value and may read "" even when the field is
+  // already set in state. The functional setState below guards safely instead.
   useEffect(() => {
     if (step !== 3) return;
-    if (state.assessEmail) return; // already filled
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) setState(s => ({ ...s, assessEmail: s.assessEmail || user.email! }));
     });
@@ -220,6 +222,12 @@ export default function Onboarding({ onComplete }: Props) {
         .limit(1)
         .then(({ data }) => {
           if (data?.length) {
+            supabase.from("user_preferences").upsert({
+              user_id: session.user.id,
+              onboarding_step: 5,
+              onboarding_completed: true,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "user_id" }).catch(() => {});
             setDir(1);
             setStep(5);
           }

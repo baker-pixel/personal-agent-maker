@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 //   4. Show result based on what DB actually says — no popup/event dependency
 
 const POLL_INTERVAL_MS = 1000;
-const POLL_MAX_ATTEMPTS = 15; // 15s max wait
+const POLL_MAX_ATTEMPTS = 60; // 60s — covers slow OAuth + cold nylas-callback start
 
 export const useGoogleOAuthPopup = () => {
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -24,8 +24,19 @@ export const useGoogleOAuthPopup = () => {
     inFlightRef.current = service;
     setConnecting(service);
 
+    // ── 1. Open popup immediately within gesture handler ───────────────
+    // window.open() must be called synchronously (or near-synchronously) from
+    // a user gesture. Calling it after an await breaks the gesture chain and
+    // browsers block the popup. Open a blank window now; navigate it once the
+    // auth URL arrives.
+    const popup = window.open(
+      "about:blank",
+      `normy-oauth-${service}`,
+      "width=500,height=650,popup=yes"
+    );
+
     try {
-      // ── 1. Get OAuth URL ───────────────────────────────────────────────
+      // ── 2. Get OAuth URL ───────────────────────────────────────────────
       const { data, error } = await supabase.functions.invoke("nylas-auth", {
         body: { service, origin: window.location.origin, isPopupFlow: true },
       });
@@ -34,15 +45,11 @@ export const useGoogleOAuthPopup = () => {
 
       const label = service === "gmail" ? "Gmail" : "Google Calendar";
 
-      // ── 2. Open popup ──────────────────────────────────────────────────
-      const popup = window.open(
-        data.url,
-        `normy-oauth-${service}`,
-        "width=500,height=650,popup=yes"
-      );
-
-      if (!popup) {
-        // Popup blocked — fetch a redirect-safe URL (no |popup in state)
+      // ── 3. Navigate popup (or fall back to redirect if blocked) ───────
+      if (popup && !popup.closed) {
+        popup.location.href = data.url;
+      } else {
+        // Popup was blocked — fetch a redirect-safe URL (no |popup in state)
         // so GoogleCallback handles it as full-page mode.
         const { data: fp } = await supabase.functions.invoke("nylas-auth", {
           body: { service, origin: window.location.origin, isPopupFlow: false },
@@ -81,13 +88,17 @@ export const useGoogleOAuthPopup = () => {
           supabase.functions.invoke("contacts-sync", { body: {} }).catch(() => {});
         }
       } else {
+        // Poll expired before grant appeared — could mean the OAuth window is
+        // still open, or nylas-callback is still processing. Don't show red
+        // error; IntegrationsContext focus/visibility listeners will detect the
+        // grant as soon as the user returns from the popup.
         toast({
-          title: "Timed out waiting for connection",
-          description: "The tab may still be open — wait a moment then try again.",
-          variant: "destructive",
+          title: "Still connecting…",
+          description: "Your Google account should appear once you finish in the OAuth window. If it doesn't, try reconnecting from Settings.",
         });
       }
     } catch (err: any) {
+      try { if (popup && !popup.closed) popup.close(); } catch {}
       console.error("Google OAuth error:", err);
       toast({
         title: "Connection failed",
