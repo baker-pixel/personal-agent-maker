@@ -220,6 +220,40 @@ async function groqFetch(url: string, init: RequestInit, retries = 1): Promise<R
   return res;
 }
 
+// Wraps a Groq SSE stream and intercepts mid-stream error objects (e.g. "Client
+// Disconnected") that Groq injects as JSON chunks instead of normal delta events.
+// Without this, the raw error JSON reaches the client and breaks the SSE parser.
+function filterGroqStream(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  let buf = "";
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, ctrl) {
+        buf += decoder.decode(chunk, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) { ctrl.enqueue(encoder.encode(line + "\n")); continue; }
+          const payload = line.slice(6).trim();
+          if (!payload || payload === "[DONE]") { ctrl.enqueue(encoder.encode(line + "\n")); continue; }
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed?.error) {
+              console.error("[groq-stream] error chunk:", JSON.stringify(parsed.error));
+              ctrl.enqueue(encoder.encode("data: [DONE]\n\n"));
+              ctrl.terminate();
+              return;
+            }
+          } catch { /* not a JSON error chunk — pass through */ }
+          ctrl.enqueue(encoder.encode(line + "\n"));
+        }
+      },
+      flush(ctrl) { if (buf) ctrl.enqueue(encoder.encode(buf)); },
+    })
+  );
+}
+
 async function summarizeOlderMessages(older: any[], apiKey: string): Promise<string> {
   if (older.length === 0) return "";
   const transcript = older
@@ -1649,9 +1683,9 @@ ${conversationMemoryNote}${realDataContext}`;
               console.log(`[voice-metrics] ${JSON.stringify({ sentences: sentences.length, words: assistantText.trim().split(/\s+/).filter(Boolean).length, userRequestedExtended, extendedProduced, triggerMatch: extendedProduced === userRequestedExtended ? "ok" : userRequestedExtended ? "missed-extended" : "over-extended", userPreview: userText.slice(0, 80) })}`);
             } catch (err) { console.error("[voice-metrics] failed:", err); }
           })();
-          return new Response(clientStream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
+          return new Response(filterGroqStream(clientStream), { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
         }
-        return new Response(streamRes.body, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
+        return new Response(filterGroqStream(streamRes.body!), { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
       };
 
       // If loop hit MAX_ROUNDS without a stop, ask the model to summarise what it did
