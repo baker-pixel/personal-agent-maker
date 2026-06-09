@@ -24,16 +24,18 @@ const GoogleCallback = () => {
     const rawState  = params.get("state") ?? "";
     const oauthErr  = params.get("error") ?? null;
 
-    const isPopup   = rawState.endsWith("|popup");
-    const hasOpener = !!(window.opener && window.opener !== window);
+    const isPopup = rawState.endsWith("|popup");
 
+    // BroadcastChannel only — single channel, works after COOP severs window.opener
     const sendHint = (error: string | null) => {
-      const payload = { type: "normy-oauth-hint", error };
-      try { const bc = new BroadcastChannel("normy-oauth"); bc.postMessage(payload); bc.close(); } catch {}
-      if (hasOpener) try { window.opener.postMessage(payload, window.location.origin); } catch {}
+      try {
+        const bc = new BroadcastChannel("normy-oauth");
+        bc.postMessage({ type: "normy-oauth-hint", error });
+        bc.close();
+      } catch {}
     };
 
-    if (isPopup || hasOpener) {
+    if (isPopup) {
       // ── Popup transport ─────────────────────────────────────────────────
       const run = async () => {
         if (oauthErr) { sendHint(`Authorization denied (${oauthErr}).`); return; }
@@ -87,8 +89,7 @@ const GoogleCallback = () => {
 
   if (displayError) {
     const isPopupLike =
-      (new URLSearchParams(window.location.search).get("state") ?? "").endsWith("|popup")
-      || !!(window.opener && window.opener !== window);
+      (new URLSearchParams(window.location.search).get("state") ?? "").endsWith("|popup");
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="glass-card rounded-2xl p-8 max-w-sm w-full text-center">

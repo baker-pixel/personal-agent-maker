@@ -6,21 +6,19 @@ import { useToast } from "@/hooks/use-toast";
 // Architecture: backend is sole authority for "connected".
 //
 // Success path:
-//   GoogleCallback (popup) → nylas-callback (edge fn) → grant stored in DB
-//   → BC hint { type: "normy-oauth-hint" } → parent calls popup.close()
-//   → closedPoll fires → refreshConnections() reads DB → toast if connected
+//   GoogleCallback → nylas-callback (backend, stores grant) → BC hint
+//   → BC onmessage fires finish() directly (no polling)
+//   → refreshConnections reads DB → toast if DB confirms connected
 //
-// Cancel path:
-//   User closes popup → closedPoll fires → no hint received → clear state, no refresh
+// Cancel path (user closes popup without OAuth):
+//   window.focus event fires when popup closes → popup.closed check → finish()
 //
-// Error path:
-//   GoogleCallback sends hint { error: "..." } → parent closes popup
-//   → closedPoll fires → show error toast, no refresh needed
+// Single channel: BroadcastChannel only. postMessage removed.
 
 export const useGoogleOAuthPopup = () => {
   const [connecting, setConnecting] = useState<string | null>(null);
-  const popupRef   = useRef<Window | null>(null);
-  const cleanupRef = useRef<(() => void) | null>(null);
+  const popupRef    = useRef<Window | null>(null);
+  const cleanupRef  = useRef<(() => void) | null>(null);
   const inFlightRef = useRef<string | null>(null);
   const { refreshConnections, integrations } = useIntegrations();
   const { toast } = useToast();
@@ -85,11 +83,11 @@ export const useGoogleOAuthPopup = () => {
       let hintError: string | null = null;
       let done = false;
 
+      // Accumulate cleanup fns so teardown has no forward-reference issues
+      const cleanups: Array<() => void> = [];
       const teardown = () => {
-        window.removeEventListener("message", onMessage);
-        clearInterval(closedPoll);
-        clearTimeout(fallback);
-        try { bc.close(); } catch {}
+        cleanups.forEach(fn => fn());
+        cleanups.length = 0;
         popupRef.current  = null;
         cleanupRef.current = null;
       };
@@ -100,7 +98,7 @@ export const useGoogleOAuthPopup = () => {
         teardown();
 
         if (!hintReceived) {
-          // User cancelled — no state change in DB
+          // User closed popup without completing OAuth — DB unchanged
           if (inFlightRef.current === service) { inFlightRef.current = null; setConnecting(null); }
           return;
         }
@@ -111,17 +109,17 @@ export const useGoogleOAuthPopup = () => {
           return;
         }
 
-        // Backend confirmed success (hint, no error) → DB is truth
+        // Backend ack received, no error — read DB as sole truth
         try {
-          const result = await refreshConnections(); // single call
+          const result = await refreshConnections(); // single call per connection
           if (!wasPreviouslyConnected && result?.googleConnected) {
             toast({
               title: `${label} connected ✓`,
               description: `Your ${label} account is now linked and ready to use.`,
             });
             if (service === "gmail") {
-              supabase.functions.invoke("email-triage",   { body: {} }).catch(() => {});
-              supabase.functions.invoke("contacts-sync",  { body: {} }).catch(() => {});
+              supabase.functions.invoke("email-triage",  { body: {} }).catch(() => {});
+              supabase.functions.invoke("contacts-sync", { body: {} }).catch(() => {});
             }
           }
         } catch (e) {
@@ -131,50 +129,38 @@ export const useGoogleOAuthPopup = () => {
         }
       };
 
-      // ── BroadcastChannel — hint/transport only ──────────────────────────
-      // GoogleCallback sends { type: "normy-oauth-hint", error?: string } after
-      // calling nylas-callback. This is NOT a success signal — it's a cue for
-      // the parent to close the popup and then read the DB via refreshConnections.
+      // ── BroadcastChannel — single channel, explicit callback ack ────────
+      // GoogleCallback (popup) sends { type: "normy-oauth-hint", error? }
+      // after nylas-callback resolves. Receipt IS the ack — finish() runs
+      // immediately, no closed-state polling required.
       const bc = new BroadcastChannel("normy-oauth");
       bc.onmessage = (event: MessageEvent) => {
         if (event.data?.type !== "normy-oauth-hint") return;
         hintReceived = true;
         hintError = event.data?.error ?? null;
-        // Parent closes popup — reliable even after COOP navigation severs opener
-        try { popup.close(); } catch {}
-      };
-
-      // postMessage fallback when window.opener is still intact
-      const onMessage = (event: MessageEvent) => {
-        if (event.origin !== window.location.origin) return;
-        if (event.data?.type !== "normy-oauth-hint") return;
-        hintReceived = true;
-        hintError = event.data?.error ?? null;
-        try { popup.close(); } catch {}
-      };
-      window.addEventListener("message", onMessage);
-
-      // ── Closed poll ─────────────────────────────────────────────────────
-      // Triggers finish() once popup.closed is true (covers both: parent-closed
-      // after hint, and user-manually-closed without hint).
-      const closedPoll = window.setInterval(() => {
-        if (!popup.closed) return;
-        clearInterval(closedPoll);
+        try { popup.close(); } catch {} // parent owns popup close
         void finish();
-      }, 300);
+      };
+      cleanups.push(() => { try { bc.close(); } catch {} });
 
-      // Safety net: force cleanup after 120s regardless
+      // ── Cancel detection: window focus event, no polling ────────────────
+      // When the user closes the popup themselves (no ack), the parent window
+      // regains focus. Check popup.closed then to detect the cancel.
+      const onParentFocus = () => { if (!done && popup.closed) void finish(); };
+      window.addEventListener("focus", onParentFocus);
+      cleanups.push(() => window.removeEventListener("focus", onParentFocus));
+
+      // Safety net: 120s hard timeout covers the case where the user closes
+      // the popup but never focuses the main window (switches to another app).
       const fallback = window.setTimeout(() => {
         try { popup.close(); } catch {}
         void finish();
       }, 120_000);
+      cleanups.push(() => clearTimeout(fallback));
 
       cleanupRef.current = () => {
-        if (!done) {
-          done = true;
-          teardown();
-          if (inFlightRef.current === service) { inFlightRef.current = null; setConnecting(null); }
-        }
+        if (!done) { done = true; teardown(); }
+        if (inFlightRef.current === service) { inFlightRef.current = null; setConnecting(null); }
       };
     } catch (error) {
       console.error("Google OAuth popup error:", error);
