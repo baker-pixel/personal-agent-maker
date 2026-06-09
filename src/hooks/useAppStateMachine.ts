@@ -166,7 +166,7 @@ export function useAppStateMachine() {
                 k === "agent-name" ||
                 k === "normy_agent" ||
                 k === "integrations-state" ||
-                k.startsWith("normy_")
+                (k.startsWith("normy_") && !k.startsWith("normy_profile_"))
               ) {
                 toRemove.push(k);
               }

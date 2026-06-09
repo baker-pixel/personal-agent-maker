@@ -38,7 +38,7 @@ export async function performSignOut(redirectTo: string = "/") {
         k === "agent-name" ||
         k === "normy_agent" ||
         k === "normy_onboarding_complete" ||
-        k.startsWith("normy_") ||
+        (k.startsWith("normy_") && !k.startsWith("normy_profile_")) ||
         k.startsWith("normy_pwd_recovery")
       ) {
         keysToRemove.push(k);
