@@ -111,10 +111,11 @@ export default function Onboarding({ onComplete }: Props) {
         } catch { /* ignore */ }
       }
 
-      // 2. Pre-fill name from session metadata (available without network).
-      //    Do NOT set assessEmail here — session.user.email can be transiently
-      //    empty right after signUp() before the JWT is fully persisted.
-      //    getUser() (running in parallel) will populate it reliably.
+      // 2. Pre-fill name and email from session metadata.
+      //    session.user.email can be transiently empty right after signUp() in
+      //    rare cases, but getUser() runs in parallel and will overwrite if needed.
+      //    Using session email here ensures the field is populated even when the
+      //    network getUser() call is slow or returns null email.
       const fullName = (u.user_metadata?.full_name || u.user_metadata?.name || "").trim();
       const idx = fullName.indexOf(" ");
       const authFirst = idx > 0 ? fullName.slice(0, idx) : fullName;
@@ -125,7 +126,7 @@ export default function Onboarding({ onComplete }: Props) {
       setState(s => ({
         ...defaults,
         ...savedState,
-        assessEmail:     s.assessEmail     || savedState.assessEmail || "",
+        assessEmail:     s.assessEmail     || savedState.assessEmail || u.email || "",
         assessFirstName: savedState.assessFirstName || authFirst,
         assessLastName:  savedState.assessLastName  || authLast,
       }));
