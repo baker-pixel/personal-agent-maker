@@ -26,6 +26,7 @@ import { useGoogleOAuthPopup } from "@/hooks/useGoogleOAuthPopup";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAgent } from "@/contexts/AgentContext";
+import { useAppState } from "@/contexts/AppStateContext";
 import { reloadAfterIntegrationChange } from "@/lib/integrationReload";
 
 interface AgentSettings {
@@ -74,6 +75,7 @@ const TABS: TabConfig[] = [
 export default function Settings() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { state: appState } = useAppState();
   const { agentName, setAgentName } = useAgent();
   const [settings, setSettings] = useState<AgentSettings>({ ...defaults, agentName });
   const [activeTab, setActiveTab] = useState<SettingsTab>("home");
@@ -95,7 +97,7 @@ export default function Settings() {
   const { connecting, connect } = useGoogleOAuthPopup();
   const { isConnected, integrations, removeAccount, refreshConnections } = useIntegrations();
   const { toast } = useToast();
-  const [userEmail, setUserEmail] = useState("");
+  const [userEmail, setUserEmail] = useState(appState.session?.user?.email ?? "");
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
@@ -140,8 +142,9 @@ export default function Settings() {
 
   useEffect(() => {
     const loadSettings = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) setUserEmail(user.email);
+      // Use session from AppStateContext — already validated, no extra network call.
+      // ProtectedRoute guarantees READY phase here, so session is never null.
+      const user = appState.session?.user ?? null;
 
       if (user) {
         // One query fetches all columns needed by this page AND VoicePersonalizationSection
@@ -177,11 +180,6 @@ export default function Settings() {
       }
     };
     loadSettings();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.email) setUserEmail(session.user.email);
-    });
-    return () => subscription.unsubscribe();
   }, []); // no deps — runs once on mount
 
   const handleChangePassword = async () => {
