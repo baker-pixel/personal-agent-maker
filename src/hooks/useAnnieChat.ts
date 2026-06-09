@@ -98,7 +98,11 @@ export function useAnnieChat(
     if (!enabled || skipInitialLoad) { setLoading(false); return; }
     let cancelled = false;
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        const { data } = await supabase.auth.refreshSession();
+        session = data.session;
+      }
       if (!session?.user || cancelled) { setLoading(false); return; }
 
       await fetchConversations();
@@ -149,8 +153,12 @@ export function useAnnieChat(
       setMessages((prev) => [...prev, userMsg]);
       setThinking(true);
 
-      // Single getSession call for the whole send flow
-      const { data: { session } } = await supabase.auth.getSession();
+      // Get session, refresh once if missing/expired
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        const { data } = await supabase.auth.refreshSession();
+        session = data.session;
+      }
 
       // Create conversation if needed
       if (!convIdRef.current) {
@@ -190,35 +198,58 @@ export function useAnnieChat(
 
       const controller = new AbortController();
       abortRef.current = controller;
-      // Hoisted outside try so finally can clearTimeout — keeping timer alive
-      // through stream read prevents stuck thinking state on Groq stalls.
-      const safetyTimer = setTimeout(() => controller.abort(), 60000);
+      // timerFired distinguishes our 60s timeout from a user-initiated abort (reset())
+      let timerFired = false;
+      const safetyTimer = setTimeout(() => {
+        timerFired = true;
+        controller.abort();
+      }, 60000);
 
       try {
-        const authHeaders: Record<string, string> = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        };
-
         const apiMessages = [...messages, userMsg].map((m) => ({
           role: m.role === "user" ? ("user" as const) : ("assistant" as const),
           content: m.text,
         }));
 
+        const reqBody = JSON.stringify({
+          messages: apiMessages,
+          agentName,
+          mode,
+          clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          clientNowIso: new Date().toISOString(),
+        });
+
+        const getToken = () =>
+          session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+        const doFetch = () =>
+          fetch(CHAT_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+            body: reqBody,
+            signal: controller.signal,
+          });
+
         if (convIdRef.current) setTurnConversationId(convIdRef.current);
         markStage("llm_start");
-        const resp = await fetch(CHAT_URL, {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({
-            messages: apiMessages,
-            agentName,
-            mode,
-            clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            clientNowIso: new Date().toISOString(),
-          }),
-          signal: controller.signal,
-        });
+        let resp = await doFetch();
+
+        // Auto-refresh session on 401 and retry once
+        if (resp.status === 401) {
+          const { data } = await supabase.auth.refreshSession();
+          if (data.session) session = data.session;
+          resp = await doFetch();
+        }
+
+        // Retry once on 503 — Supabase edge function cold start
+        if (resp.status === 503) {
+          await new Promise<void>((resolve) => {
+            const t = setTimeout(resolve, 4000);
+            controller.signal.addEventListener("abort", () => { clearTimeout(t); resolve(); });
+          });
+          if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
+          resp = await doFetch();
+        }
 
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({ error: "Request failed" }));
@@ -275,7 +306,15 @@ export function useAnnieChat(
           persistMessage(convIdRef.current, "assistant", assistantSoFar);
         }
       } catch (err: any) {
-        if (err?.name === "AbortError") return;
+        if (err?.name === "AbortError") {
+          // Timeout from our safetyTimer — show recoverable message so user knows to retry
+          if (timerFired) {
+            const msg = "Request timed out. Please try again.";
+            upsertAssistant(msg);
+            if (convIdRef.current) persistMessage(convIdRef.current, "assistant", msg);
+          }
+          return;
+        }
         console.error("Agent chat error:", err);
         const errorMsg = err?.message || "Something went wrong. Try again!";
         toast({ title: "Oops", description: errorMsg, variant: "destructive" });

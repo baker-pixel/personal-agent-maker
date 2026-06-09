@@ -463,6 +463,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
   return {
     conversationActive,
     isListening: speech.isListening,
+    isTranscribing: speech.isTranscribing,
     isSpeaking: tts.isSpeaking,
     isSupported: speech.isSupported,
     transcript: speech.transcript,

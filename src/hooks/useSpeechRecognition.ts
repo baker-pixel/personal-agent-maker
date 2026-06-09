@@ -82,6 +82,7 @@ export function useSpeechRecognition({
   const [isListening, setIsListening] = useState(false);
   const [isSpeechActive, setIsSpeechActive] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const onResultRef = useRef(onResult);
   const onEndRef = useRef(onEnd);
@@ -188,6 +189,7 @@ export function useSpeechRecognition({
       if (abortRef.current) abortRef.current.abort();
       const abort = new AbortController();
       abortRef.current = abort;
+      setIsTranscribing(true);
 
       try {
         const text = await transcribe(blob, langRef.current, abort.signal);
@@ -219,6 +221,7 @@ export function useSpeechRecognition({
         console.error("STT transcription error:", err);
         onErrorRef.current?.(err?.message ?? "network");
       } finally {
+        setIsTranscribing(false);
         if (!continuousRef.current) {
           stopListeningRef.current();
         } else if (isListeningRef.current && streamRef.current && !stoppingRef.current && recorderGenRef.current === myGen) {
@@ -373,5 +376,5 @@ export function useSpeechRecognition({
     };
   }, [clearTimers]);
 
-  return { isListening, isSpeechActive, transcript, startListening, stopListening, stopAndSubmit, toggleListening, isSupported };
+  return { isListening, isSpeechActive, transcript, isTranscribing, startListening, stopListening, stopAndSubmit, toggleListening, isSupported };
 }

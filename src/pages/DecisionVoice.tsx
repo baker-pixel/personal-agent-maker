@@ -337,7 +337,14 @@ export default function DecisionVoice() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder={voice.conversationActive ? "Or type instead…" : "Type a message…"}
+              placeholder={
+                voice.isTranscribing
+                  ? "Transcribing…"
+                  : voice.conversationActive
+                    ? "Or type instead…"
+                    : "Type a message…"
+              }
+              disabled={voice.isTranscribing}
               className={`flex-1 transition-all duration-300 ${voiceJustFilled ? "ring-2 ring-primary/60 border-primary/50 bg-primary/5" : ""}`}
             />
             <VoiceWaveform isActive={voice.isListening} />
@@ -345,6 +352,7 @@ export default function DecisionVoice() {
             {/* Mic / PTT button */}
             <button
               onClick={() => {
+                if (voice.isTranscribing) return;
                 if (!voice.isSupported && !voice.speechRecognitionBlockedByPwa) return;
 
                 // iOS PWA: TTS-only toggle
@@ -374,9 +382,11 @@ export default function DecisionVoice() {
                   voice.startRecordingTurn();
                 }
               }}
-              disabled={!voice.isSupported && !voice.speechRecognitionBlockedByPwa}
+              disabled={voice.isTranscribing || (!voice.isSupported && !voice.speechRecognitionBlockedByPwa)}
               title={
-                voice.speechRecognitionBlockedByPwa
+                voice.isTranscribing
+                  ? "Transcribing…"
+                  : voice.speechRecognitionBlockedByPwa
                   ? voice.conversationActive ? "Mute voice replies" : "Enable voice replies"
                   : !voice.isSupported
                     ? "Voice not supported — try Chrome, Edge, or Safari"
@@ -389,14 +399,21 @@ export default function DecisionVoice() {
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 flex-shrink-0 ${
                 !voice.isSupported && !voice.speechRecognitionBlockedByPwa
                   ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
-                  : voice.isListening
-                    ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/40 animate-pulse"
-                    : voice.conversationActive
-                      ? "bg-accent text-accent-foreground shadow-md shadow-accent/30"
-                      : "bg-accent text-accent-foreground shadow-md shadow-accent/20"
+                  : voice.isTranscribing
+                    ? "bg-accent text-accent-foreground opacity-70 cursor-wait"
+                    : voice.isListening
+                      ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/40 animate-pulse"
+                      : voice.conversationActive
+                        ? "bg-accent text-accent-foreground shadow-md shadow-accent/30"
+                        : "bg-accent text-accent-foreground shadow-md shadow-accent/20"
               }`}
             >
-              {voice.isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              {voice.isTranscribing
+                ? <Loader2 className="w-5 h-5 animate-spin" />
+                : voice.isListening
+                  ? <MicOff className="w-5 h-5" />
+                  : <Mic className="w-5 h-5" />
+              }
             </button>
 
             {input.trim() && (
