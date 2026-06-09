@@ -37,29 +37,15 @@ export const useGoogleOAuthPopup = () => {
     setConnecting(service);
 
     try {
-      // On mobile, popup windows are unreliable — window.open() returns a reference
-      // but window.close() often fails and BroadcastChannel doesn't cross tab contexts.
-      // Always use full-page redirect on mobile.
-      const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
       // isPopupFlow=true causes nylas-auth to encode "|popup" in the OAuth state
       // param. GoogleCallback reads this to detect popup mode even after COOP
       // headers from Google sever window.opener.
       const response = await supabase.functions.invoke("nylas-auth", {
-        body: { service, origin: window.location.origin, isPopupFlow: !isMobile },
+        body: { service, origin: window.location.origin, isPopupFlow: true },
       });
       if (response.error) throw response.error;
       const { url } = response.data;
       if (!url) throw new Error("No auth URL returned");
-
-      if (isMobile) {
-        // Full-page redirect — GoogleCallback handles return navigation via sessionStorage.
-        inFlightRef.current = null;
-        setConnecting(null);
-        sessionStorage.setItem("oauth-return-to", window.location.pathname + window.location.search);
-        window.location.href = url;
-        return;
-      }
 
       const wasPreviouslyConnected = integrationsRef.current.find(i => i.id === service)?.connected;
 
