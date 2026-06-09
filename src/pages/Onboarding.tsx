@@ -171,10 +171,13 @@ export default function Onboarding({ onComplete }: Props) {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Persist step + form data under the user-scoped key
+  // Persist step + form data under the user-scoped key.
+  // assessEmail is excluded — it comes from auth, not localStorage, so persisting
+  // a transiently-empty value would cause the email field to appear blank on reload.
   useEffect(() => {
     if (!storageKey) return;
-    localStorage.setItem(storageKey, JSON.stringify({ step, state }));
+    const { assessEmail: _skip, ...stateToSave } = state;
+    localStorage.setItem(storageKey, JSON.stringify({ step, state: stateToSave }));
   }, [step, state, storageKey]);
 
   // Auto-advance when IntegrationsContext confirms connected (live connection case)
@@ -282,7 +285,10 @@ export default function Onboarding({ onComplete }: Props) {
   const finish = async () => {
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // getSession reads from localStorage — no network hang risk unlike getUser().
+      // RLS on user_preferences enforces auth.uid() = user_id, so this is safe.
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) {
         toast({ title: "Session expired", description: "Please sign in again.", variant: "destructive" });
         navigate("/auth");
@@ -663,14 +669,15 @@ export default function Onboarding({ onComplete }: Props) {
                     {(() => {
                       const connected = gmailConnected || calendarConnected;
                       const connecting_ = connecting === "gmail";
+                      const checking = integrationsLoading;
                       return (
                         <button
-                          onClick={() => { if (!connected && !integrationsLoading) connect("gmail").catch(() => {}); }}
-                          disabled={connected || connecting_}
+                          onClick={() => { if (!connected && !checking && !connecting_) connect("gmail").catch(() => {}); }}
+                          disabled={connected || connecting_ || checking}
                           className={`w-full flex items-center gap-4 rounded-2xl px-5 py-4 border transition-all text-left ${
                             connected
                               ? "bg-green-500/5 border-green-500/20 cursor-default"
-                              : connecting_
+                              : checking || connecting_
                               ? "bg-card border-accent/30 opacity-80 cursor-wait"
                               : "bg-card border-border hover:border-accent/50 hover:bg-accent/[0.02] cursor-pointer active:scale-[0.99]"
                           }`}
@@ -680,13 +687,13 @@ export default function Onboarding({ onComplete }: Props) {
                           }`}>
                             {connected
                               ? <Check className="w-5 h-5 text-green-600" />
-                              : connecting_
+                              : checking || connecting_
                               ? <Loader2 className="w-5 h-5 text-accent animate-spin" />
                               : <Mail className="w-5 h-5 text-muted-foreground" />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-foreground">
-                              {connected ? "Google Account connected" : connecting_ ? "Connecting…" : "Connect Google Account (Gmail & Calendar)"}
+                              {connected ? "Google Account connected" : checking ? "Checking connection…" : connecting_ ? "Connecting…" : "Connect Google Account (Gmail & Calendar)"}
                             </p>
                             <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                               {connected ? "Gmail + Calendar access granted" : "Grants access to Gmail + Calendar in one step"}
