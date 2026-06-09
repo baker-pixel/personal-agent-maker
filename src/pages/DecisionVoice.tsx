@@ -84,8 +84,9 @@ export default function DecisionVoice() {
     onUserUtterance: (text) => {
       setInput(text);
       setVoiceJustFilled(true);
-      setTimeout(() => setVoiceJustFilled(false), 1500);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => setVoiceJustFilled(false), 2000);
+      // No auto-focus: prevents mobile keyboard from popping up and accidental
+      // Enter/Go key submission. User explicitly taps Send to confirm.
     },
     agentReply: pendingGreeting ?? (chat.thinking ? null : latestAgentReply),
     streamingText: pendingGreeting ? null : streamingAgentText,
@@ -301,24 +302,34 @@ export default function DecisionVoice() {
               <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full ${
                 voice.isSpeaking
                   ? "bg-primary/10 text-primary"
-                  : voice.isListening
-                    ? "bg-destructive/10 text-destructive"
-                    : chat.thinking
-                      ? "bg-muted text-muted-foreground"
-                      : "bg-muted text-muted-foreground"
+                  : voice.isTranscribing
+                    ? "bg-accent/10 text-accent"
+                    : voice.isListening
+                      ? "bg-destructive/10 text-destructive"
+                      : input.trim()
+                        ? "bg-accent/10 text-accent"
+                        : chat.thinking
+                          ? "bg-muted text-muted-foreground"
+                          : "bg-muted text-muted-foreground"
               }`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${
                   voice.isSpeaking ? "bg-primary animate-pulse" :
+                  voice.isTranscribing ? "bg-accent animate-pulse" :
                   voice.isListening ? "bg-destructive animate-pulse" :
+                  input.trim() ? "bg-accent" :
                   "bg-muted-foreground"
                 }`} />
                 {voice.isSpeaking
                   ? `${agentName} speaking…`
-                  : voice.isListening
-                    ? "Recording — tap mic to send"
-                    : chat.thinking
-                      ? "Thinking…"
-                      : "Tap mic to speak"}
+                  : voice.isTranscribing
+                    ? "Transcribing…"
+                    : voice.isListening
+                      ? "Recording — tap mic to stop"
+                      : chat.thinking
+                        ? "Thinking…"
+                        : input.trim()
+                          ? "Review your message, then tap Send →"
+                          : "Tap mic to speak"}
               </div>
               <button
                 onClick={() => voice.stopConversation()}
@@ -393,7 +404,7 @@ export default function DecisionVoice() {
                     : !voice.conversationActive
                       ? `Start a voice session with ${agentName}`
                       : voice.isListening
-                        ? "Tap to send your message"
+                        ? "Tap to stop recording"
                         : "Tap to speak"
               }
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 flex-shrink-0 ${
@@ -416,15 +427,18 @@ export default function DecisionVoice() {
               }
             </button>
 
-            {input.trim() && (
-              <button
-                onClick={handleSend}
-                disabled={chat.thinking}
-                className="w-11 h-11 rounded-xl bg-accent text-accent-foreground flex items-center justify-center hover:bg-accent/90 active:scale-95 transition-all disabled:opacity-40"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            )}
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || chat.thinking}
+              className={`w-11 h-11 rounded-xl flex items-center justify-center active:scale-95 transition-all ${
+                input.trim() && !chat.thinking
+                  ? "bg-accent text-accent-foreground hover:bg-accent/90 shadow-md shadow-accent/30"
+                  : "bg-muted text-muted-foreground opacity-40 cursor-not-allowed"
+              }`}
+              title={input.trim() ? "Send message" : "Speak or type a message first"}
+            >
+              <Send className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>

@@ -19,7 +19,8 @@ interface UseSpeechRecognitionOptions {
 
 interface SpeechRecognitionReturn {
   isListening: boolean;
-  isSpeechActive: boolean; // true the moment VAD detects speech onset; false after utterance submitted
+  isSpeechActive: boolean;
+  isTranscribing: boolean;
   transcript: string;
   startListening: () => void;
   stopListening: () => void;

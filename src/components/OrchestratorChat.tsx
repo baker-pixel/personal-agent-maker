@@ -88,8 +88,8 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
   const handleVoiceResult = useCallback((text: string) => {
     setInput((prev) => (prev ? prev + " " + text : text));
     setVoiceJustFilled(true);
-    setTimeout(() => setVoiceJustFilled(false), 1500);
-    setTimeout(() => inputRef.current?.focus(), 0);
+    setTimeout(() => setVoiceJustFilled(false), 2000);
+    // No auto-focus: prevents mobile keyboard from popping up and accidental submission.
   }, []);
 
   const { isListening, isSupported: voiceSupported, startListening, stopAndSubmit } = useVoiceInput(handleVoiceResult);

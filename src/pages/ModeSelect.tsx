@@ -25,6 +25,7 @@ export default function ModeSelect() {
   // Fix #4: only enable chat hook (and its DB queries) on first mic tap
   const [hookEnabled, setHookEnabled] = useState(false);
   const [textInput, setTextInput] = useState("");
+  const [voiceJustFilled, setVoiceJustFilled] = useState(false);
   const [pendingGreeting, setPendingGreeting] = useState<string | null>(null);
   const [hasGreeted, setHasGreeted] = useState(false);
   const autoStartedRef = useRef(false);
@@ -53,7 +54,9 @@ export default function ModeSelect() {
 
   const voice = useVoiceConversation({
     onUserUtterance: (text) => {
-      chat.send(text);
+      setTextInput(text);
+      setVoiceJustFilled(true);
+      setTimeout(() => setVoiceJustFilled(false), 2000);
     },
     agentReply: pendingGreeting ?? (chat.thinking ? null : latestAgentReply),
     thinking: chat.thinking,
@@ -118,8 +121,12 @@ export default function ModeSelect() {
 
   const statusLabel = voice.isSpeaking
     ? `${displayName} is speaking…`
+    : voice.isTranscribing
+    ? "Transcribing…"
     : voice.isListening
-    ? "Recording — tap mic to send"
+    ? "Recording — tap mic to stop"
+    : textInput.trim()
+    ? "Review your message, then tap Send →"
     : chat.thinking
     ? "Thinking…"
     : "Tap mic to speak";
@@ -312,8 +319,9 @@ export default function ModeSelect() {
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  placeholder="Or type instead…"
-                  className="flex-1"
+                  placeholder={voice.isTranscribing ? "Transcribing…" : "Or type instead…"}
+                  disabled={voice.isTranscribing}
+                  className={`flex-1 transition-all duration-300 ${voiceJustFilled ? "ring-2 ring-primary/60 border-primary/50 bg-primary/5" : ""}`}
                 />
                 <VoiceWaveform isActive={voice.isListening} />
                 {/* PTT mic button */}
@@ -325,7 +333,7 @@ export default function ModeSelect() {
                     else voice.startRecordingTurn();
                   }}
                   disabled={!voice.isSupported && !voice.speechRecognitionBlockedByPwa}
-                  title={voice.isListening ? "Tap to send" : "Tap to speak"}
+                  title={voice.isListening ? "Tap to stop recording" : "Tap to speak"}
                   className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 shrink-0 ${
                     voice.isListening
                       ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30 animate-pulse"
