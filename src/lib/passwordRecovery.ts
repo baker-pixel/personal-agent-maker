@@ -68,7 +68,9 @@ export const getPasswordRecoveryParams = (href = typeof window !== "undefined" ?
       type === "recovery" ||
       (Boolean(tokenHash) && type !== "signup") ||
       (Boolean(accessToken && refreshToken) && type !== "signup") ||
-      Boolean(errorDesc || errorCode) ||
+      // Only treat error params as recovery intent when already on the reset path —
+      // OAuth callbacks (/auth/google/callback) also return error params on failure.
+      (Boolean(errorDesc || errorCode) && isResetPath) ||
       Boolean(code && isResetPath),
   };
 };
@@ -156,6 +158,9 @@ export const hasStoredPasswordRecovery = () => loadStoredPasswordRecoveryParams(
 
 export const preparePasswordRecoveryUrlForManualHandling = () => {
   if (typeof window === "undefined") return null;
+  // OAuth callbacks (/auth/google/callback) also carry ?code= and ?error= params —
+  // never treat those as password-recovery signals.
+  if (window.location.pathname.startsWith("/auth/google/callback")) return null;
   const params = getPasswordRecoveryParams();
   if (!params.hasRecoveryIntent) return params;
   savePasswordRecoveryParams(params);
