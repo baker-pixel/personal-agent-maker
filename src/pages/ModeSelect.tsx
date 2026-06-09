@@ -2,7 +2,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, X, PhoneOff, Send, Loader2, MessageSquare } from "lucide-react";
+import { Mic, MicOff, X, Send, Loader2, MessageSquare } from "lucide-react";
 import { useAgent } from "@/contexts/AgentContext";
 import { useAnnieChat } from "@/hooks/useAnnieChat";
 import { useVoiceConversation } from "@/hooks/useVoiceConversation";
@@ -26,6 +26,8 @@ export default function ModeSelect() {
   const [hookEnabled, setHookEnabled] = useState(false);
   const [textInput, setTextInput] = useState("");
   const [pendingGreeting, setPendingGreeting] = useState<string | null>(null);
+  const [hasGreeted, setHasGreeted] = useState(false);
+  const autoStartedRef = useRef(false);
   const greetedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -55,16 +57,35 @@ export default function ModeSelect() {
     },
     agentReply: pendingGreeting ?? (chat.thinking ? null : latestAgentReply),
     thinking: chat.thinking,
+    pushToTalk: true,
   });
 
   useEffect(() => {
     if (voice.conversationActive && voice.prefsLoaded && !greetedRef.current && chat.messages.length === 0) {
       greetedRef.current = true;
+      setHasGreeted(true);
       setPendingGreeting(greeting);
       const t = setTimeout(() => setPendingGreeting(null), 500);
       return () => clearTimeout(t);
     }
   }, [voice.conversationActive, voice.prefsLoaded, greeting, chat.messages.length]);
+
+  // Auto-start recording once the greeting finishes playing (first turn only)
+  useEffect(() => {
+    if (
+      hasGreeted &&
+      voice.conversationActive &&
+      !voice.isSpeaking &&
+      !voice.isListening &&
+      !chat.thinking &&
+      chat.messages.length === 0 &&
+      !autoStartedRef.current
+    ) {
+      autoStartedRef.current = true;
+      voice.startRecordingTurn();
+    }
+    if (!voice.conversationActive) autoStartedRef.current = false;
+  }, [hasGreeted, voice.conversationActive, voice.isSpeaking, voice.isListening, chat.thinking, chat.messages.length]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -72,10 +93,12 @@ export default function ModeSelect() {
 
   const handleMicTap = () => {
     if (!hookEnabled) setHookEnabled(true);
-    chat.reset(); // always start with a clean slate
+    chat.reset();
     greetedRef.current = false;
+    setHasGreeted(false);
+    autoStartedRef.current = false;
     setVoiceOpen(true);
-    if (!voice.conversationActive) voice.toggleConversation();
+    if (!voice.conversationActive) voice.startConversation();
   };
 
   const handleClose = () => {
@@ -83,6 +106,8 @@ export default function ModeSelect() {
     setVoiceOpen(false);
     chat.reset();
     greetedRef.current = false;
+    setHasGreeted(false);
+    autoStartedRef.current = false;
   };
 
   const handleSend = () => {
@@ -94,10 +119,10 @@ export default function ModeSelect() {
   const statusLabel = voice.isSpeaking
     ? `${displayName} is speaking…`
     : voice.isListening
-    ? "Listening…"
+    ? "Recording — tap mic to send"
     : chat.thinking
     ? "Thinking…"
-    : "Ready";
+    : "Tap mic to speak";
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-5 pb-12" style={{ paddingTop: "var(--header-h, 56px)" }}>
@@ -209,12 +234,20 @@ export default function ModeSelect() {
                     {displayName.charAt(0)}
                   </motion.div>
                   <p className="font-display text-lg font-semibold text-foreground">
-                    {voice.isListening ? "Listening…" : voice.isSpeaking ? `${displayName} is speaking…` : "Ready — just talk"}
+                    {voice.isListening
+                      ? "Recording…"
+                      : voice.isSpeaking
+                        ? `${displayName} is speaking…`
+                        : chat.thinking
+                          ? "Thinking…"
+                          : "Tap mic to speak"}
                   </p>
                   <p className="text-sm text-muted-foreground max-w-xs">
                     {voice.speechRecognitionBlockedByPwa
                       ? "Mic unavailable in installed app — type below."
-                      : `Ask ${displayName} anything. Draft emails, schedule meetings, get answers.`}
+                      : voice.isListening
+                        ? `Tap mic again to send to ${displayName}.`
+                        : `Tap the mic, speak, then tap again to send.`}
                   </p>
                 </div>
               )}
@@ -262,29 +295,45 @@ export default function ModeSelect() {
                   Mic unavailable in installed app on iOS — type below. {displayName} will speak replies aloud.
                 </p>
               )}
+              {/* Status strip */}
+              {voice.conversationActive && (
+                <div className={`flex items-center gap-2 mb-2 px-1 text-xs font-medium ${
+                  voice.isListening ? "text-destructive" : voice.isSpeaking ? "text-primary" : "text-muted-foreground"
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    voice.isListening ? "bg-destructive animate-pulse" :
+                    voice.isSpeaking ? "bg-primary animate-pulse" : "bg-muted-foreground"
+                  }`} />
+                  {statusLabel}
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Input
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  placeholder={voice.conversationActive ? "Or type instead…" : "Type a message…"}
+                  placeholder="Or type instead…"
                   className="flex-1"
                 />
                 <VoiceWaveform isActive={voice.isListening} />
+                {/* PTT mic button */}
                 <button
                   onClick={() => {
                     if (voice.speechRecognitionBlockedByPwa) { voice.toggleConversation(); return; }
-                    if (voice.isSupported) voice.toggleConversation();
+                    if (!voice.isSupported) return;
+                    if (voice.isListening) voice.stopRecordingTurn();
+                    else voice.startRecordingTurn();
                   }}
                   disabled={!voice.isSupported && !voice.speechRecognitionBlockedByPwa}
+                  title={voice.isListening ? "Tap to send" : "Tap to speak"}
                   className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 shrink-0 ${
-                    voice.conversationActive
-                      ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30"
-                      : "text-accent-foreground shadow-md"
+                    voice.isListening
+                      ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30 animate-pulse"
+                      : "text-white shadow-lg"
                   }`}
-                  style={!voice.conversationActive ? { background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 32%))" } : {}}
+                  style={!voice.isListening ? { background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 32%))" } : {}}
                 >
-                  {voice.conversationActive ? <PhoneOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  {voice.isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                 </button>
                 {textInput.trim() && (
                   <button

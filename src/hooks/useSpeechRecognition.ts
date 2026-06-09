@@ -10,6 +10,11 @@ interface UseSpeechRecognitionOptions {
   continuous?: boolean;
   lang?: string;
   silenceTimeoutMs?: number;
+  /**
+   * Push-to-talk mode: recording accumulates until stopAndSubmit() is called explicitly.
+   * VAD still updates isSpeechActive for visual feedback but never auto-submits on silence.
+   */
+  pushToTalk?: boolean;
 }
 
 interface SpeechRecognitionReturn {
@@ -18,6 +23,8 @@ interface SpeechRecognitionReturn {
   transcript: string;
   startListening: () => void;
   stopListening: () => void;
+  /** PTT only: stop the recorder and submit accumulated audio to STT (does not discard). */
+  stopAndSubmit: () => void;
   toggleListening: () => void;
   isSupported: boolean;
 }
@@ -70,6 +77,7 @@ export function useSpeechRecognition({
   continuous = true,
   lang = "en-US",
   silenceTimeoutMs = 0,
+  pushToTalk = false,
 }: UseSpeechRecognitionOptions = {}): SpeechRecognitionReturn {
   const [isListening, setIsListening] = useState(false);
   const [isSpeechActive, setIsSpeechActive] = useState(false);
@@ -82,6 +90,7 @@ export function useSpeechRecognition({
   const langRef = useRef(lang);
   const silenceTimeoutMsRef = useRef(silenceTimeoutMs);
   const continuousRef = useRef(continuous);
+  const pushToTalkRef = useRef(pushToTalk);
   useEffect(() => { onResultRef.current = onResult; }, [onResult]);
   useEffect(() => { onEndRef.current = onEnd; }, [onEnd]);
   useEffect(() => { onSilenceTimeoutRef.current = onSilenceTimeout; }, [onSilenceTimeout]);
@@ -89,6 +98,7 @@ export function useSpeechRecognition({
   useEffect(() => { langRef.current = lang; }, [lang]);
   useEffect(() => { silenceTimeoutMsRef.current = silenceTimeoutMs; }, [silenceTimeoutMs]);
   useEffect(() => { continuousRef.current = continuous; }, [continuous]);
+  useEffect(() => { pushToTalkRef.current = pushToTalk; }, [pushToTalk]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -121,6 +131,8 @@ export function useSpeechRecognition({
   }, []);
 
   const armSilenceTimer = useCallback(() => {
+    // PTT: user controls start/stop — no idle silence timeout
+    if (pushToTalkRef.current) return;
     const ms = silenceTimeoutMsRef.current;
     if (!ms || ms <= 0) return;
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -218,6 +230,37 @@ export function useSpeechRecognition({
     mr.start();
   }, [armSilenceTimer]);
 
+  /**
+   * PTT stop: halts recording and lets onstop submit the audio to STT.
+   * Unlike stopListening(), this does NOT set stoppingRef or increment gen,
+   * so the onstop handler runs and calls onResult with the transcript.
+   */
+  const stopAndSubmit = useCallback(() => {
+    if (!isListeningRef.current) return;
+    clearTimers();
+    isListeningRef.current = false;
+    setIsListening(false);
+    setIsSpeechActive(false);
+    hasSpeechRef.current = false;
+    if (vadIntervalRef.current) { clearInterval(vadIntervalRef.current); vadIntervalRef.current = null; }
+    // stoppingRef stays false + gen stays same → onstop processes + transcribes the audio
+    const mr = mediaRecorderRef.current;
+    mediaRecorderRef.current = null;
+    if (mr && mr.state !== "inactive") {
+      try { mr.stop(); } catch { /* ignore */ }
+    }
+    if (audioCtxRef.current) {
+      try { audioCtxRef.current.close(); } catch { /* ignore */ }
+      audioCtxRef.current = null;
+      analyserRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setTranscript("");
+  }, [clearTimers]);
+
   const stopListening = useCallback(() => {
     stoppingRef.current = true;
     recorderGenRef.current++;   // invalidate all pending onstop handlers
@@ -295,7 +338,8 @@ export function useSpeechRecognition({
             hasSpeechRef.current = true;
             setIsSpeechActive(true);
           }
-        } else if (hasSpeechRef.current && !utteranceEndTimerRef.current) {
+        } else if (hasSpeechRef.current && !utteranceEndTimerRef.current && !pushToTalkRef.current) {
+          // VAD auto-submit on silence — disabled in PTT mode (user presses stop explicitly)
           utteranceEndTimerRef.current = setTimeout(() => {
             utteranceEndTimerRef.current = null;
             submitChunk();
@@ -329,5 +373,5 @@ export function useSpeechRecognition({
     };
   }, [clearTimers]);
 
-  return { isListening, isSpeechActive, transcript, startListening, stopListening, toggleListening, isSupported };
+  return { isListening, isSpeechActive, transcript, startListening, stopListening, stopAndSubmit, toggleListening, isSupported };
 }

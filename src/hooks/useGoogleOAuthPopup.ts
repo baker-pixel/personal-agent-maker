@@ -84,8 +84,11 @@ export const useGoogleOAuthPopup = () => {
           description: `Your ${label} account is now linked and ready to use.`,
         });
         if (service === "gmail") {
-          supabase.functions.invoke("email-triage",  { body: {} }).catch(() => {});
-          supabase.functions.invoke("contacts-sync", { body: {} }).catch(() => {});
+          // Delay 3s — Nylas grants take a moment to activate after OAuth callback
+          setTimeout(() => {
+            supabase.functions.invoke("email-triage",  { body: {} }).catch(() => {});
+            supabase.functions.invoke("contacts-sync", { body: {} }).catch(() => {});
+          }, 3000);
         }
       } else {
         // Poll expired before grant appeared — could mean the OAuth window is

@@ -43,6 +43,11 @@ async function fetchEmails(grantId: string, nylasApiKey: string, maxResults = 30
       err.code = "ACCOUNT_BLOCKED";
       throw err;
     }
+    if (listRes.status === 404 || listRes.status === 422 || listRes.status === 429) {
+      const err = new Error("Gmail connection is still initializing. Please try again in a moment.") as any;
+      err.code = "GRANT_INITIALIZING";
+      throw err;
+    }
     const errText = await listRes.text().catch(() => "");
     console.error("Nylas messages fetch failed:", listRes.status, errText);
     throw new Error(`Failed to fetch emails from Nylas (HTTP ${listRes.status})`);
@@ -222,7 +227,7 @@ Deno.serve(async (req) => {
         getUserTriagePrefs(user.id),
       ]);
     } catch (fetchError: any) {
-      if (fetchError.code === "RECONNECT_REQUIRED" || fetchError.code === "ACCOUNT_BLOCKED") {
+      if (fetchError.code === "RECONNECT_REQUIRED" || fetchError.code === "ACCOUNT_BLOCKED" || fetchError.code === "GRANT_INITIALIZING") {
         return new Response(
           JSON.stringify({ error: fetchError.message, code: fetchError.code }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -642,7 +647,7 @@ Use the suggest_triage tool to return your analysis.`
   } catch (error: any) {
     console.error("email-triage error:", error);
     const code = (error as any).code || "UNKNOWN";
-    const status = (code === "RECONNECT_REQUIRED" || code === "ACCOUNT_BLOCKED") ? 200 : code === "NOT_CONNECTED" ? 404 : 500;
+    const status = (code === "RECONNECT_REQUIRED" || code === "ACCOUNT_BLOCKED" || code === "GRANT_INITIALIZING") ? 200 : code === "NOT_CONNECTED" ? 404 : 500;
     return new Response(
       JSON.stringify({ error: error.message, code }),
       { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }

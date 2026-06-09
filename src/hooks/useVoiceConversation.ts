@@ -11,6 +11,11 @@ interface UseVoiceConversationOpts {
   thinking?: boolean;
   /** Live streaming text from the LLM while thinking=true. Hook speaks complete sentences immediately. */
   streamingText?: string | null;
+  /**
+   * Push-to-talk mode: mic never auto-starts or restarts. User explicitly calls
+   * startRecordingTurn() / stopRecordingTurn() to control each speaking turn.
+   */
+  pushToTalk?: boolean;
 }
 
 /** Extract sentences that end with .!? followed by whitespace from text[from..]. */
@@ -42,14 +47,16 @@ function extractCompleteSentences(text: string, from: number): { sentences: stri
  * - After TTS ends, restarts listening
  * - If user starts speaking while TTS is playing, cancels TTS (barge-in)
  */
-export function useVoiceConversation({ onUserUtterance, agentReply, thinking, streamingText }: UseVoiceConversationOpts) {
+export function useVoiceConversation({ onUserUtterance, agentReply, thinking, streamingText, pushToTalk = false }: UseVoiceConversationOpts) {
   const voicePrefs = useVoicePreferences();
   const [conversationActive, setConversationActive] = useState(false);
   const conversationActiveRef = useRef(false);
   const lastSpokenReplyRef = useRef<string | null>(null);
   const ensuredTtsAfterPrefsRef = useRef(false);
   const thinkingRef = useRef(!!thinking);
+  const pushToTalkRef = useRef(pushToTalk);
   useEffect(() => { thinkingRef.current = !!thinking; }, [thinking]);
+  useEffect(() => { pushToTalkRef.current = pushToTalk; }, [pushToTalk]);
   // Forward declare so onEnd can reference it
   const speechRef = useRef<ReturnType<typeof useSpeechRecognition> | null>(null);
 
@@ -145,13 +152,11 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     onUserUtteranceRef.current?.(buffered);
   };
 
-  // Use continuous mode so mobile Safari doesn't end recognition the moment
-  // it doesn't hear speech in the first ~1s. We rely on our PAUSE_MS buffer
-  // (in onResult) to decide when the user has finished a turn.
   const speech = useSpeechRecognition({
     continuous: true,
     lang: voicePrefs.prefs.stt_language || "en-US",
     silenceTimeoutMs: 5000,
+    pushToTalk,
     onSilenceTimeout: () => {
       if (!conversationActiveRef.current) return;
       // Don't interrupt if agent is already working or TTS is playing.
@@ -207,8 +212,8 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
       }
     },
     onEnd: () => {
-      // If conversation is active and we're idle, restart listening shortly.
-      // Use refs (not closure) so we read the *current* thinking/speaking state.
+      // PTT: user controls each turn manually — never auto-restart
+      if (pushToTalkRef.current) return;
       if (!conversationActiveRef.current) return;
       // Backoff if we're in an error storm: 250ms base, doubling up to 4s.
       const backoff = Math.min(250 * Math.pow(2, errorCountRef.current), 4000);
@@ -296,7 +301,8 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
       if (resumed) return;
       resumed = true;
       if (watchdogId) { clearTimeout(watchdogId); watchdogId = null; }
-      if (conversationActiveRef.current) {
+      // PTT: never auto-restart mic after TTS — user presses the button for next turn
+      if (conversationActiveRef.current && !pushToTalkRef.current) {
         setTimeout(() => {
           lastStartAttemptRef.current = Date.now();
           try { speechRef.current?.startListening(); } catch { /* ignore */ }
@@ -368,7 +374,8 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
   // and aborts the user mid-sentence ("stops before I can speak").
   // (lastStartAttemptRef is declared near the top of the hook)
   useEffect(() => {
-    if (!conversationActive) return;
+    // PTT: watchdog disabled — user manually controls each recording turn
+    if (!conversationActive || pushToTalk) return;
     if (speech.isListening || tts.isSpeaking || thinking) return;
     const id = setInterval(() => {
       if (
@@ -385,7 +392,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
       }
     }, 1200);
     return () => clearInterval(id);
-  }, [conversationActive, speech.isListening, tts.isSpeaking, thinking]);
+  }, [conversationActive, pushToTalk, speech.isListening, tts.isSpeaking, thinking]);
 
   const pwa = usePwaEnvironment();
 
@@ -404,19 +411,15 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     // Only attempt to start the mic if SpeechRecognition is actually supported.
     // On iOS PWA this API is missing entirely; TTS-only mode is the fallback.
     if (speech.isSupported) {
-      // Fire getUserMedia synchronously from the gesture handler to pre-warm mic
-      // permission state (iOS Safari won't show the SpeechRecognition prompt until
-      // getUserMedia has been called at least once from a gesture context).
-      // Fire-and-forget — we don't gate startListening on it because SpeechRecognition
-      // ALSO needs to be called from this same gesture context on iOS.
+      // Pre-warm mic permission from the gesture handler (required for iOS Safari).
       try {
         navigator.mediaDevices?.getUserMedia({ audio: true })
           .then((stream) => { stream.getTracks().forEach((t) => t.stop()); })
-          .catch(() => { /* user denied; SpeechRecognition will surface error */ });
+          .catch(() => { /* user denied; startRecordingTurn will surface the error */ });
       } catch { /* ignore — mediaDevices missing on old browsers */ }
-      // Start recognition synchronously while still in the gesture handler.
-      // Skip if TTS is already playing (greeting may have started) — resume() handles restart.
-      if (!ttsSpeakingRef.current) {
+
+      // PTT: don't auto-start mic — user explicitly presses the button each turn.
+      if (!pushToTalkRef.current && !ttsSpeakingRef.current) {
         lastStartAttemptRef.current = Date.now();
         try { speech.startListening(); } catch { /* ignore */ }
       }
@@ -437,6 +440,26 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     else startConversation();
   }, [conversationActive, startConversation, stopConversation]);
 
+  /** PTT: start recording the user's current speaking turn. Interrupts TTS if playing. */
+  const startRecordingTurn = useCallback(() => {
+    if (!conversationActiveRef.current) return;
+    // Interrupt agent speech (barge-in)
+    if (ttsSpeakingRef.current || ttsStreamBusyRef.current || ttsStreamQueueRef.current.length > 0) {
+      ttsStreamQueueRef.current = [];
+      ttsStreamBusyRef.current = false;
+      postDrainCallbackRef.current = null;
+      streamingSpokenUpToRef.current = 0;
+      try { ttsRef.current.stop(); } catch { /* ignore */ }
+    }
+    lastStartAttemptRef.current = Date.now();
+    try { speechRef.current?.startListening(); } catch { /* ignore */ }
+  }, []);
+
+  /** PTT: stop recording and submit the audio to STT → triggers onUserUtterance. */
+  const stopRecordingTurn = useCallback(() => {
+    try { speechRef.current?.stopAndSubmit(); } catch { /* ignore */ }
+  }, []);
+
   return {
     conversationActive,
     isListening: speech.isListening,
@@ -449,6 +472,8 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     startConversation,
     stopConversation,
     toggleConversation,
+    startRecordingTurn,
+    stopRecordingTurn,
     // Voice settings
     voices: tts.voices,
     voiceURI: tts.voiceURI,

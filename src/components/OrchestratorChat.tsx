@@ -90,15 +90,17 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
     pendingSendRef.current = true;
   }, []);
 
-  const { isListening, isSupported: voiceSupported, startListening, stopListening } = useVoiceInput(handleVoiceResult);
+  const { isListening, isSupported: voiceSupported, startListening, stopAndSubmit } = useVoiceInput(handleVoiceResult);
 
-  // Auto-send after voice input completes
+  // Auto-send after PTT: isListening goes false before transcription completes,
+  // so also watch input — when onResult fires and sets input, this re-runs and sends.
   useEffect(() => {
     if (!isListening && pendingSendRef.current && input.trim()) {
       pendingSendRef.current = false;
       handleSend();
     }
-  }, [isListening]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isListening, input]);
 
   const uploadAttachments = async (files: Attachment[]): Promise<any[]> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -353,13 +355,13 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
             <FileAttachmentButton onAdd={handleAddFiles} />
             {voiceSupported && (
               <button
-                onClick={isListening ? stopListening : startListening}
+                onClick={isListening ? stopAndSubmit : startListening}
                 className={`shrink-0 p-2.5 rounded-xl transition-all duration-200 ${
                   isListening
                     ? "text-destructive bg-destructive/10 animate-pulse"
                     : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/40"
                 }`}
-                title={isListening ? "Stop listening" : "Voice input"}
+                title={isListening ? "Tap to send" : "Tap to speak"}
                 type="button"
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}

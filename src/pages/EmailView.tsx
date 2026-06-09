@@ -275,6 +275,11 @@ export default function EmailView() {
           setGmailError({ type: "account_blocked", message: data.error });
           return;
         }
+        if (data?.code === "GRANT_INITIALIZING") {
+          // Grant still activating — silently retry after 5s
+          setTimeout(() => runTriage(), 5000);
+          return;
+        }
         throw new Error(data.error);
       }
       setLastSyncAt(new Date());

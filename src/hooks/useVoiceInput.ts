@@ -1,11 +1,12 @@
 import { useSpeechRecognition } from "./useSpeechRecognition";
 
 export function useVoiceInput(onResult: (text: string) => void) {
-  const { isListening, isSupported, startListening, stopListening } = useSpeechRecognition({
-    continuous: false,
-    silenceTimeoutMs: 5000,
+  const { isListening, isSupported, startListening, stopListening, stopAndSubmit } = useSpeechRecognition({
+    continuous: true,
+    pushToTalk: true,
+    silenceTimeoutMs: 0,
     onResult,
   });
 
-  return { isListening, isSupported, startListening, stopListening };
+  return { isListening, isSupported, startListening, stopListening, stopAndSubmit };
 }

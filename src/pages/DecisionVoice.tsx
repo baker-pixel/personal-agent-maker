@@ -23,6 +23,8 @@ export default function DecisionVoice() {
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [firstName, setFirstName] = useState<string>("");
+  const [hasGreeted, setHasGreeted] = useState(false);
+  const autoStartedRef = useRef(false);
   const greetedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -80,10 +82,10 @@ export default function DecisionVoice() {
     onUserUtterance: (text) => {
       chat.send(text);
     },
-    // Speak the greeting first; then defer to the live conversation thread
     agentReply: pendingGreeting ?? (chat.thinking ? null : latestAgentReply),
     streamingText: pendingGreeting ? null : streamingAgentText,
     thinking: chat.thinking,
+    pushToTalk: true,
   });
 
   // Once the conversation becomes active AND voice prefs are loaded, queue the
@@ -92,18 +94,30 @@ export default function DecisionVoice() {
   useEffect(() => {
     if (voice.conversationActive && voice.prefsLoaded && !greetedRef.current && chat.messages.length === 0) {
       greetedRef.current = true;
+      setHasGreeted(true);
       setPendingGreeting(greeting);
-      // Clear after a tick so subsequent agent replies still trigger TTS via latestAgentReply
       const t = setTimeout(() => setPendingGreeting(null), 500);
       return () => clearTimeout(t);
     }
   }, [voice.conversationActive, voice.prefsLoaded, greeting, chat.messages.length]);
 
-  // We deliberately do NOT auto-start on the first pointerdown anywhere on the
-  // page — on mobile that handler eats the user's tap on Back/menu/etc. and
-  // makes the page feel broken. The dedicated mic button (bottom-right) is the
-  // single, explicit entry point for starting voice. This guarantees the gesture
-  // context iOS needs to unlock SpeechSynthesis + Audio + getUserMedia.
+  // Auto-start recording once the greeting finishes (first turn only).
+  // Subsequent turns the user taps the mic manually.
+  useEffect(() => {
+    if (
+      hasGreeted &&
+      voice.conversationActive &&
+      !voice.isSpeaking &&
+      !voice.isListening &&
+      !chat.thinking &&
+      chat.messages.length === 0 &&
+      !autoStartedRef.current
+    ) {
+      autoStartedRef.current = true;
+      voice.startRecordingTurn();
+    }
+    if (!voice.conversationActive) autoStartedRef.current = false;
+  }, [hasGreeted, voice.conversationActive, voice.isSpeaking, voice.isListening, chat.thinking, chat.messages.length]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -171,7 +185,7 @@ export default function DecisionVoice() {
               onGroqVoiceChange={voice.setGroqVoiceId}
             />
             <button
-              onClick={() => { voice.stopConversation(); chat.reset(); }}
+              onClick={() => { voice.stopConversation(); chat.reset(); greetedRef.current = false; setHasGreeted(false); autoStartedRef.current = false; }}
               className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-accent/50"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -201,7 +215,7 @@ export default function DecisionVoice() {
               </div>
               <p className="font-display text-lg font-semibold text-foreground mb-1">Ready to chat</p>
               <p className="text-sm text-muted-foreground max-w-xs mb-6">
-                Tap the call button to start a hands-free conversation with {agentName}, or type below.
+                Tap the mic to start a voice session with {agentName}, or type below.
               </p>
               <p className="text-xs text-muted-foreground/70 max-w-xs">
                 Tip: on iPhone, set up "Hey Siri, talk to {agentName}" — see <a href="/normy-siri-shortcut.txt" target="_blank" rel="noreferrer" className="underline hover:text-foreground">setup guide</a>.
@@ -222,7 +236,9 @@ export default function DecisionVoice() {
                 {voice.isSpeaking ? `${agentName} is speaking…` : voice.isListening ? "Listening…" : "Ready"}
               </p>
               <p className="text-sm text-muted-foreground max-w-xs">
-                Just talk. {agentName} will reply out loud — you can interrupt anytime.
+                {voice.isListening
+                  ? `Tap mic to send — ${agentName} will reply out loud.`
+                  : `Tap mic to speak. ${agentName} will reply out loud.`}
               </p>
             </motion.div>
           )}
@@ -273,20 +289,43 @@ export default function DecisionVoice() {
               </div>
             </div>
           )}
+
+          {/* Status bar — only when conversation is active */}
           {voice.conversationActive && (
-            <div className="container max-w-lg flex items-center justify-center gap-2 pt-3 px-4">
+            <div className="container max-w-lg flex items-center justify-between gap-2 pt-3 px-4">
               <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full ${
                 voice.isSpeaking
                   ? "bg-primary/10 text-primary"
                   : voice.isListening
                     ? "bg-destructive/10 text-destructive"
-                    : "bg-muted text-muted-foreground"
+                    : chat.thinking
+                      ? "bg-muted text-muted-foreground"
+                      : "bg-muted text-muted-foreground"
               }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${voice.isSpeaking ? "bg-primary" : voice.isListening ? "bg-destructive animate-pulse" : "bg-muted-foreground"}`} />
-                {voice.isSpeaking ? `${agentName} speaking` : voice.isListening ? "Listening — interrupt anytime" : chat.thinking ? "Thinking…" : "Paused"}
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  voice.isSpeaking ? "bg-primary animate-pulse" :
+                  voice.isListening ? "bg-destructive animate-pulse" :
+                  "bg-muted-foreground"
+                }`} />
+                {voice.isSpeaking
+                  ? `${agentName} speaking…`
+                  : voice.isListening
+                    ? "Recording — tap mic to send"
+                    : chat.thinking
+                      ? "Thinking…"
+                      : "Tap mic to speak"}
               </div>
+              <button
+                onClick={() => voice.stopConversation()}
+                title="End voice session"
+                className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive transition-colors px-2 py-1.5 rounded-lg hover:bg-destructive/10"
+              >
+                <PhoneOff className="w-3.5 h-3.5" />
+                End
+              </button>
             </div>
           )}
+
           <div className="container max-w-lg flex items-center gap-2 py-3 px-4">
             <Input
               value={input}
@@ -296,41 +335,64 @@ export default function DecisionVoice() {
               className="flex-1"
             />
             <VoiceWaveform isActive={voice.isListening} />
+
+            {/* Mic / PTT button */}
             <button
               onClick={() => {
-                // Reset chat history when starting a new voice session
-                if (!voice.conversationActive) {
-                  chat.reset();
-                  greetedRef.current = false;
-                }
+                if (!voice.isSupported && !voice.speechRecognitionBlockedByPwa) return;
+
+                // iOS PWA: TTS-only toggle
                 if (voice.speechRecognitionBlockedByPwa) {
+                  if (!voice.conversationActive) {
+                    chat.reset();
+                    greetedRef.current = false;
+                  }
                   voice.toggleConversation();
                   return;
                 }
-                if (voice.isSupported) voice.toggleConversation();
+
+                if (!voice.conversationActive) {
+                  // Start session — greeting will play, then auto-starts recording
+                  chat.reset();
+                  greetedRef.current = false;
+                  setHasGreeted(false);
+                  autoStartedRef.current = false;
+                  voice.startConversation();
+                  return;
+                }
+
+                // PTT: toggle recording turn
+                if (voice.isListening) {
+                  voice.stopRecordingTurn();
+                } else {
+                  voice.startRecordingTurn();
+                }
               }}
               disabled={!voice.isSupported && !voice.speechRecognitionBlockedByPwa}
               title={
                 voice.speechRecognitionBlockedByPwa
-                  ? voice.conversationActive
-                    ? "Mute Normy's voice replies"
-                    : "Tap to enable Normy's voice replies (mic input not available in installed app on iOS)"
+                  ? voice.conversationActive ? "Mute voice replies" : "Enable voice replies"
                   : !voice.isSupported
-                    ? "Voice is not supported in this browser. Try Chrome, Edge, or Safari."
-                    : voice.conversationActive
-                      ? "End voice conversation"
-                      : `Start hands-free conversation with ${agentName}`
+                    ? "Voice not supported — try Chrome, Edge, or Safari"
+                    : !voice.conversationActive
+                      ? `Start a voice session with ${agentName}`
+                      : voice.isListening
+                        ? "Tap to send your message"
+                        : "Tap to speak"
               }
-              className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 ${
+              className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 flex-shrink-0 ${
                 !voice.isSupported && !voice.speechRecognitionBlockedByPwa
                   ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
-                  : voice.conversationActive
-                    ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30"
-                    : "bg-accent text-accent-foreground shadow-md shadow-accent/20"
+                  : voice.isListening
+                    ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/40 animate-pulse"
+                    : voice.conversationActive
+                      ? "bg-accent text-accent-foreground shadow-md shadow-accent/30"
+                      : "bg-accent text-accent-foreground shadow-md shadow-accent/20"
               }`}
             >
-              {voice.conversationActive ? <PhoneOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              {voice.isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
+
             {input.trim() && (
               <button
                 onClick={handleSend}
