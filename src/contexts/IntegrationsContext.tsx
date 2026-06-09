@@ -17,7 +17,7 @@ interface IntegrationsContextType {
   integrations: Integration[];
   toggleConnection: (id: string) => void;
   isConnected: (id: string) => boolean;
-  refreshConnections: () => Promise<{ googleConnected: boolean }>;
+  refreshConnections: () => Promise<{ gmailConnected: boolean; calendarConnected: boolean }>;
   removeAccount: (provider: string, email: string) => Promise<void>;
   /** True while the integration list is being re-fetched from the server. */
   refreshing: boolean;
@@ -115,7 +115,7 @@ const IntegrationsContext = createContext<IntegrationsContextType>({
   integrations: defaultIntegrations,
   toggleConnection: () => {},
   isConnected: () => false,
-  refreshConnections: async () => ({ googleConnected: false }),
+  refreshConnections: async () => ({ gmailConnected: false, calendarConnected: false }),
   removeAccount: async () => {},
   refreshing: false,
   integrationsLoading: true,
@@ -130,11 +130,11 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [integrationsLoading, setIntegrationsLoading] = useState(true);
   const [tokensError, setTokensError] = useState<string | null>(null);
 
-  const fetchConnected = useCallback(async (): Promise<{ googleConnected: boolean }> => {
+  const fetchConnected = useCallback(async (): Promise<{ gmailConnected: boolean; calendarConnected: boolean }> => {
     setRefreshing(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return { googleConnected: false };
+      if (!session) return { gmailConnected: false, calendarConnected: false };
 
       const { data: grants, error: grantsQueryError } = await supabase
         .from("nylas_grants")
@@ -143,7 +143,7 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (grantsQueryError) {
         console.error("Failed to load nylas_grants:", grantsQueryError);
         setTokensError(grantsQueryError.message ?? "Failed to load integrations");
-        return { googleConnected: false };
+        return { gmailConnected: false, calendarConnected: false };
       }
       setTokensError(null);
 
@@ -155,14 +155,15 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
       }
 
+      const isConnected = googleEmails.length > 0;
       setIntegrations((prev) =>
         prev.map((i) => {
           if (i.id !== "gmail" && i.id !== "google-calendar") return i;
-          return { ...i, connected: googleEmails.length > 0, connectedAccounts: googleEmails };
+          return { ...i, connected: isConnected, connectedAccounts: googleEmails };
         })
       );
 
-      return { googleConnected: googleEmails.length > 0 };
+      return { gmailConnected: isConnected, calendarConnected: isConnected };
     } finally {
       setRefreshing(false);
       setIntegrationsLoading(false);
