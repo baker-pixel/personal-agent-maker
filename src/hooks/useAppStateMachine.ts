@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useRef, useCallback } from "react";
+import { useReducer, useEffect, useRef, useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   appStateReducer,
@@ -6,14 +6,31 @@ import {
   type IntegrationState,
   type ProfileState,
 } from "@/lib/appStateMachine";
+import {
+  getPasswordRecoveryParams,
+  hasStoredPasswordRecovery,
+} from "@/lib/passwordRecovery";
 
 const PROFILE_TIMEOUT_MS = 1500;
 
 export function useAppStateMachine() {
   const [state, dispatch] = useReducer(appStateReducer, INITIAL_STATE);
 
+  // isRecovery is computed once on mount (lazy useState), then the
+  // PASSWORD_RECOVERY auth event can flip it true as a fallback for
+  // implicit-flow recovery links where Supabase clears the URL hash
+  // before getPasswordRecoveryParams() would read it.
+  const [isRecovery, setIsRecovery] = useState(() => {
+    if (typeof window === "undefined") return false;
+    if (window.location.pathname === "/auth/google/callback") return false;
+    return (
+      getPasswordRecoveryParams().hasRecoveryIntent ||
+      hasStoredPasswordRecovery()
+    );
+  });
+
   // Track which userId profile has been fetched for.
-  // Prevents duplicate fetches from INITIAL_SESSION + getSession() or TOKEN_REFRESHED.
+  // Prevents duplicate fetches from INITIAL_SESSION + TOKEN_REFRESHED.
   const profileFetchedForRef = useRef<string | null>(null);
 
   // ── Integrations ────────────────────────────────────────────────────────────
@@ -172,6 +189,19 @@ export function useAppStateMachine() {
           }
           break;
 
+        case "PASSWORD_RECOVERY":
+          // Fallback for implicit-flow recovery links where Supabase clears
+          // the URL hash before the computed isRecovery value would see it.
+          setIsRecovery(true);
+          if (session) {
+            // Set session + immediately skip hydration — profile isn't needed
+            // for the reset-password page. Both dispatches are batched by React
+            // into one render so no spinner flash occurs.
+            dispatch({ type: "AUTH_RESOLVED", session });
+            dispatch({ type: "PROFILE_FAILED" });
+          }
+          break;
+
         default:
           break;
       }
@@ -180,5 +210,5 @@ export function useAppStateMachine() {
     return () => subscription.unsubscribe();
   }, [fetchProfile, fetchIntegrations]);
 
-  return { state, fetchIntegrations, markOnboardingComplete };
+  return { state, fetchIntegrations, markOnboardingComplete, isRecovery };
 }

@@ -9,7 +9,6 @@ import { AppStateContext } from "@/contexts/AppStateContext";
 import { IntegrationsProvider } from "@/contexts/IntegrationsContext";
 import { AgentProvider } from "@/contexts/AgentContext";
 import { useAppStateMachine } from "@/hooks/useAppStateMachine";
-import { getPasswordRecoveryParams, hasStoredPasswordRecovery } from "@/lib/passwordRecovery";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
@@ -55,20 +54,19 @@ const Spinner = () => (
 );
 
 // ── Protected route ────────────────────────────────────────────────────────────
-// Renders children only when authenticated + onboarded.
-// isOnboarded null = still hydrating; false = redirect to onboarding; true = allow.
+// Only reached when !booting (phase is UNAUTHENTICATED, ONBOARDING, READY, or ERROR).
+// HYDRATING is blocked by the spinner in App, so isOnboarded is never null here.
 const ProtectedRoute = ({
   authenticated,
   isOnboarded,
   children,
 }: {
   authenticated: boolean;
-  isOnboarded: boolean | null;
+  isOnboarded: boolean;
   children: React.ReactNode;
 }) => {
   if (!authenticated) return <Navigate to="/auth" replace />;
-  if (isOnboarded === false) return <Navigate to="/onboarding" replace />;
-  // null = hydrating — show header + page optimistically; routing will correct if needed.
+  if (!isOnboarded) return <Navigate to="/onboarding" replace />;
   return (
     <>
       <AppHeader />
@@ -79,22 +77,13 @@ const ProtectedRoute = ({
 
 // ── App root ───────────────────────────────────────────────────────────────────
 const App = () => {
-  const { state, fetchIntegrations, markOnboardingComplete } = useAppStateMachine();
-
-  const isRecovery =
-    typeof window !== "undefined" &&
-    window.location.pathname !== "/auth/google/callback" &&
-    (getPasswordRecoveryParams().hasRecoveryIntent || hasStoredPasswordRecovery());
+  const { state, fetchIntegrations, markOnboardingComplete, isRecovery } = useAppStateMachine();
 
   const authenticated = !!state.session;
 
-  // isOnboarded: null while hydrating (don't redirect), false = needs onboarding, true = done.
-  // During password recovery we skip this check entirely.
-  let isOnboarded: boolean | null = null;
-  if (state.phase === "READY") isOnboarded = true;
-  if (state.phase === "ONBOARDING") isOnboarded = false;
-  if (state.phase === "UNAUTHENTICATED") isOnboarded = null;
-  // HYDRATING → null (protected routes render optimistically, no redirect yet)
+  // isOnboarded is only read when !booting (phase is READY, ONBOARDING, or UNAUTHENTICATED).
+  // HYDRATING is blocked by the spinner below, so this is always a definite boolean.
+  const isOnboarded = state.phase === "READY";
 
   // Block on BOOTING and HYDRATING.
   // HYDRATING is brief (< 200ms for a live session, 1.5s worst-case timeout).
@@ -193,7 +182,7 @@ const App = () => {
                       <Route path="/beta-crm" element={<ProtectedRoute authenticated={authenticated} isOnboarded={isOnboarded}><BetaCrm /></ProtectedRoute>} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
-                    {authenticated && isOnboarded === true && <InstallBanner />}
+                    {authenticated && isOnboarded && <InstallBanner />}
                   </BrowserRouter>
                 )}
               </AgentProvider>

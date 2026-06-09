@@ -84,10 +84,16 @@ export default function Onboarding({ onComplete }: Props) {
   const calendarConnected = !integrationsLoading && integrations.find(i => i.id === "google-calendar")?.connected;
 
   useEffect(() => {
-    // getSession reads from localStorage — fast, no network
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Fire both in parallel — getSession is fast (localStorage cache) and sets up
+    // storageKey + name fields; getUser is a network call but is the authoritative
+    // email source. Running them concurrently means email resolves as soon as the
+    // network responds, not after getSession completes first.
+    const sessionPromise = supabase.auth.getSession();
+    const userPromise    = supabase.auth.getUser(); // starts NOW, not after getSession
+
+    sessionPromise.then(({ data: { session } }) => {
       if (!session?.user) return;
-      const u = session.user;
+      const u   = session.user;
       const key = `onboarding_progress_${u.id}`;
       setStorageKey(key);
 
@@ -105,69 +111,73 @@ export default function Onboarding({ onComplete }: Props) {
         } catch { /* ignore */ }
       }
 
-      // 2. Pre-fill assessment fields from auth — only if not already saved
-      const authEmail = u.email ?? u.user_metadata?.email ?? "";
+      // 2. Pre-fill name from session metadata (available without network).
+      //    Do NOT set assessEmail here — session.user.email can be transiently
+      //    empty right after signUp() before the JWT is fully persisted.
+      //    getUser() (running in parallel) will populate it reliably.
       const fullName = (u.user_metadata?.full_name || u.user_metadata?.name || "").trim();
       const idx = fullName.indexOf(" ");
       const authFirst = idx > 0 ? fullName.slice(0, idx) : fullName;
       const authLast  = idx > 0 ? fullName.slice(idx + 1) : "";
 
-      setState({
+      // Functional updater: if userPromise already resolved and set assessEmail,
+      // preserve it instead of overwriting with a potentially empty session email.
+      setState(s => ({
         ...defaults,
         ...savedState,
-        assessEmail:     savedState.assessEmail     || authEmail,
+        assessEmail:     s.assessEmail     || savedState.assessEmail || "",
         assessFirstName: savedState.assessFirstName || authFirst,
         assessLastName:  savedState.assessLastName  || authLast,
-      });
+      }));
       if (savedStep > 0) setStep(savedStep);
+    });
 
-      // 3. Security check (getUser = server-side JWT verify) + DB prefs
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (!user) {
-          toast({ title: "Session expired", description: "Please sign in again.", variant: "destructive" });
-          supabase.auth.signOut();
-          return;
-        }
-        // Fill email immediately from server-verified user — don't wait for DB query
-        if (user.email) setState(s => ({ ...s, assessEmail: s.assessEmail || user.email }));
-        supabase
-          .from("user_preferences")
-          .select("onboarding_completed, assessment_status, user_display_name, onboarding_step, agent_name, tone, email_length, priority_visibility, decision_style, tts_elevenlabs_voice_id")
-          .eq("user_id", user.id)
-          .maybeSingle()
-          .then(({ data }) => {
-            if (data?.onboarding_completed) {
-              localStorage.removeItem(key);
-              onComplete?.();
-              return;
-            }
-            if (data?.assessment_status === "success") setAssessmentDone(true);
+    // 3. Security check + authoritative email + DB prefs — all from getUser()
+    userPromise.then(({ data: { user } }) => {
+      if (!user) {
+        toast({ title: "Session expired", description: "Please sign in again.", variant: "destructive" });
+        supabase.auth.signOut();
+        return;
+      }
 
-            // DB step as floor — never go backwards from what was saved
-            const dbStep = data?.onboarding_step ?? 0;
-            if (resumeStep === 0 && dbStep > 0) setStep(s => Math.max(s, dbStep));
+      // Set email immediately — this may fire before or after sessionPromise.then(),
+      // but the functional updater above and here both use `s.assessEmail ||`
+      // so whichever fires second wins only if the first left it empty.
+      if (user.email) setState(s => ({ ...s, assessEmail: s.assessEmail || user.email }));
 
-            // Fill DB values as fallback for fields not yet in localStorage.
-            // assessEmail: fall back to server-verified user email in case
-            // session.user.email was transiently empty during token refresh.
-            setState(s => {
-              const dbName = (data?.user_display_name || "").trim();
-              const di = dbName.indexOf(" ");
-              return {
-                ...s,
-                assessEmail:      s.assessEmail      || user.email || "",
-                agentName:        s.agentName        || data?.agent_name || "",
-                voiceId:          s.voiceId          || data?.tts_elevenlabs_voice_id || DEFAULT_GROQ_VOICE,
-                tone:             s.tone             || data?.tone              || "friendly",
-                emailLength:      s.emailLength      || data?.email_length      || "balanced",
-                priorityVisibility: s.priorityVisibility || data?.priority_visibility || "important",
-                decisionStyle:    s.decisionStyle    || data?.decision_style    || "careful",
-                assessFirstName:  s.assessFirstName  || (di > 0 ? dbName.slice(0, di) : dbName),
-                assessLastName:   s.assessLastName   || (di > 0 ? dbName.slice(di + 1) : ""),
-              };
-            });
+      supabase
+        .from("user_preferences")
+        .select("onboarding_completed, assessment_status, user_display_name, onboarding_step, agent_name, tone, email_length, priority_visibility, decision_style, tts_elevenlabs_voice_id")
+        .eq("user_id", user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.onboarding_completed) {
+            localStorage.removeItem(`onboarding_progress_${user.id}`);
+            onComplete?.();
+            return;
+          }
+          if (data?.assessment_status === "success") setAssessmentDone(true);
+
+          const dbStep = data?.onboarding_step ?? 0;
+          if (resumeStep === 0 && dbStep > 0) setStep(s => Math.max(s, dbStep));
+
+          setState(s => {
+            const dbName = (data?.user_display_name || "").trim();
+            const di = dbName.indexOf(" ");
+            return {
+              ...s,
+              assessEmail:        s.assessEmail        || user.email || "",
+              agentName:          s.agentName          || data?.agent_name || "",
+              voiceId:            s.voiceId            || data?.tts_elevenlabs_voice_id || DEFAULT_GROQ_VOICE,
+              tone:               s.tone               || data?.tone               || "friendly",
+              emailLength:        s.emailLength        || data?.email_length       || "balanced",
+              priorityVisibility: s.priorityVisibility || data?.priority_visibility || "important",
+              decisionStyle:      s.decisionStyle      || data?.decision_style     || "careful",
+              assessFirstName:    s.assessFirstName    || (di > 0 ? dbName.slice(0, di) : dbName),
+              assessLastName:     s.assessLastName     || (di > 0 ? dbName.slice(di + 1) : ""),
+            };
           });
-      });
+        });
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
