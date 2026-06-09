@@ -136,6 +136,7 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
   const handleSend = async (overrideText?: string) => {
     const text = (overrideText || input).trim();
     if (!text || isLoading) return;
+    tts.unlockAudio();
 
     const uploadedFiles = await uploadAttachments(attachments);
     const userMsg: Message = { role: "user", content: text, attachments: uploadedFiles.length > 0 ? uploadedFiles : undefined };
