@@ -202,7 +202,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
           onboarding_step: 5,
           onboarding_completed: true,
           updated_at: new Date().toISOString(),
-        }, { onConflict: "user_id" }).catch(() => {});
+        }, { onConflict: "user_id" }).then(() => {}, () => {});
       });
       setDir(1);
       setStep(5);
@@ -242,7 +242,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
               onboarding_step: 5,
               onboarding_completed: true,
               updated_at: new Date().toISOString(),
-            }, { onConflict: "user_id" }).catch(() => {});
+            }, { onConflict: "user_id" }).then(() => {}, () => {});
             setDir(1);
             setStep(5);
           }
@@ -277,7 +277,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
         updates.priority_visibility = currentState.priorityVisibility;
         updates.decision_style = currentState.decisionStyle;
       }
-      await supabase.from("user_preferences").upsert(updates, { onConflict: "user_id" });
+      await supabase.from("user_preferences").upsert(updates as any, { onConflict: "user_id" });
     } catch (err) {
       console.warn("[Onboarding] saveStepToDB failed:", err);
     }

@@ -40,7 +40,7 @@ async function getOrCreateSubscription(): Promise<PushSubscription | null> {
     if (existing) return existing;
     return await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
     });
   } catch (e) {
     console.warn("PushManager.subscribe failed:", e);

@@ -24,7 +24,6 @@ export function UpdatePrompt() {
 
   useEffect(() => {
     if (!needRefresh) return;
-
     toast("Update available", {
       description: "A new version of Normy is ready.",
       duration: Infinity,
@@ -35,8 +34,9 @@ export function UpdatePrompt() {
       icon: <RefreshCw className="w-4 h-4" />,
       id: "pwa-update",
     });
-
-    return () => toast.dismiss("pwa-update");
+    return () => {
+      toast.dismiss("pwa-update");
+    };
   }, [needRefresh, updateServiceWorker]);
 
   return null;
