@@ -1,5 +1,5 @@
 import { forwardRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { PASSWORD_RESET_REDIRECT_URL } from "@/lib/passwordRecovery";
@@ -11,7 +11,10 @@ import normyLogo from "@/assets/normy-logo.png";
 
 const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">(
+    searchParams.get("mode") === "signup" ? "signup" : "login"
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
