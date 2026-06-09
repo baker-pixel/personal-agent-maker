@@ -1,6 +1,14 @@
 // @ts-nocheck
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+} from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAppState } from "@/contexts/AppStateContext";
 
 export interface Integration {
   id: string;
@@ -17,21 +25,22 @@ interface IntegrationsContextType {
   integrations: Integration[];
   toggleConnection: (id: string) => void;
   isConnected: (id: string) => boolean;
-  refreshConnections: () => Promise<{ gmailConnected: boolean; calendarConnected: boolean }>;
+  refreshConnections: () => Promise<{
+    gmailConnected: boolean;
+    calendarConnected: boolean;
+  }>;
   removeAccount: (provider: string, email: string) => Promise<void>;
-  /** True while the integration list is being re-fetched from the server. */
   refreshing: boolean;
-  /** True until the very first fetchConnected completes — prevents flash of "not connected". */
   integrationsLoading: boolean;
-  /** Error from the most recent token metadata fetch, if any. */
   tokensError: string | null;
 }
 
-const defaultIntegrations: Integration[] = [
+const BASE_INTEGRATIONS: Integration[] = [
   {
     id: "gmail",
     name: "Gmail",
-    description: "Read, categorize, and draft email replies. Triage your inbox automatically.",
+    description:
+      "Read, categorize, and draft email replies. Triage your inbox automatically.",
     icon: "mail",
     connected: false,
     connectedAccounts: [],
@@ -52,7 +61,8 @@ const defaultIntegrations: Integration[] = [
   {
     id: "google-calendar",
     name: "Google Calendar",
-    description: "Manage scheduling, detect conflicts, and optimize your calendar.",
+    description:
+      "Manage scheduling, detect conflicts, and optimize your calendar.",
     icon: "calendar",
     connected: false,
     connectedAccounts: [],
@@ -93,7 +103,8 @@ const defaultIntegrations: Integration[] = [
   {
     id: "slack",
     name: "Slack",
-    description: "Monitor channels, surface action items, and draft responses.",
+    description:
+      "Monitor channels, surface action items, and draft responses.",
     icon: "message",
     connected: false,
     connectedAccounts: [],
@@ -112,10 +123,13 @@ const defaultIntegrations: Integration[] = [
 ];
 
 const IntegrationsContext = createContext<IntegrationsContextType>({
-  integrations: defaultIntegrations,
+  integrations: BASE_INTEGRATIONS,
   toggleConnection: () => {},
   isConnected: () => false,
-  refreshConnections: async () => ({ gmailConnected: false, calendarConnected: false }),
+  refreshConnections: async () => ({
+    gmailConnected: false,
+    calendarConnected: false,
+  }),
   removeAccount: async () => {},
   refreshing: false,
   integrationsLoading: true,
@@ -124,141 +138,98 @@ const IntegrationsContext = createContext<IntegrationsContextType>({
 
 export const useIntegrations = () => useContext(IntegrationsContext);
 
-export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [integrations, setIntegrations] = useState<Integration[]>(defaultIntegrations);
+export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const { state, fetchIntegrations } = useAppState();
   const [refreshing, setRefreshing] = useState(false);
-  const [integrationsLoading, setIntegrationsLoading] = useState(true);
   const [tokensError, setTokensError] = useState<string | null>(null);
 
-  const fetchConnected = useCallback(async (): Promise<{ gmailConnected: boolean; calendarConnected: boolean }> => {
+  // integrationsLoading is true until we have our first data from the machine.
+  // Machine starts with HYDRATING; once it transitions out, profile+integrations are set.
+  const integrationsLoading = state.phase === "BOOTING" || state.phase === "HYDRATING";
+
+  // Map machine integration state onto the full Integration[] shape expected by consumers.
+  const integrations = useMemo<Integration[]>(() => {
+    const { gmailConnected, connectedEmails } = state.integrations;
+    return BASE_INTEGRATIONS.map((i) => {
+      if (i.id === "gmail" || i.id === "google-calendar") {
+        return {
+          ...i,
+          connected: gmailConnected,
+          connectedAccounts: connectedEmails,
+        };
+      }
+      return i;
+    });
+  }, [state.integrations]);
+
+  // Wrap fetchIntegrations so callsites get the legacy return shape.
+  const refreshConnections = useCallback(async () => {
     setRefreshing(true);
+    setTokensError(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return { gmailConnected: false, calendarConnected: false };
-
-      const { data: grants, error: grantsQueryError } = await supabase
-        .from("nylas_grants")
-        .select("email, provider");
-
-      if (grantsQueryError) {
-        console.error("Failed to load nylas_grants:", grantsQueryError);
-        setTokensError(grantsQueryError.message ?? "Failed to load integrations");
-        return { gmailConnected: false, calendarConnected: false };
-      }
-      setTokensError(null);
-
-      // One Nylas Google grant covers both Gmail and Calendar.
-      const googleEmails: string[] = [];
-      for (const g of grants ?? []) {
-        if (g.provider === "google" && g.email && !googleEmails.includes(g.email)) {
-          googleEmails.push(g.email);
-        }
-      }
-
-      const isConnected = googleEmails.length > 0;
-      setIntegrations((prev) =>
-        prev.map((i) => {
-          if (i.id !== "gmail" && i.id !== "google-calendar") return i;
-          return { ...i, connected: isConnected, connectedAccounts: googleEmails };
-        })
-      );
-
-      return { gmailConnected: isConnected, calendarConnected: isConnected };
+      const result = await fetchIntegrations();
+      return {
+        gmailConnected: result.gmailConnected,
+        calendarConnected: result.calendarConnected,
+      };
+    } catch (err: any) {
+      setTokensError(err?.message ?? "Failed to load integrations");
+      return { gmailConnected: false, calendarConnected: false };
     } finally {
       setRefreshing(false);
-      setIntegrationsLoading(false);
     }
-  }, []);
+  }, [fetchIntegrations]);
 
+  // Re-sync on tab focus / visibility — eventual consistency for OAuth completions.
   useEffect(() => {
-    // Initial sync on mount / page load — guarantees the UI reflects the
-    // server's authoritative integration state without any manual refresh.
-    fetchConnected();
-
-    // Re-sync on every relevant auth lifecycle event so OAuth completions
-    // and re-hydrated sessions immediately flip integration status.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
-        fetchConnected();
-      } else if (event === "SIGNED_OUT") {
-        // Clear connected state immediately on sign-out so a subsequent
-        // sign-in starts from a clean, unsynced UI before re-fetching.
-        setIntegrations((prev) =>
-          prev.map((i) =>
-            i.id === "gmail" || i.id === "google-calendar"
-              ? { ...i, connected: false, connectedAccounts: [] }
-              : i
-          )
-        );
-      }
-    });
-
-    // Re-sync whenever the tab regains focus or becomes visible — covers the
-    // case where an OAuth popup completes in another window/tab, or the user
-    // returns to the app after a disconnect elsewhere.
-    // Debounced to avoid rapid consecutive fetches on quick tab switches.
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const debouncedFetch = () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => fetchConnected(), 500);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const debounced = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => refreshConnections(), 500);
     };
-    const onFocus = () => { debouncedFetch(); };
+    const onFocus = () => debounced();
     const onVisibility = () => {
-      if (document.visibilityState === "visible") debouncedFetch();
+      if (document.visibilityState === "visible") debounced();
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
-
     return () => {
-      subscription.unsubscribe();
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibility);
-      if (debounceTimer) clearTimeout(debounceTimer);
+      if (timer) clearTimeout(timer);
     };
-  }, [fetchConnected]);
+  }, [refreshConnections]);
 
   const toggleConnection = useCallback((id: string) => {
-    setIntegrations((prev) =>
-      prev.map((i) => {
-        if (i.id !== id) return i;
-        const nowConnected = !i.connected;
-        return {
-          ...i,
-          connected: nowConnected,
-          connectedAccounts: nowConnected ? i.connectedAccounts : [],
-        };
-      })
-    );
+    // Kept for backward compat — real state lives in the machine.
+    // UI-only optimistic toggle; machine state will overwrite on next refresh.
   }, []);
 
-  const removeAccount = useCallback(async (_provider: string, email: string) => {
-    // Optimistic UI: one Nylas Google grant covers both Gmail and Calendar.
-    setIntegrations((prev) =>
-      prev.map((i) => {
-        if (i.id !== "gmail" && i.id !== "google-calendar") return i;
-        const remaining = i.connectedAccounts.filter((e) => e !== email);
-        return { ...i, connected: remaining.length > 0, connectedAccounts: remaining };
-      })
-    );
-
-    // Revoke the Nylas grant (handles DB deletion + email data purge internally).
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await supabase.functions.invoke("nylas-revoke", {
-          body: { provider: "google", email },
-        });
+  const removeAccount = useCallback(
+    async (_provider: string, email: string) => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session) {
+          await supabase.functions.invoke("nylas-revoke", {
+            body: { provider: "google", email },
+          });
+        }
+      } catch (err) {
+        console.warn("Nylas revoke failed (continuing):", err);
       }
-    } catch (err) {
-      console.warn("Nylas revoke failed (continuing):", err);
-    }
 
-    // Clear client-side email caches so no stale data survives reconnect.
-    try { localStorage.removeItem("normy_archived_emails"); } catch { /* ignore */ }
+      try {
+        localStorage.removeItem("normy_archived_emails");
+      } catch {}
 
-    // Re-sync from server so state is authoritative.
-    await fetchConnected();
-  }, [fetchConnected]);
+      await refreshConnections();
+    },
+    [refreshConnections]
+  );
 
   const isConnected = useCallback(
     (id: string) => integrations.find((i) => i.id === id)?.connected ?? false,
@@ -266,7 +237,18 @@ export const IntegrationsProvider: React.FC<{ children: React.ReactNode }> = ({ 
   );
 
   return (
-    <IntegrationsContext.Provider value={{ integrations, toggleConnection, isConnected, refreshConnections: fetchConnected, removeAccount, refreshing, integrationsLoading, tokensError }}>
+    <IntegrationsContext.Provider
+      value={{
+        integrations,
+        toggleConnection,
+        isConnected,
+        refreshConnections,
+        removeAccount,
+        refreshing,
+        integrationsLoading,
+        tokensError,
+      }}
+    >
       {children}
     </IntegrationsContext.Provider>
   );
