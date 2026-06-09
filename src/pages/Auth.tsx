@@ -41,6 +41,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
       password,
     });
     setLoading(false);
+    setEmail(data.user.email)
     if (error) {
       toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
     } else if (data.user?.identities?.length === 0) {
