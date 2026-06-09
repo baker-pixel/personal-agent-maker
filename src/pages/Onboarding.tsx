@@ -389,6 +389,14 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
       previewUrlRef.current = null;
     }
 
+    // Create and unlock the audio element NOW (synchronously, within the user gesture)
+    // so browser autoplay policy allows the later async play() call.
+    const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+    const audio = new Audio(SILENT_WAV);
+    audio.setAttribute("playsinline", "true");
+    audio.play().catch(() => {});
+    previewAudioRef.current = audio;
+
     const name = state.agentName.trim() || "your agent";
     const text = `Hi, I'm ${name}, your personal assistant. Ready to help you take on the day.`;
     setPreviewingVoiceId(voiceId);
@@ -426,11 +434,10 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
 
       const url = URL.createObjectURL(blob);
       previewUrlRef.current = url;
-      const audio = new Audio(url);
-      previewAudioRef.current = audio;
       const cleanup = () => { setPreviewingVoiceId(null); URL.revokeObjectURL(url); previewUrlRef.current = null; };
       audio.onended = cleanup;
       audio.onerror = cleanup;
+      audio.src = url;
       await audio.play();
     } catch (e: any) {
       if (e?.name === "AbortError") return;
