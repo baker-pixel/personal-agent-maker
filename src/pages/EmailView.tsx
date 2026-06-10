@@ -177,6 +177,9 @@ export default function EmailView() {
   const [searchQuery, setSearchQuery] = useState("");
   const archiveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const autoTriaged = useRef(false);
+  const grantInitRetries = useRef(0);
+  const grantRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (grantRetryTimer.current) clearTimeout(grantRetryTimer.current); }, []);
 
   const handleArchive = useCallback((email: TriagedEmail) => {
     if (selectedEmail?.id === email.id) setSelectedEmail(null);
@@ -276,12 +279,23 @@ export default function EmailView() {
           return;
         }
         if (data?.code === "GRANT_INITIALIZING") {
-          // Grant still activating — silently retry after 5s
-          setTimeout(() => runTriage(), 5000);
+          // Grant still activating — retry after 5s, but cap it so a stuck
+          // grant can't spin the loading state forever.
+          if (grantInitRetries.current < 3) {
+            grantInitRetries.current += 1;
+            grantRetryTimer.current = setTimeout(() => runTriage(), 5000);
+          } else {
+            grantInitRetries.current = 0;
+            setGmailError({
+              type: "reconnect_required",
+              message: "Your email connection is still activating. Please try again in a minute or reconnect.",
+            });
+          }
           return;
         }
         throw new Error(data.error);
       }
+      grantInitRetries.current = 0;
       setLastSyncAt(new Date());
       await refetch(); // Realtime will catch upserts, but explicit refetch ensures order
       if (data?.totalProcessed) {

@@ -58,7 +58,7 @@ async function getAllNylasGrants(adminClient: any, userId: string): Promise<{ gr
   return rows.map((r: any) => ({ grantId: r.grant_id, email: r.email || "primary" }));
 }
 
-// --- Gmail fetch with timeout ---
+// --- Nylas email fetch with timeout ---
 async function fetchRecentEmails(grantId: string, nylasApiKey: string, maxResults = 30, accountLabel = "") {
   try {
     const ctrl = new AbortController();
@@ -312,7 +312,7 @@ const TEXT_TOOLS = [
     type: "function",
     function: {
       name: "create_calendar_event",
-      description: "Create a new event on the user's Google Calendar and send invites to attendees.",
+      description: "Create a new event on the user's calendar and send invites to attendees.",
       parameters: {
         type: "object",
         properties: {
@@ -447,6 +447,36 @@ interface ToolExecutionContext {
   grantId: string | null;
   nylasApiKey: string;
   adminClient: any;
+  tz: string;
+}
+
+// Offset (ms) of `timeZone` from UTC at instant `ts`
+function tzOffsetMs(ts: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(new Date(ts));
+  const map: Record<string, string> = {};
+  for (const p of parts) map[p.type] = p.value;
+  const asUtc = Date.UTC(
+    Number(map.year), Number(map.month) - 1, Number(map.day),
+    Number(map.hour) % 24, Number(map.minute), Number(map.second),
+  );
+  return asUtc - ts;
+}
+
+// Parse an ISO datetime as wall-clock time in `timeZone`. The model emits
+// naive local ISO ("2026-06-10T14:00:00") per the system prompt; the edge
+// runtime is UTC, so new Date() alone would shift the event by the user's
+// UTC offset. Explicit offsets ("Z", "+05:30") are trusted as-is.
+function parseLocalIsoMs(iso: string, timeZone: string): number {
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso)) return Date.parse(iso);
+  const utcGuess = Date.parse(iso.includes("T") ? `${iso}Z` : `${iso}T00:00:00Z`);
+  // Two passes to converge across DST boundaries
+  let ts = utcGuess - tzOffsetMs(utcGuess, timeZone);
+  ts = utcGuess - tzOffsetMs(ts, timeZone);
+  return ts;
 }
 
 async function executeToolCall(
@@ -454,7 +484,7 @@ async function executeToolCall(
   args: Record<string, any>,
   ctx: ToolExecutionContext
 ): Promise<{ success: boolean; message: string; data?: any }> {
-  const { userId, grantId, nylasApiKey, adminClient } = ctx;
+  const { userId, grantId, nylasApiKey, adminClient, tz } = ctx;
 
   if (name !== "save_contact" && !grantId) {
     return { success: false, message: "Google account not connected. Please reconnect via Integrations." };
@@ -492,7 +522,7 @@ async function executeToolCall(
       });
       const data = await res.json();
       if (!res.ok) {
-        if (res.status === 401) return { success: false, message: "Gmail session expired. User needs to reconnect via Integrations." };
+        if (res.status === 401) return { success: false, message: "Email connection expired. User needs to reconnect via Integrations." };
         return { success: false, message: data.message || "Failed to send email" };
       }
 
@@ -520,10 +550,9 @@ async function executeToolCall(
         })();
         when = { object: "datespan", start_date: args.start, end_date: endDate };
       } else {
-        const startUnix = Math.floor(new Date(args.start).getTime() / 1000);
-        const endIso = args.end || new Date(new Date(args.start).getTime() + 3600000).toISOString();
-        const endUnix = Math.floor(new Date(endIso).getTime() / 1000);
-        when = { object: "timespan", start_time: startUnix, end_time: endUnix };
+        const startMs = parseLocalIsoMs(args.start as string, tz);
+        const endMs = args.end ? parseLocalIsoMs(args.end as string, tz) : startMs + 3600000;
+        when = { object: "timespan", start_time: Math.floor(startMs / 1000), end_time: Math.floor(endMs / 1000) };
       }
 
       const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -545,7 +574,7 @@ async function executeToolCall(
       });
       const data = await res.json();
       if (!res.ok) {
-        if (res.status === 401) return { success: false, message: "Google Calendar session expired. User needs to reconnect." };
+        if (res.status === 401) return { success: false, message: "Calendar connection expired. User needs to reconnect via Integrations." };
         return { success: false, message: data.message || data.error || "Failed to create event" };
       }
       const inviteNote = validAttendees.length > 0
@@ -553,7 +582,7 @@ async function executeToolCall(
         : "";
       return {
         success: true,
-        message: `Event "${args.summary}" created on Google Calendar${inviteNote}`,
+        message: `Event "${args.summary}" created on the calendar${inviteNote}`,
         data: { eventId: data.data?.id, htmlLink: data.data?.html_link },
       };
     }
@@ -561,9 +590,9 @@ async function executeToolCall(
     if (name === "update_calendar_event") {
       const updateBody: Record<string, any> = { title: args.summary };
       if (args.start) {
-        const startUnix = Math.floor(new Date(args.start).getTime() / 1000);
-        const endIso = args.end || new Date(new Date(args.start).getTime() + 3600000).toISOString();
-        updateBody.when = { object: "timespan", start_time: startUnix, end_time: Math.floor(new Date(endIso).getTime() / 1000) };
+        const startMs = parseLocalIsoMs(args.start as string, tz);
+        const endMs = args.end ? parseLocalIsoMs(args.end as string, tz) : startMs + 3600000;
+        updateBody.when = { object: "timespan", start_time: Math.floor(startMs / 1000), end_time: Math.floor(endMs / 1000) };
       }
       if (args.description !== undefined) updateBody.description = args.description;
       if (args.location !== undefined) updateBody.location = args.location;
@@ -581,11 +610,11 @@ async function executeToolCall(
       });
       const data = await res.json();
       if (!res.ok) {
-        if (res.status === 401) return { success: false, message: "Google Calendar session expired." };
+        if (res.status === 401) return { success: false, message: "Calendar connection expired. User needs to reconnect via Integrations." };
         if (res.status === 404) return { success: false, message: `Event "${args.summary}" not found — it may have been deleted.` };
         return { success: false, message: data.message || data.error || "Failed to update event" };
       }
-      return { success: true, message: `Event "${args.summary}" updated on Google Calendar`, data: { htmlLink: data.data?.html_link } };
+      return { success: true, message: `Event "${args.summary}" updated on the calendar`, data: { htmlLink: data.data?.html_link } };
     }
 
     if (name === "delete_calendar_event") {
@@ -596,7 +625,7 @@ async function executeToolCall(
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (res.status === 401) return { success: false, message: "Google Calendar session expired." };
+        if (res.status === 401) return { success: false, message: "Calendar connection expired. User needs to reconnect via Integrations." };
         if (res.status === 404) return { success: false, message: `Event "${args.summary}" not found.` };
         return { success: false, message: (data as any).message || "Failed to delete event" };
       }
@@ -642,7 +671,7 @@ async function executeToolCall(
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (res.status === 401) return { success: false, message: "Gmail session expired. Please reconnect via Integrations." };
+        if (res.status === 401) return { success: false, message: "Email connection expired. Please reconnect via Integrations." };
         if (res.status === 404) return { success: false, message: `Email "${args.subject}" not found — it may have already been deleted.` };
         return { success: false, message: (data as any).message || "Failed to delete email" };
       }
@@ -744,13 +773,14 @@ serve(async (req) => {
         // User's own email for test email / self-send scenarios
         const userOwnEmail = primaryGrant?.email || user.email || "";
 
-        const todayDate = new Date().toISOString().slice(0, 10);
+        // User-local YYYY-MM-DD (en-CA locale formats as ISO date)
+        const todayDate = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
         const inSevenDays = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
         const canFetchNylas = nylasApiKey.length > 0;
 
         const [
-          gmailResults,
+          emailResults,
           calendarResult,
           contactsRes,
           leadsRes,
@@ -863,11 +893,11 @@ serve(async (req) => {
 
         // Aggregate emails across all Nylas grants
         const allEmails: any[] = [];
-        const gmailErrors: string[] = [];
-        const gmailReauth: string[] = [];
-        for (const r of gmailResults as any[]) {
-          if (r?.needsReauth) gmailReauth.push(r.account);
-          else if (r?.error) gmailErrors.push(`${r.account}: ${r.error}`);
+        const emailErrors: string[] = [];
+        const emailReauth: string[] = [];
+        for (const r of emailResults as any[]) {
+          if (r?.needsReauth) emailReauth.push(r.account);
+          else if (r?.error) emailErrors.push(`${r.account}: ${r.error}`);
           if (r?.emails) allEmails.push(...r.emails);
         }
         allEmails.sort((a, b) => {
@@ -923,14 +953,14 @@ Date: ${e.date}
 Preview: ${e.snippet}\n`;
           });
           realDataContext += "\n--- END INBOX DATA ---\n";
-        } else if (nylasGrants.length > 0 && gmailErrors.length === 0 && gmailReauth.length === 0) {
+        } else if (nylasGrants.length > 0 && emailErrors.length === 0 && emailReauth.length === 0) {
           realDataContext += "\n\n[Inbox is empty for the last 2 days — no recent messages.]\n";
         }
 
-        if (gmailReauth.length > 0) {
-          realDataContext += `\n\n[🔌 RECONNECT NEEDED: Google access expired for: ${gmailReauth.join(", ")}. Tell the user clearly: "I lost access to your Gmail (${gmailReauth.join(", ")}). Please reconnect via the plug icon → Integrations." Do NOT invent emails. Do NOT pretend you have access.]\n`;
+        if (emailReauth.length > 0) {
+          realDataContext += `\n\n[🔌 RECONNECT NEEDED: Google access expired for: ${emailReauth.join(", ")}. Tell the user clearly: "I lost access to your Gmail (${emailReauth.join(", ")}). Please reconnect via the plug icon → Integrations." Do NOT invent emails. Do NOT pretend you have access.]\n`;
         }
-        if (gmailErrors.length > 0) {
+        if (emailErrors.length > 0) {
           realDataContext += `\n\n[⚠️ Email data temporarily unavailable. Tell the user: "I'm having trouble reaching your inbox right now — it should resolve on its own. Try again in a moment." Do NOT mention any API names, service names, or technical details. Do NOT invent emails.]\n`;
         }
 
@@ -985,8 +1015,7 @@ Location: ${e.location || "None"}\n`;
 
         // ─── RIGHT NOW context ────────────────────────────────────────────────
         {
-          const todayDate = new Date(now);
-          const todayStr = `${todayDate.getFullYear()}-${String(todayDate.getMonth()+1).padStart(2,"0")}-${String(todayDate.getDate()).padStart(2,"0")}`;
+          const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
           const todayEvents = events.filter((e: any) => {
             try { return e.start?.startsWith(todayStr); } catch { return false; }
           });
@@ -995,7 +1024,7 @@ Location: ${e.location || "None"}\n`;
 
           realDataContext += "\n\n--- RIGHT NOW (user's current situation) ---\n";
           if (currentEvent) {
-            realDataContext += `🟢 CURRENTLY IN MEETING: "${currentEvent.summary}" (ends ${new Date(currentEvent.end).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})\n`;
+            realDataContext += `🟢 CURRENTLY IN MEETING: "${currentEvent.summary}" (ends ${new Date(currentEvent.end).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz })})\n`;
           } else if (nextEvent && minsUntilNext !== null) {
             if (minsUntilNext <= 30) {
               realDataContext += `🟡 MEETING STARTING SOON: "${nextEvent.summary}" in ${minsUntilNext} minute${minsUntilNext === 1 ? "" : "s"}\n`;
@@ -1047,7 +1076,7 @@ Location: ${e.location || "None"}\n`;
           realDataContext += "\n\n--- DRAFTS WAITING FOR APPROVAL ---\n";
           realDataContext += "These AI-generated email drafts are in the user's Approval Inbox, waiting to be sent. Mention them if relevant.\n";
           pendingDrafts.forEach((d: any) => {
-            realDataContext += `• To: ${d.to_name || d.to_email} | Subject: "${d.subject}" | Created: ${new Date(d.created_at).toLocaleString()}\n`;
+            realDataContext += `• To: ${d.to_name || d.to_email} | Subject: "${d.subject}" | Created: ${new Date(d.created_at).toLocaleString("en-US", { timeZone: tz })}\n`;
           });
           realDataContext += "--- END DRAFTS ---\n";
         }
@@ -1066,7 +1095,7 @@ Location: ${e.location || "None"}\n`;
         if (reminders.length > 0) {
           realDataContext += "\n\n--- UPCOMING EMAIL REMINDERS (next 7 days) ---\n";
           reminders.forEach((r: any) => {
-            realDataContext += `• ${new Date(r.remind_at).toLocaleString()} — "${r.email_subject}" from ${r.email_from}\n`;
+            realDataContext += `• ${new Date(r.remind_at).toLocaleString("en-US", { timeZone: tz })} — "${r.email_subject}" from ${r.email_from}\n`;
           });
           realDataContext += "--- END REMINDERS ---\n";
         }
@@ -1223,7 +1252,7 @@ Location: ${e.location || "None"}\n`;
           );
 
           const renderSession = (s: any, idx: number, full: boolean) => {
-            const when = new Date(s.created_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+            const when = new Date(s.created_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: tz });
             const att = (s.attendees && s.attendees.length) ? s.attendees.join(", ") : "solo / not specified";
             const loc = s.location || "not specified";
             const topicStr = (s.topics && s.topics.length) ? ` | topics: ${s.topics.join(", ")}` : "";
@@ -1256,7 +1285,7 @@ Location: ${e.location || "None"}\n`;
         if (contacts.length > 0) {
           realDataContext += "\n\n--- CONTACT INTELLIGENCE (people the user knows) ---\n";
           contacts.forEach((c: any) => {
-            const last = c.last_interaction_at ? new Date(c.last_interaction_at).toLocaleDateString() : "unknown";
+            const last = c.last_interaction_at ? new Date(c.last_interaction_at).toLocaleDateString("en-US", { timeZone: tz }) : "unknown";
             const aiBrief = c.ai_summary ? ` | AI brief: ${c.ai_summary}` : "";
             const topics = c.ai_topics && c.ai_topics.length ? ` | topics: ${c.ai_topics.join(", ")}` : "";
             const bday = c.birthday ? ` | birthday: ${c.birthday}` : "";
@@ -1419,47 +1448,10 @@ You have real-time access to the user's:
 - **Action items + tasks**: what's overdue and due today
 Always use this live context to give specific, actionable answers — never say "I don't have access to your data."
 
-${isVoice ? `
-## VOICE MODE — CRITICAL
-You are speaking out loud through TTS. Sound like a real human EA on the phone — NOT a memo being read.
-- **NO bullet points. NO headers. NO "Next Steps:" labels. NO emojis. NO markdown.** Ever. Spoken speech only.
-- Use natural spoken English with contractions ("you've", "I'll", "let's"). Never read raw data, ISO dates, or URLs aloud — reference them naturally ("Sarah's email about the budget", "your 3 PM with Jay").
-
-### Pacing — match length to the request
-**Default (normal questions, status checks, quick asks): 1-2 short sentences, then one natural follow-up question.**
-- Examples: "What's on my calendar?", "Any urgent emails?", "Did Sarah reply?"
-- Mention the most important item and offer more ("There's an urgent one from Sarah — want the rest?"). End with one question like "Want me to draft that?" or "Anything else?".
-
-**Extended (only when the user explicitly asks for depth): up to ~6 sentences, still no lists or markdown.**
-- Trigger phrases: "tell me more", "give me the details", "walk me through", "explain", "read it to me", "the full thing", "everything", "in depth", "summarize the whole…", "what did they say exactly".
-- Speak it as a flowing paragraph — connect items with "also", "then", "and the last one". Still end with one short follow-up question.
-- If the user asks to read an email/doc verbatim, you may go longer, but paraphrase formatting (no "Subject colon…").
-
-When in doubt, stay short and offer more. Never volunteer a long answer the user didn't ask for.
-
-### VOICE ACTIONS — EMAIL, CALENDAR, CONTACTS
-
-Your tools execute immediately — no "confirm" step needed. Call the tool, then confirm in 1 spoken sentence. **NEVER output function tags, XML tags, or JSON in your spoken response — plain speech only.**
-
-**EMAIL:** call send_email → say e.g. "Done — sent that to Sarah. Anything else?"
-**DELETE EMAIL:** call delete_email (use ID from REAL INBOX DATA) → say e.g. "Done — moved that to trash."
-**CALENDAR:** call create/update/delete tool → say e.g. "Done — your 3pm is set. Anything else?"
-**CONTACTS:** call save_contact → say e.g. "Done — Jay's saved. Anything else?"
-**DELETE CONTACT:** call delete_contact (use id from CONTACT INTELLIGENCE) → say e.g. "Done — contact removed."
-**TASKS:** call create_task → say e.g. "Done — added that to your tasks. Anything else?"
-
-If you can't resolve someone's email, say "I don't have their email — what is it?" and wait before calling the tool.
-` : `
-## RESPONSE STYLE — CONCISE BY DEFAULT
-- Reply in short, conversational text — 2-4 sentences max for most replies.
-- NEVER dump full email contents, raw data, or long lists unless the user explicitly asks.
-- Brief summary: mention sender/subject, not full content.
-- Expand only when user says "show me", "tell me more", "what does it say", "details", etc.
-
 ## TOOLS — USE THEM DIRECTLY (NO CONFIRMATION NEEDED)
 You have tools: **send_email**, **delete_email**, **create_calendar_event**, **update_calendar_event**, **delete_calendar_event**, **save_contact**, **delete_contact**, **create_task**.
 
-**CRITICAL: NEVER output tool call syntax, function tags, XML tags, or JSON payloads in your text response.** Never write angle-bracket function tags or raw JSON in your message. Your response must be plain natural language only. Tools are called silently by the system — you just confirm in words after.
+**CRITICAL: NEVER output tool call syntax, function tags, XML tags, or JSON payloads in your response.** Never write angle-bracket function tags or raw JSON in your message. Your response must be plain natural language only. Tools are called silently by the system — you just confirm in words after.
 
 When the user asks to take an action, call the appropriate tool immediately — do not ask for confirmation, do not describe what you're about to do, just call it. After the tool executes, confirm in one short sentence ("Done — email sent to Sarah. Anything else?").
 
@@ -1494,6 +1486,33 @@ When the user asks to take an action, call the appropriate tool immediately — 
 **delete_contact rules:**
 - contactId MUST come from the id field in CONTACT INTELLIGENCE above. Never invent one.
 - If the contact is not in CONTACT INTELLIGENCE, tell the user you can't find them.
+
+${isVoice ? `
+## VOICE MODE — CRITICAL
+You are speaking out loud through TTS. Sound like a real human EA on the phone — NOT a memo being read.
+- **NO bullet points. NO headers. NO "Next Steps:" labels. NO emojis. NO markdown.** Ever. Spoken speech only.
+- Use natural spoken English with contractions ("you've", "I'll", "let's"). Never read raw data, ISO dates, or URLs aloud — reference them naturally ("Sarah's email about the budget", "your 3 PM with Jay").
+- Confirm tool actions in 1 spoken sentence: "Done — sent that to Sarah. Anything else?", "Done — your 3pm is set.", "Done — Jay's saved."
+
+### Pacing — match length to the request
+**Default (normal questions, status checks, quick asks): 1-2 short sentences, then one natural follow-up question.**
+- Examples: "What's on my calendar?", "Any urgent emails?", "Did Sarah reply?"
+- Mention the most important item and offer more ("There's an urgent one from Sarah — want the rest?"). End with one question like "Want me to draft that?" or "Anything else?".
+
+**Extended (only when the user explicitly asks for depth): up to ~6 sentences, still no lists or markdown.**
+- Trigger phrases: "tell me more", "give me the details", "walk me through", "explain", "read it to me", "the full thing", "everything", "in depth", "summarize the whole…", "what did they say exactly".
+- Speak it as a flowing paragraph — connect items with "also", "then", "and the last one". Still end with one short follow-up question.
+- If the user asks to read an email/doc verbatim, you may go longer, but paraphrase formatting (no "Subject colon…").
+
+When in doubt, stay short and offer more. Never volunteer a long answer the user didn't ask for.
+
+If you can't resolve someone's email, say "I don't have their email — what is it?" and wait before calling the tool.
+` : `
+## RESPONSE STYLE — CONCISE BY DEFAULT
+- Reply in short, conversational text — 2-4 sentences max for most replies.
+- NEVER dump full email contents, raw data, or long lists unless the user explicitly asks.
+- Brief summary: mention sender/subject, not full content.
+- Expand only when user says "show me", "tell me more", "what does it say", "details", etc.
 
 ## NEXT STEPS (CRITICAL)
 At the end of EVERY response, include 2-3 brief action suggestions the user can say "yes" to. One line each. Simple list under "**Next Steps:**"
@@ -1550,6 +1569,7 @@ ${conversationMemoryNote}${realDataContext}`;
         grantId: authedPrimaryGrant?.grantId ?? null,
         nylasApiKey,
         adminClient: authedAdminClient,
+        tz,
       };
 
       const loopMessages: any[] = [

@@ -197,6 +197,7 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
         body: JSON.stringify({
           messages: messagesPayload,
           agentName,
+          mode: "text",
           clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           clientNowIso: new Date().toISOString(),
         }),
@@ -243,7 +244,11 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       if (currentConvId && assistantSoFar) {
         await onSaveMessage(currentConvId, { role: "assistant", content: assistantSoFar });
       }
-      if (assistantSoFar) tts.speak(assistantSoFar);
+      if (assistantSoFar) {
+        // Don't read the trailing "Next Steps:" suggestion list aloud
+        const speakable = assistantSoFar.replace(/\n+\**next steps:?\**[\s\S]*$/i, "").trim();
+        if (speakable) tts.speak(speakable);
+      }
     } catch (e: any) {
       if (e?.name === "AbortError") {
         upsertAssistant("⚠️ Request timed out. Please try again.");

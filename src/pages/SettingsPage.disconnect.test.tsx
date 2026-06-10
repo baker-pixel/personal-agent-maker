@@ -55,6 +55,15 @@ vi.mock("@/contexts/AgentContext", () => ({
   useAgent: () => ({ agentName: "Annie", setAgentName: vi.fn() }),
 }));
 
+vi.mock("@/contexts/AppStateContext", () => ({
+  useAppState: () => ({
+    state: { session: { user: { email: "user@example.com" } } },
+    fetchIntegrations: vi.fn(),
+    markOnboardingComplete: vi.fn(),
+    clearRecovery: vi.fn(),
+  }),
+}));
+
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     auth: {
@@ -65,6 +74,11 @@ vi.mock("@/integrations/supabase/client", () => ({
     },
     from: vi.fn().mockReturnValue({
       upsert: vi.fn().mockResolvedValue({ error: null }),
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+      }),
     }),
   },
 }));
@@ -77,7 +91,8 @@ import SettingsPage from "@/pages/SettingsPage";
 
 const renderPage = () =>
   render(
-    <MemoryRouter>
+    // Connected accounts live behind the "integrations" tab, selected via URL hash
+    <MemoryRouter initialEntries={["/settings#integrations"]}>
       <SettingsPage />
     </MemoryRouter>
   );

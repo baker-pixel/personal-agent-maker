@@ -40,43 +40,61 @@ function addArchivedId(nylasMessageId: string) {
   } catch {}
 }
 
+const FETCH_TIMEOUT_MS = 10_000;
+
 export function useTriagedEmails() {
   const [emails, setEmails] = useState<TriagedEmail[]>([]);
   const [snoozedEmails, setSnoozedEmails] = useState<TriagedEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const snoozeTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const hasLoadedRef = useRef(false);
 
   const fetchEmails = useCallback(async () => {
-    setLoading(true);
+    // Background refetches (visibility/online/realtime catch-up) stay silent so
+    // an already-rendered list doesn't flip back to the loading skeleton.
+    if (!hasLoadedRef.current) setLoading(true);
     const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
     const now = new Date().toISOString();
 
-    const [activeRes, snoozedRes] = await Promise.all([
-      supabase
-        .from("email_metadata")
-        .select("*")
-        .gte("received_at", cutoff)
-        // exclude emails snoozed into the future
-        .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
-        .order("received_at", { ascending: false })
-        .limit(200),
-      supabase
-        .from("email_metadata")
-        .select("*")
-        .gte("received_at", cutoff)
-        .gt("snoozed_until", now)
-        .order("snoozed_until", { ascending: true }),
-    ]);
+    try {
+      // Race against a timeout: on PWA resume, a stale auth/socket can leave
+      // supabase-js queries hanging forever, which kept the spinner up forever.
+      const [activeRes, snoozedRes] = await Promise.race([
+        Promise.all([
+          supabase
+            .from("email_metadata")
+            .select("*")
+            .gte("received_at", cutoff)
+            // exclude emails snoozed into the future
+            .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
+            .order("received_at", { ascending: false })
+            .limit(200),
+          supabase
+            .from("email_metadata")
+            .select("*")
+            .gte("received_at", cutoff)
+            .gt("snoozed_until", now)
+            .order("snoozed_until", { ascending: true }),
+        ]),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("email fetch timed out")), FETCH_TIMEOUT_MS)
+        ),
+      ]);
 
-    const archivedIds = getArchivedIds();
-    if (!activeRes.error && activeRes.data) {
-      setEmails((activeRes.data as TriagedEmail[]).filter(e => !archivedIds.has(e.nylas_message_id)));
+      const archivedIds = getArchivedIds();
+      if (!activeRes.error && activeRes.data) {
+        setEmails((activeRes.data as TriagedEmail[]).filter(e => !archivedIds.has(e.nylas_message_id)));
+        hasLoadedRef.current = true;
+      }
+      if (!snoozedRes.error && snoozedRes.data) {
+        setSnoozedEmails(snoozedRes.data as TriagedEmail[]);
+      }
+    } catch (err) {
+      console.warn("fetchEmails failed or timed out:", err);
+    } finally {
+      setLoading(false);
     }
-    if (!snoozedRes.error && snoozedRes.data) {
-      setSnoozedEmails(snoozedRes.data as TriagedEmail[]);
-    }
-    setLoading(false);
   }, []);
 
   // Schedule a wake-up when a snoozed email is due
@@ -93,10 +111,31 @@ export function useTriagedEmails() {
   useEffect(() => {
     fetchEmails();
 
-    const channelName = `email_metadata_${Math.random().toString(36).slice(2)}`;
-    channelRef.current = supabase
-      .channel(channelName)
-      .on("postgres_changes", { event: "*", schema: "public", table: "email_metadata" }, (payload) => {
+    const subscribeChannel = () => {
+      const channelName = `email_metadata_${Math.random().toString(36).slice(2)}`;
+      channelRef.current = supabase
+        .channel(channelName)
+        .on("postgres_changes", { event: "*", schema: "public", table: "email_metadata" }, handleRealtimeEvent)
+        .subscribe();
+    };
+
+    // Refetch when the PWA comes back to the foreground or regains network —
+    // the realtime channel may have silently died while backgrounded, so
+    // resubscribe it too or updates stay frozen until remount.
+    const resync = () => {
+      fetchEmails();
+      if (channelRef.current && channelRef.current.state !== "joined") {
+        supabase.removeChannel(channelRef.current);
+        subscribeChannel();
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") resync();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", resync);
+
+    const handleRealtimeEvent = (payload: any) => {
         if (payload.eventType === "INSERT") {
           const row = payload.new as TriagedEmail;
           if (getArchivedIds().has(row.nylas_message_id)) return;
@@ -120,10 +159,13 @@ export function useTriagedEmails() {
           setEmails(prev => prev.filter(e => e.id !== id));
           setSnoozedEmails(prev => prev.filter(e => e.id !== id));
         }
-      })
-      .subscribe();
+    };
+
+    subscribeChannel();
 
     return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", resync);
       if (channelRef.current) supabase.removeChannel(channelRef.current);
       Object.values(snoozeTimers.current).forEach(clearTimeout);
     };
