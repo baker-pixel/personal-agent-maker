@@ -24,6 +24,50 @@ const fetchWithTimeout = (input: RequestInfo | URL, init: RequestInit = {}) =>
       : AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
+// supabase-js's default navigatorLock waits 5s for the auth Web Lock, then
+// throws. A lock orphaned by a suspended PWA/tab context stays held after
+// resume, so every auth call stalls 5s and fails until a full page reload —
+// the watchdog reload recovers this, but with a visible freeze first.
+// This lock prevents the deadlock instead: if the lock can't be acquired
+// within LOCK_ACQUIRE_MS it is assumed orphaned and stolen. Stealing aborts
+// whoever held it (worst case another tab mid-refresh — tolerable, Supabase
+// grants a reuse window for rotated refresh tokens); the alternative is a
+// frozen app.
+const LOCK_ACQUIRE_MS = 3_000;
+const LOCK_HELD_WARN_MS = 5_000;
+
+async function stealingNavigatorLock<R>(
+  name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<R>
+): Promise<R> {
+  if (typeof navigator === "undefined" || !navigator.locks) return fn();
+
+  const run = async () => {
+    const start = Date.now();
+    try {
+      return await fn();
+    } finally {
+      const heldMs = Date.now() - start;
+      // A long hold here is the smoking gun for who starves everyone else.
+      if (heldMs > LOCK_HELD_WARN_MS) console.warn(`[auth-lock] ${name} held ${heldMs}ms`);
+    }
+  };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOCK_ACQUIRE_MS);
+  try {
+    // Abort only cancels a *pending* acquisition — once granted it has no effect.
+    return await navigator.locks.request(name, { signal: controller.signal }, run);
+  } catch (err) {
+    if (!controller.signal.aborted) throw err;
+    console.warn(`[auth-lock] ${name} blocked ${LOCK_ACQUIRE_MS}ms — stealing orphaned lock`);
+    return navigator.locks.request(name, { steal: true }, run);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
@@ -31,6 +75,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: "pkce",
+    lock: stealingNavigatorLock,
   },
   global: {
     fetch: fetchWithTimeout,
