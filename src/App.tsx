@@ -9,6 +9,7 @@ import { AppStateContext } from "@/contexts/AppStateContext";
 import { IntegrationsProvider } from "@/contexts/IntegrationsContext";
 import { AgentProvider } from "@/contexts/AgentContext";
 import { useAppStateMachine } from "@/hooks/useAppStateMachine";
+import { useClientHealthWatchdog } from "@/hooks/useClientHealthWatchdog";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
@@ -79,6 +80,9 @@ const ProtectedRoute = ({
 // ── App root ───────────────────────────────────────────────────────────────────
 const App = () => {
   const { state, fetchIntegrations, markOnboardingComplete, isRecovery, clearRecovery } = useAppStateMachine();
+
+  // Detect a deadlocked supabase client after background suspend and hard-reload.
+  useClientHealthWatchdog();
 
   const authenticated = !!state.session;
 

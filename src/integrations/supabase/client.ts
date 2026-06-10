@@ -8,6 +8,18 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Every supabase request gets a hard 20s ceiling. After a tab/PWA suspend the
+// underlying socket can be dead, and a fetch on a dead socket hangs forever —
+// which leaves queries (and the auth refresh that all queries wait on) stuck.
+const FETCH_TIMEOUT_MS = 20_000;
+const fetchWithTimeout = (input: RequestInfo | URL, init: RequestInit = {}) =>
+  fetch(input, {
+    ...init,
+    signal: init.signal
+      ? AbortSignal.any([init.signal, AbortSignal.timeout(FETCH_TIMEOUT_MS)])
+      : AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
@@ -15,5 +27,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: "pkce",
+  },
+  global: {
+    fetch: fetchWithTimeout,
   },
 });
