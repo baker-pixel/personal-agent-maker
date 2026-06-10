@@ -849,6 +849,7 @@ export type Database = {
           id: string
           provider: string
           scopes: string[] | null
+          status: string
           updated_at: string
           user_id: string
         }
@@ -859,6 +860,7 @@ export type Database = {
           id?: string
           provider: string
           scopes?: string[] | null
+          status?: string
           updated_at?: string
           user_id: string
         }
@@ -869,6 +871,7 @@ export type Database = {
           id?: string
           provider?: string
           scopes?: string[] | null
+          status?: string
           updated_at?: string
           user_id?: string
         }
