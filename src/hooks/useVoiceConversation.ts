@@ -444,6 +444,13 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     errorCountRef.current = 0;
     pausedByVisibilityRef.current = false;
     streamMutedRef.current = false; // fresh session — greeting must be audible
+    // Fresh session — forget the last spoken reply so an identical greeting
+    // (same text every session) isn't skipped as "already spoken".
+    lastSpokenReplyRef.current = null;
+    ttsStreamQueueRef.current = [];
+    ttsStreamBusyRef.current = false;
+    postDrainCallbackRef.current = null;
+    streamingSpokenUpToRef.current = 0;
     voicePrefs.update({ voice_conversation_enabled: true });
     // Unlock iOS SpeechSynthesis + <audio> on the user gesture (required for PWA).
     // MUST happen synchronously inside the gesture handler — never after `await`.

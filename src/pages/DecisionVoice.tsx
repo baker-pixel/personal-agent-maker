@@ -1,11 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, Mic, MicOff, Send, Loader2, Plus, PanelLeft, Volume2, VolumeX, PhoneOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useAnnieChat } from "@/hooks/useAnnieChat";
-import { useVoiceConversation } from "@/hooks/useVoiceConversation";
+import { useVoiceSession } from "@/hooks/useVoiceSession";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
 import { DelegateSidebar } from "@/components/chat/DelegateSidebar";
 import ReactMarkdown from "react-markdown";
@@ -24,61 +22,10 @@ export default function DecisionVoice() {
   const [voiceJustFilled, setVoiceJustFilled] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [firstName, setFirstName] = useState<string>("");
-  const greetedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const chat = useAnnieChat(agentName, "voice");
-
-  // Resolve the user's first name for the greeting
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data.user;
-      const meta = (u?.user_metadata ?? {}) as Record<string, any>;
-      const raw =
-        meta.first_name ||
-        meta.given_name ||
-        meta.full_name ||
-        meta.name ||
-        (u?.email ? u.email.split("@")[0] : "");
-      const first = String(raw).trim().split(/\s+/)[0] || "";
-      // Capitalize if it came from an email handle
-      setFirstName(first ? first.charAt(0).toUpperCase() + first.slice(1) : "");
-    });
-  }, []);
-
-  // Latest agent reply (used to trigger TTS after streaming ends)
-  const latestAgentReply = useMemo(() => {
-    for (let i = chat.messages.length - 1; i >= 0; i--) {
-      if (chat.messages[i].role === "agent") {
-        return chat.messages[i].text.replace(/```[\s\S]*?```/g, "").trim();
-      }
-    }
-    return null;
-  }, [chat.messages]);
-
-  // Live streaming text while LLM is generating — fed to voice hook for sentence-level TTS
-  const streamingAgentText = useMemo(() => {
-    if (!chat.thinking) return null;
-    for (let i = chat.messages.length - 1; i >= 0; i--) {
-      if (chat.messages[i].role === "agent") {
-        return chat.messages[i].text.replace(/```[\s\S]*?```/g, "").trim() || null;
-      }
-    }
-    return null;
-  }, [chat.messages, chat.thinking]);
-
-  // Greeting spoken once when the voice conversation first starts
-  const greeting = useMemo(() => {
-    const who = firstName ? firstName : "there";
-    return `Hey ${who}, how can I help?`;
-  }, [firstName]);
-
-  const [pendingGreeting, setPendingGreeting] = useState<string | null>(null);
-
-  // ── Voice confirm: "say confirm" to execute pending action ──────────────────
-
-  const voice = useVoiceConversation({
+  // Shared voice session — same greeting, TTS, and mic behavior as ModeSelect
+  const { chat, voice, resetSession, handleMicTap } = useVoiceSession(agentName, {
     onUserUtterance: (text) => {
       setInput(text);
       setVoiceJustFilled(true);
@@ -86,24 +33,7 @@ export default function DecisionVoice() {
       // No auto-focus: prevents mobile keyboard from popping up and accidental
       // Enter/Go key submission. User explicitly taps Send to confirm.
     },
-    agentReply: pendingGreeting ?? (chat.thinking ? null : latestAgentReply),
-    streamingText: pendingGreeting ? null : streamingAgentText,
-    thinking: chat.thinking,
-    pushToTalk: true,
   });
-
-  // Once the conversation becomes active AND voice prefs are loaded, queue the
-  // greeting (only once per page visit). Waiting on prefsLoaded ensures the
-  // greeting uses the user's saved Groq voice rather than the default.
-  useEffect(() => {
-    if (voice.conversationActive && voice.prefsLoaded && !greetedRef.current && chat.messages.length === 0) {
-      greetedRef.current = true;
-      setPendingGreeting(greeting);
-      const t = setTimeout(() => setPendingGreeting(null), 500);
-      return () => clearTimeout(t);
-    }
-  }, [voice.conversationActive, voice.prefsLoaded, greeting, chat.messages.length]);
-
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -171,7 +101,7 @@ export default function DecisionVoice() {
               onGroqVoiceChange={voice.setGroqVoiceId}
             />
             <button
-              onClick={() => { voice.stopConversation(); chat.reset(); greetedRef.current = false; }}
+              onClick={resetSession}
               className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-accent/50"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -342,35 +272,7 @@ export default function DecisionVoice() {
 
             {/* Mic / PTT button */}
             <button
-              onClick={() => {
-                if (!voice.isSupported && !voice.speechRecognitionBlockedByPwa) return;
-
-                // iOS PWA: TTS-only toggle
-                if (voice.speechRecognitionBlockedByPwa) {
-                  if (!voice.conversationActive) {
-                    chat.reset();
-                    greetedRef.current = false;
-                  }
-                  voice.toggleConversation();
-                  return;
-                }
-
-                if (!voice.conversationActive) {
-                  chat.reset();
-                  greetedRef.current = false;
-                  voice.startConversation();
-                  return;
-                }
-
-                // PTT: toggle recording turn. Tapping while a transcription is
-                // in flight cancels it and starts a fresh recording — the button
-                // must never be a dead end (same behavior as ModeSelect).
-                if (voice.isListening) {
-                  voice.stopRecordingTurn();
-                } else {
-                  voice.startRecordingTurn();
-                }
-              }}
+              onClick={handleMicTap}
               disabled={!voice.isSupported && !voice.speechRecognitionBlockedByPwa}
               title={
                 voice.isTranscribing

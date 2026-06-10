@@ -44,6 +44,9 @@ export function useAnnieChat(
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const convIdRef = useRef<string | null>(null);
+  // Bumped by reset() — an in-flight initial load from a previous "generation"
+  // must not repopulate messages after the user started a fresh session.
+  const resetGenRef = useRef(0);
 
   const fetchConversations = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -97,15 +100,18 @@ export function useAnnieChat(
   useEffect(() => {
     if (!enabled || skipInitialLoad) { setLoading(false); return; }
     let cancelled = false;
+    const gen = resetGenRef.current;
+    const stale = () => cancelled || resetGenRef.current !== gen;
     (async () => {
       let { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         const { data } = await supabase.auth.refreshSession();
         session = data.session;
       }
-      if (!session?.user || cancelled) { setLoading(false); return; }
+      if (!session?.user || stale()) { if (!stale()) setLoading(false); return; }
 
       await fetchConversations();
+      if (stale()) return;
 
       const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: existing } = await supabase
@@ -117,7 +123,7 @@ export function useAnnieChat(
         .order("updated_at", { ascending: false })
         .limit(1);
 
-      if (existing && existing.length > 0 && !cancelled) {
+      if (existing && existing.length > 0 && !stale()) {
         const convId = existing[0].id;
         convIdRef.current = convId;
         setActiveConversationId(convId);
@@ -129,7 +135,7 @@ export function useAnnieChat(
           .order("created_at", { ascending: false })
           .limit(200);
 
-        if (msgs && msgs.length > 0 && !cancelled) {
+        if (msgs && msgs.length > 0 && !stale()) {
           const ordered = [...msgs].reverse();
           setMessages(
             ordered.map((m) => ({
@@ -139,7 +145,7 @@ export function useAnnieChat(
           );
         }
       }
-      if (!cancelled) setLoading(false);
+      if (!stale()) setLoading(false);
     })();
     return () => { cancelled = true; };
   }, [enabled, skipInitialLoad, conversationTitle, fetchConversations]);
@@ -234,10 +240,22 @@ export function useAnnieChat(
         markStage("llm_start");
         let resp = await doFetch();
 
-        // Auto-refresh session on 401 and retry once
+        // Auto-refresh session on 401 and retry once. The refresh is raced
+        // against a timeout: after a background suspend the auth client can
+        // deadlock on its internal lock, and an unguarded await here would
+        // hang forever with `thinking` stuck on.
         if (resp.status === 401) {
-          const { data } = await supabase.auth.refreshSession();
-          if (data.session) session = data.session;
+          try {
+            const { data } = await Promise.race([
+              supabase.auth.refreshSession(),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("session refresh timed out")), 8000)
+              ),
+            ]);
+            if (data.session) session = data.session;
+          } catch (refreshErr) {
+            console.warn("Session refresh failed:", refreshErr);
+          }
           resp = await doFetch();
         }
 
@@ -329,9 +347,11 @@ export function useAnnieChat(
   );
 
   const reset = useCallback(async () => {
+    resetGenRef.current += 1; // invalidate any in-flight initial load
     abortRef.current?.abort();
     setMessages([]);
     setThinking(false);
+    setLoading(false);
     convIdRef.current = null;
     setActiveConversationId(null);
   }, []);

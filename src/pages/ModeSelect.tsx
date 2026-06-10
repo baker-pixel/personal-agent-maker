@@ -1,13 +1,10 @@
 // @ts-nocheck
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, MicOff, X, Send, Loader2, MessageSquare } from "lucide-react";
 import { useAgent } from "@/contexts/AgentContext";
-import { useAnnieChat } from "@/hooks/useAnnieChat";
-import { useVoiceConversation } from "@/hooks/useVoiceConversation";
-import { useUserDisplayName } from "@/hooks/useUserDisplayName";
-import { stripMarkdown } from "@/lib/stripMarkdown";
+import { useVoiceSession } from "@/hooks/useVoiceSession";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
 import { stripAgentBlocks } from "@/lib/stripAgentBlocks";
 import { Input } from "@/components/ui/input";
@@ -18,75 +15,40 @@ export default function ModeSelect() {
   const { agentName } = useAgent();
   const displayName = agentName || "Normy Agent";
 
-  // Fix #2: use saved display name preference, falls back to auth metadata
-  const userName = useUserDisplayName();
-
   const [voiceOpen, setVoiceOpen] = useState(false);
-  // Fix #4: only enable chat hook (and its DB queries) on first mic tap
+  // Only enable chat hook (and its DB queries) on first mic tap
   const [hookEnabled, setHookEnabled] = useState(false);
   const [textInput, setTextInput] = useState("");
   const [voiceJustFilled, setVoiceJustFilled] = useState(false);
-  const [pendingGreeting, setPendingGreeting] = useState<string | null>(null);
-  const greetedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Fix #5: separate conversation title so quick sessions don't pollute Delegate history
-  const chat = useAnnieChat(displayName, "voice", {
+  // Shared voice session — same greeting, TTS, and mic behavior as DecisionVoice.
+  // Separate conversation title so quick sessions don't pollute Delegate history.
+  const { chat, voice, startSession, resetSession, handleMicTap } = useVoiceSession(displayName, {
     conversationTitle: "Quick Chat",
     enabled: hookEnabled,
     skipInitialLoad: true,
-  });
-
-  // Fix #1: strip markdown before TTS so "**bold**" isn't spoken literally
-  const latestAgentReply = useMemo(() => {
-    for (let i = chat.messages.length - 1; i >= 0; i--) {
-      if (chat.messages[i].role === "agent") {
-        return stripMarkdown(chat.messages[i].text);
-      }
-    }
-    return null;
-  }, [chat.messages]);
-
-  // Fix #2: greeting uses saved display name preference
-  const greeting = userName ? `Hey ${userName}, how can I help?` : "Hey, how can I help?";
-
-  const voice = useVoiceConversation({
     onUserUtterance: (text) => {
       setTextInput(text);
       setVoiceJustFilled(true);
       setTimeout(() => setVoiceJustFilled(false), 2000);
     },
-    agentReply: pendingGreeting ?? (chat.thinking ? null : latestAgentReply),
-    thinking: chat.thinking,
-    pushToTalk: true,
   });
-
-  useEffect(() => {
-    if (voice.conversationActive && voice.prefsLoaded && !greetedRef.current && chat.messages.length === 0) {
-      greetedRef.current = true;
-      setPendingGreeting(greeting);
-      const t = setTimeout(() => setPendingGreeting(null), 500);
-      return () => clearTimeout(t);
-    }
-  }, [voice.conversationActive, voice.prefsLoaded, greeting, chat.messages.length]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat.messages, chat.thinking]);
 
-  const handleMicTap = () => {
+  // "Talk to {agent}" / big mic circle: open the overlay and start a session
+  const handleOpenVoice = () => {
     if (!hookEnabled) setHookEnabled(true);
-    chat.reset();
-    greetedRef.current = false;
     setVoiceOpen(true);
-    if (!voice.conversationActive) voice.startConversation();
+    if (!voice.conversationActive) startSession();
   };
 
   const handleClose = () => {
-    voice.stopConversation();
+    resetSession();
     setVoiceOpen(false);
-    chat.reset();
-    greetedRef.current = false;
   };
 
   const handleSend = () => {
@@ -121,7 +83,7 @@ export default function ModeSelect() {
 
         {/* Tap to talk */}
         <div className="flex flex-col items-center gap-3 py-4">
-          <button onClick={handleMicTap} className="relative flex items-center justify-center">
+          <button onClick={handleOpenVoice} className="relative flex items-center justify-center">
             {[0, 1, 2].map((i) => (
               <motion.div
                 key={i}
@@ -154,7 +116,7 @@ export default function ModeSelect() {
               Text {displayName}
             </button>
             <button
-              onClick={handleMicTap}
+              onClick={handleOpenVoice}
               className="flex-1 flex items-center justify-center gap-2 h-12 rounded-2xl text-sm font-semibold text-accent-foreground active:scale-[0.97] transition-all shadow-md shadow-accent/20 whitespace-nowrap"
               style={{ background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 32%))" }}
             >
@@ -302,12 +264,7 @@ export default function ModeSelect() {
                 <VoiceWaveform isActive={voice.isListening} />
                 {/* PTT mic button */}
                 <button
-                  onClick={() => {
-                    if (voice.speechRecognitionBlockedByPwa) { voice.toggleConversation(); return; }
-                    if (!voice.isSupported) return;
-                    if (voice.isListening) voice.stopRecordingTurn();
-                    else voice.startRecordingTurn();
-                  }}
+                  onClick={handleMicTap}
                   disabled={!voice.isSupported && !voice.speechRecognitionBlockedByPwa}
                   title={voice.isListening ? "Tap to stop recording" : "Tap to speak"}
                   className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 shrink-0 ${
