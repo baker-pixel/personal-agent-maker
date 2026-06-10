@@ -62,6 +62,11 @@ export function useAnnieChat(
   }, [conversationTitle]);
 
   const loadConversation = useCallback(async (conversationId: string) => {
+    // Bump the generation: this load supersedes any in-flight initial load or
+    // streaming turn, and a reset()/new session while our query is in flight
+    // invalidates US — without this the stale result repopulated messages
+    // after a fresh voice session started and the old reply got spoken aloud.
+    const gen = ++resetGenRef.current;
     setLoading(true);
     convIdRef.current = conversationId;
     setActiveConversationId(conversationId);
@@ -72,6 +77,7 @@ export function useAnnieChat(
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: false })
       .limit(200);
+    if (resetGenRef.current !== gen) return;
     if (msgs && msgs.length > 0) {
       const ordered = [...msgs].reverse();
       setMessages(
@@ -155,6 +161,13 @@ export function useAnnieChat(
       const trimmed = input.trim();
       if (!trimmed || thinking) return;
 
+      // Stamp this turn: reset()/loadConversation() bump the generation, and a
+      // stale turn must stop touching state — otherwise a late streaming chunk
+      // re-appends a partial old reply into the NEW session's empty message
+      // list and the voice loop speaks it as if it were fresh.
+      const gen = resetGenRef.current;
+      const stale = () => resetGenRef.current !== gen;
+
       const userMsg: ChatMessage = { role: "user", text: trimmed };
       setMessages((prev) => [...prev, userMsg]);
       setThinking(true);
@@ -165,6 +178,7 @@ export function useAnnieChat(
         const { data } = await supabase.auth.refreshSession();
         session = data.session;
       }
+      if (stale()) return;
 
       // Create conversation if needed
       if (!convIdRef.current) {
@@ -190,6 +204,7 @@ export function useAnnieChat(
       let assistantSoFar = "";
 
       const upsertAssistant = (chunk: string) => {
+        if (stale()) return;
         assistantSoFar += chunk;
         setMessages((prev) => {
           const last = prev[prev.length - 1];
@@ -277,6 +292,7 @@ export function useAnnieChat(
           else if (resp.status === 402) title = "Out of AI credits";
           else if (resp.status === 401 || resp.status === 403) title = "Please sign in again";
           else if (resp.status === 503) title = "AI service offline";
+          if (stale()) return;
           toast({ title, description: errorMsg, variant: "destructive" });
           upsertAssistant(`⚠️ ${errorMsg}`);
           if (convIdRef.current) persistMessage(convIdRef.current, "assistant", `⚠️ ${errorMsg}`);
@@ -320,13 +336,13 @@ export function useAnnieChat(
         }
 
         // Persist assistant response
-        if (convIdRef.current && assistantSoFar) {
+        if (convIdRef.current && assistantSoFar && !stale()) {
           persistMessage(convIdRef.current, "assistant", assistantSoFar);
         }
       } catch (err: any) {
         if (err?.name === "AbortError") {
           // Timeout from our safetyTimer — show recoverable message so user knows to retry
-          if (timerFired) {
+          if (timerFired && !stale()) {
             const msg = "Request timed out. Please try again.";
             upsertAssistant(msg);
             if (convIdRef.current) persistMessage(convIdRef.current, "assistant", msg);
@@ -340,7 +356,10 @@ export function useAnnieChat(
       } finally {
         clearTimeout(safetyTimer);
         abortRef.current = null;
-        setThinking(false);
+        // Stale turn: reset() already cleared thinking, and a NEW turn may
+        // have set it true — stomping it here would kill that turn's
+        // thinking indicator (and mute its streaming TTS).
+        if (!stale()) setThinking(false);
       }
     },
     [messages, thinking, agentName, fetchConversations]

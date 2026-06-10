@@ -66,37 +66,42 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     const v = parseFloat(localStorage.getItem(PITCH_KEY) || "1.0");
     return isNaN(v) ? 1.0 : v;
   });
-  const [provider, setProviderState] = useState<TtsProvider>("browser");
-  const [groqVoiceId, setGroqVoiceIdState] = useState<string | null>(DEFAULT_GROQ_VOICE); // "tara"
+  // Groq (premium) is the product default; browser speechSynthesis is only a
+  // runtime fallback when the Groq pipeline fails or audio is blocked.
+  const [provider, setProviderState] = useState<TtsProvider>("groq");
+  const [groqVoiceId, setGroqVoiceIdState] = useState<string | null>(DEFAULT_GROQ_VOICE);
 
-  // Sync from remote prefs whenever they change, until the user edits something
-  // in THIS surface. A one-shot hydrate is not enough: the first "loaded" snapshot
-  // can be stale (auth race at boot delivers defaults, then real prefs arrive on
-  // the next fetch) and the chosen voice would be silently ignored.
-  const localEditRef = useRef(false);
+  // Sync from remote prefs whenever they change, per field, until the user
+  // edits that field in THIS surface. A one-shot hydrate is not enough (the
+  // first "loaded" snapshot can be stale), and a single global edit flag is
+  // worse: startConversation() auto-enables TTS via toggle(), and when that
+  // landed before the prefs fetch the flag blocked the user's real provider/
+  // voice from ever syncing — the session ran on defaults and went silent.
+  const editedFieldsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!remote?.loaded || localEditRef.current) return;
-    setVoiceURIState(remote.voiceURI);
-    setRateState(remote.rate);
-    setPitchState(remote.pitch);
-    setEnabledState(remote.enabled);
-    if (remote.provider) setProviderState(remote.provider);
-    if (remote.groqVoiceId !== undefined) setGroqVoiceIdState(remote.groqVoiceId);
+    if (!remote?.loaded) return;
+    const edited = editedFieldsRef.current;
+    if (!edited.has("voiceURI")) setVoiceURIState(remote.voiceURI);
+    if (!edited.has("rate")) setRateState(remote.rate);
+    if (!edited.has("pitch")) setPitchState(remote.pitch);
+    if (!edited.has("enabled")) setEnabledState(remote.enabled);
+    if (!edited.has("provider") && remote.provider) setProviderState(remote.provider);
+    if (!edited.has("groqVoiceId") && remote.groqVoiceId !== undefined) setGroqVoiceIdState(remote.groqVoiceId);
   }, [remote?.loaded, remote?.voiceURI, remote?.rate, remote?.pitch, remote?.enabled, remote?.provider, remote?.groqVoiceId]);
 
   const setEnabled = (v: boolean | ((prev: boolean) => boolean)) => {
-    localEditRef.current = true;
+    editedFieldsRef.current.add("enabled");
     setEnabledState((prev) => {
       const next = typeof v === "function" ? (v as (p: boolean) => boolean)(prev) : v;
       onChange?.({ tts_enabled: next });
       return next;
     });
   };
-  const setVoiceURI = (v: string | null) => { localEditRef.current = true; setVoiceURIState(v); onChange?.({ tts_voice_uri: v }); };
-  const setRate = (v: number) => { localEditRef.current = true; setRateState(v); onChange?.({ tts_rate: v }); };
-  const setPitch = (v: number) => { localEditRef.current = true; setPitchState(v); onChange?.({ tts_pitch: v }); };
-  const setProvider = (v: TtsProvider) => { localEditRef.current = true; setProviderState(v); onChange?.({ tts_provider: v }); };
-  const setGroqVoiceId = (v: string | null) => { localEditRef.current = true; setGroqVoiceIdState(v); onChange?.({ tts_groq_voice_id: v }); };
+  const setVoiceURI = (v: string | null) => { editedFieldsRef.current.add("voiceURI"); setVoiceURIState(v); onChange?.({ tts_voice_uri: v }); };
+  const setRate = (v: number) => { editedFieldsRef.current.add("rate"); setRateState(v); onChange?.({ tts_rate: v }); };
+  const setPitch = (v: number) => { editedFieldsRef.current.add("pitch"); setPitchState(v); onChange?.({ tts_pitch: v }); };
+  const setProvider = (v: TtsProvider) => { editedFieldsRef.current.add("provider"); setProviderState(v); onChange?.({ tts_provider: v }); };
+  const setGroqVoiceId = (v: string | null) => { editedFieldsRef.current.add("groqVoiceId"); setGroqVoiceIdState(v); onChange?.({ tts_groq_voice_id: v }); };
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -300,6 +305,10 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
         audioRef.current.crossOrigin = "anonymous";
       }
 
+      // True when el.play() rejected (autoplay policy, missing gesture unlock).
+      // Without tracking this the reply ends "successfully" with zero audio.
+      let playbackBlocked = false;
+
       // Play a blob and wait for it to finish.
       // Resolves on natural end, error, OR abort signal — prevents promise from
       // hanging forever when stop() clears el.onended or a mediaSession action fires.
@@ -319,7 +328,7 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
           if ("mediaSession" in navigator) {
             navigator.mediaSession.playbackState = "playing";
           }
-        }).catch(() => resolve());
+        }).catch(() => { playbackBlocked = true; resolve(); });
       });
 
       if ("mediaSession" in navigator) {
@@ -342,11 +351,20 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
 
       let firstBlob = true;
       for (const blobPromise of blobPromises) {
-        if (abort.signal.aborted) break;
+        if (abort.signal.aborted || playbackBlocked) break;
         const blob = await blobPromise;
         if (!blob || abort.signal.aborted) break;
         if (firstBlob) { markStage("audio_play_start"); firstBlob = false; }
         await playBlob(blob);
+      }
+
+      // Autoplay blocked — every chunk would fail the same way; the reply made
+      // no sound at all. Try the browser engine instead of ending silently.
+      if (playbackBlocked && !abort.signal.aborted) {
+        console.warn("[Groq TTS] audio playback blocked — falling back to browser voice");
+        setIsSpeaking(false);
+        speakBrowser(text, safeComplete);
+        return;
       }
 
       if (!abort.signal.aborted) {

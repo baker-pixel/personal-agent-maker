@@ -71,7 +71,7 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const { prefs, loaded: prefsLoaded } = useVoicePreferences();
+  const { prefs, loaded: prefsLoaded, update: updateVoicePrefs } = useVoicePreferences();
   const tts = useTextToSpeech({
     remote: {
       voiceURI: prefs.tts_voice_uri,
@@ -82,6 +82,9 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
       groqVoiceId: prefs.tts_groq_voice_id,
       loaded: prefsLoaded,
     },
+    // Persist toggles like every other voice surface — without this, muting
+    // here only hit localStorage and the rest of the app disagreed.
+    onChange: updateVoicePrefs,
   });
   const [voiceJustFilled, setVoiceJustFilled] = useState(false);
 

@@ -22,7 +22,8 @@ const DEFAULTS: VoicePrefs = {
   tts_enabled: false,
   voice_conversation_enabled: false,
   stt_language: "en-US",
-  tts_provider: "browser",
+  // Groq is the product default voice; browser is only a runtime fallback.
+  tts_provider: "groq",
   tts_groq_voice_id: DEFAULT_GROQ_VOICE,
 };
 

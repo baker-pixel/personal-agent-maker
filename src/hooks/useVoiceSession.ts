@@ -24,12 +24,22 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
   const userName = useUserDisplayName();
   const [pendingGreeting, setPendingGreeting] = useState<string | null>(null);
   const greetedRef = useRef(false);
+  // True once the user has sent a message in THIS voice session. Until then
+  // the only thing TTS may speak is the greeting — replies that were already
+  // in the transcript when the session started (restored history, stale async
+  // loads) must never be read aloud.
+  const sentThisSessionRef = useRef(false);
 
   const chat = useAnnieChat(agentName, "voice", {
     conversationTitle: opts.conversationTitle,
     enabled: opts.enabled,
     skipInitialLoad: opts.skipInitialLoad,
   });
+
+  const sendInSession = useCallback((text: string) => {
+    sentThisSessionRef.current = true;
+    return chat.send(text);
+  }, [chat.send]);
 
   // The voice hook slices the final reply by character offsets counted against
   // streamingText, so both MUST go through the same transform.
@@ -44,21 +54,26 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
 
   const streamingAgentText = useMemo(() => {
     if (!chat.thinking) return null;
-    for (let i = chat.messages.length - 1; i >= 0; i--) {
-      if (chat.messages[i].role === "agent") {
-        return stripMarkdown(chat.messages[i].text) || null;
-      }
-    }
-    return null;
+    // Only the LAST message counts, and only if it's the agent's. While
+    // thinking but before the first token, the list ends with the user's new
+    // message — scanning backwards past it would return the PREVIOUS reply,
+    // and the voice loop would speak the earlier answer as if it streamed now.
+    const last = chat.messages[chat.messages.length - 1];
+    if (!last || last.role !== "agent") return null;
+    return stripMarkdown(last.text) || null;
   }, [chat.messages, chat.thinking]);
 
   const onUserUtteranceRef = useRef(opts.onUserUtterance);
   useEffect(() => { onUserUtteranceRef.current = opts.onUserUtterance; });
 
+  // Hard gate: no user turn this session yet → nothing but the greeting is
+  // speakable, no matter what the message list contains.
+  const speakableReply = sentThisSessionRef.current && !chat.thinking ? latestAgentReply : null;
+
   const voice = useVoiceConversation({
     onUserUtterance: (text) => onUserUtteranceRef.current?.(text),
-    agentReply: pendingGreeting ?? (chat.thinking ? null : latestAgentReply),
-    streamingText: pendingGreeting ? null : streamingAgentText,
+    agentReply: pendingGreeting ?? speakableReply,
+    streamingText: pendingGreeting || !sentThisSessionRef.current ? null : streamingAgentText,
     thinking: chat.thinking,
     pushToTalk: true,
   });
@@ -83,13 +98,23 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
     ) {
       greetedRef.current = true;
       setPendingGreeting(greeting);
-      const t = setTimeout(() => setPendingGreeting(null), 500);
-      return () => clearTimeout(t);
     }
   }, [voice.conversationActive, voice.prefsLoaded, voice.ttsEnabled, greeting, chat.loading, chat.messages.length]);
 
+  // Clear the greeting in its own effect, keyed ONLY on pendingGreeting.
+  // When the timer lived in the effect above, any dep changing within 500ms
+  // (display name resolving, prefs settling) ran the cleanup, killed the
+  // timer, and pendingGreeting stayed set forever — pinning agentReply to the
+  // greeting and muting every real reply for the rest of the session.
+  useEffect(() => {
+    if (!pendingGreeting) return;
+    const t = setTimeout(() => setPendingGreeting(null), 500);
+    return () => clearTimeout(t);
+  }, [pendingGreeting]);
+
   const resetGreeting = useCallback(() => {
     greetedRef.current = false;
+    sentThisSessionRef.current = false;
     setPendingGreeting(null);
   }, []);
 
@@ -143,5 +168,14 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
     startSession,
   ]);
 
-  return { chat, voice, startSession, resetSession, resetGreeting, handleMicTap };
+  // Surfaces must send through sendInSession so the per-session "user actually
+  // spoke" gate opens — expose it as chat.send so call sites can't bypass it.
+  return {
+    chat: { ...chat, send: sendInSession },
+    voice,
+    startSession,
+    resetSession,
+    resetGreeting,
+    handleMicTap,
+  };
 }
