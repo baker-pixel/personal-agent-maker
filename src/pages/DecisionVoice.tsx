@@ -50,8 +50,14 @@ export default function DecisionVoice() {
       <DelegateSidebar
         conversations={chat.conversations}
         activeId={chat.activeConversationId}
-        onSelect={(id) => { chat.loadConversation(id); setSidebarOpen(false); }}
-        onNew={() => { chat.reset(); setSidebarOpen(false); }}
+        onSelect={(id) => {
+          // End the voice loop first — otherwise the loaded conversation's last
+          // agent message lands as a "new" reply and gets spoken aloud.
+          voice.stopConversation();
+          chat.loadConversation(id);
+          setSidebarOpen(false);
+        }}
+        onNew={() => { resetSession(); setSidebarOpen(false); }}
         onDelete={chat.deleteConversation}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}

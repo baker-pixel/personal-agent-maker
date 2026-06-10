@@ -110,6 +110,17 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
   // Real-time VAD signal — updated before React re-renders, used in drainStreamQueue closure.
   const isSpeechActiveRef = useRef(false);
 
+  // Barge-in flush: silence the rest of the current agent reply. Single source
+  // of truth for the queue/mute/stop dance — every interrupt path goes through here.
+  const flushTtsPipeline = useCallback(() => {
+    ttsStreamQueueRef.current = [];
+    ttsStreamBusyRef.current = false;
+    postDrainCallbackRef.current = null;
+    streamMutedRef.current = true;
+    streamingSpokenUpToRef.current = 0;
+    try { ttsRef.current?.stop(); } catch { /* ignore */ }
+  }, []);
+
   // Drain the streaming TTS queue one sentence at a time.
   const drainStreamQueue = useCallback(() => {
     if (ttsStreamBusyRef.current) return;
@@ -131,7 +142,6 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
       drainStreamQueue();
     }
   // drainStreamQueue only uses refs — stable, no deps needed
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Buffer final transcripts so a brief pause (thinking) doesn't cut the user off.
@@ -153,17 +163,10 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     if (!buffered) return;
     errorCountRef.current = 0;
     // Barge-in: discard streaming TTS queue and mute the rest of this reply
-    ttsStreamQueueRef.current = [];
-    ttsStreamBusyRef.current = false;
-    postDrainCallbackRef.current = null;
-    streamMutedRef.current = true;
-    streamingSpokenUpToRef.current = 0;
+    flushTtsPipeline();
     // Stop mic immediately — prevents noise during LLM thinking from racing into
     // the next turn. The agentReply effect restarts it after TTS finishes.
     try { speechRef.current?.stopListening(); } catch { /* ignore */ }
-    if (ttsSpeakingRef.current) {
-      try { ttsRef.current?.stop(); } catch { /* ignore */ }
-    }
     onUserUtteranceRef.current?.(buffered);
   };
 
@@ -190,11 +193,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
       //   the agent and accept the transcript instead of dropping it.
       if (ttsSpeakingRef.current || ttsStreamBusyRef.current || ttsStreamQueueRef.current.length > 0) {
         if (!pushToTalkRef.current) return;
-        ttsStreamQueueRef.current = [];
-        ttsStreamBusyRef.current = false;
-        postDrainCallbackRef.current = null;
-        streamMutedRef.current = true;
-        try { ttsRef.current?.stop(); } catch { /* ignore */ }
+        flushTtsPipeline();
       }
       pendingTranscriptRef.current = (
         pendingTranscriptRef.current ? pendingTranscriptRef.current + " " : ""
@@ -277,11 +276,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     if (!conversationActiveRef.current) return;
     if (!ttsSpeakingRef.current && !ttsStreamBusyRef.current && !ttsStreamQueueRef.current.length) return;
     // User started speaking — flush TTS state immediately.
-    ttsStreamQueueRef.current = [];
-    ttsStreamBusyRef.current = false;
-    postDrainCallbackRef.current = null;
-    streamMutedRef.current = true;
-    try { ttsRef.current.stop(); } catch { /* ignore */ }
+    flushTtsPipeline();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [speech.isSpeechActive]);
 
@@ -377,6 +372,16 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
       speakRemainder();
     }
   }, [agentReply, conversationActive]);
+
+  // Unmount: kill the whole loop. The speech hook cleans up its own recorder,
+  // but TTS would keep talking after a route change without this.
+  useEffect(() => {
+    return () => {
+      conversationActiveRef.current = false;
+      try { speechRef.current?.stopListening(); } catch { /* ignore */ }
+      try { ttsRef.current?.stop(); } catch { /* ignore */ }
+    };
+  }, []);
 
   // Tab visibility: pause listening when hidden, resume when visible.
   // Browsers throttle/kill SpeechRecognition on hidden tabs which causes
@@ -492,20 +497,13 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
   /** PTT: start recording the user's current speaking turn. Interrupts TTS if playing. */
   const startRecordingTurn = useCallback(() => {
     if (!conversationActiveRef.current) return;
-    // User is taking the floor: mute the rest of the current agent reply so the
-    // streamingText effect can't re-queue sentences while they're recording.
-    streamMutedRef.current = true;
-    // Interrupt agent speech (barge-in)
-    if (ttsSpeakingRef.current || ttsStreamBusyRef.current || ttsStreamQueueRef.current.length > 0) {
-      ttsStreamQueueRef.current = [];
-      ttsStreamBusyRef.current = false;
-      postDrainCallbackRef.current = null;
-      streamingSpokenUpToRef.current = 0;
-      try { ttsRef.current.stop(); } catch { /* ignore */ }
-    }
+    // User is taking the floor: mute the current agent reply and interrupt
+    // any speech in flight (barge-in). flushTtsPipeline also sets streamMutedRef
+    // so the streamingText effect can't re-queue sentences while they record.
+    flushTtsPipeline();
     lastStartAttemptRef.current = Date.now();
     try { speechRef.current?.startListening(); } catch { /* ignore */ }
-  }, []);
+  }, [flushTtsPipeline]);
 
   /** PTT: stop recording and submit the audio to STT → triggers onUserUtterance. */
   const stopRecordingTurn = useCallback(() => {

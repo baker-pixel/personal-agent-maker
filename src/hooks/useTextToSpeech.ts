@@ -69,10 +69,13 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   const [provider, setProviderState] = useState<TtsProvider>("browser");
   const [groqVoiceId, setGroqVoiceIdState] = useState<string | null>(DEFAULT_GROQ_VOICE); // "tara"
 
-  const hydratedRef = useRef(false);
+  // Sync from remote prefs whenever they change, until the user edits something
+  // in THIS surface. A one-shot hydrate is not enough: the first "loaded" snapshot
+  // can be stale (auth race at boot delivers defaults, then real prefs arrive on
+  // the next fetch) and the chosen voice would be silently ignored.
+  const localEditRef = useRef(false);
   useEffect(() => {
-    if (!remote?.loaded || hydratedRef.current) return;
-    hydratedRef.current = true;
+    if (!remote?.loaded || localEditRef.current) return;
     setVoiceURIState(remote.voiceURI);
     setRateState(remote.rate);
     setPitchState(remote.pitch);
@@ -82,17 +85,18 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   }, [remote?.loaded, remote?.voiceURI, remote?.rate, remote?.pitch, remote?.enabled, remote?.provider, remote?.groqVoiceId]);
 
   const setEnabled = (v: boolean | ((prev: boolean) => boolean)) => {
+    localEditRef.current = true;
     setEnabledState((prev) => {
       const next = typeof v === "function" ? (v as (p: boolean) => boolean)(prev) : v;
       onChange?.({ tts_enabled: next });
       return next;
     });
   };
-  const setVoiceURI = (v: string | null) => { setVoiceURIState(v); onChange?.({ tts_voice_uri: v }); };
-  const setRate = (v: number) => { setRateState(v); onChange?.({ tts_rate: v }); };
-  const setPitch = (v: number) => { setPitchState(v); onChange?.({ tts_pitch: v }); };
-  const setProvider = (v: TtsProvider) => { setProviderState(v); onChange?.({ tts_provider: v }); };
-  const setGroqVoiceId = (v: string | null) => { setGroqVoiceIdState(v); onChange?.({ tts_groq_voice_id: v }); };
+  const setVoiceURI = (v: string | null) => { localEditRef.current = true; setVoiceURIState(v); onChange?.({ tts_voice_uri: v }); };
+  const setRate = (v: number) => { localEditRef.current = true; setRateState(v); onChange?.({ tts_rate: v }); };
+  const setPitch = (v: number) => { localEditRef.current = true; setPitchState(v); onChange?.({ tts_pitch: v }); };
+  const setProvider = (v: TtsProvider) => { localEditRef.current = true; setProviderState(v); onChange?.({ tts_provider: v }); };
+  const setGroqVoiceId = (v: string | null) => { localEditRef.current = true; setGroqVoiceIdState(v); onChange?.({ tts_groq_voice_id: v }); };
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -256,7 +260,13 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
       const abort = new AbortController();
       fetchAbortRef.current = abort;
 
-      const { data: { session } } = await supabase.auth.getSession();
+      // Race getSession against a timeout — after a background suspend the auth
+      // client can deadlock on its internal lock and this await would hang
+      // forever, killing TTS silently. A null session falls back to the anon key.
+      const session = await Promise.race([
+        supabase.auth.getSession().then(({ data }) => data.session),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+      ]);
       const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
       const anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const headers = {

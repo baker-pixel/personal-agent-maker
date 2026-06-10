@@ -45,6 +45,12 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Warm-up ping: lets the frontend boot this isolate ahead of real use so
+  // the first user action doesn't pay the cold-start cost.
+  if (req.method === "GET" && new URL(req.url).searchParams.has("warmup")) {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {

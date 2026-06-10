@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -266,15 +265,28 @@ export default function ModeSelect() {
                 <button
                   onClick={handleMicTap}
                   disabled={!voice.isSupported && !voice.speechRecognitionBlockedByPwa}
-                  title={voice.isListening ? "Tap to stop recording" : "Tap to speak"}
+                  title={
+                    voice.isTranscribing
+                      ? "Transcribing — tap to record again"
+                      : voice.isListening
+                        ? "Tap to stop recording"
+                        : "Tap to speak"
+                  }
                   className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 shrink-0 ${
                     voice.isListening
                       ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30 animate-pulse"
-                      : "text-white shadow-lg"
+                      : voice.isTranscribing
+                        ? "text-white shadow-lg opacity-70"
+                        : "text-white shadow-lg"
                   }`}
                   style={!voice.isListening ? { background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 32%))" } : {}}
                 >
-                  {voice.isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  {voice.isTranscribing
+                    ? <Loader2 className="w-5 h-5 animate-spin" />
+                    : voice.isListening
+                      ? <MicOff className="w-5 h-5" />
+                      : <Mic className="w-5 h-5" />
+                  }
                 </button>
                 {textInput.trim() && (
                   <button

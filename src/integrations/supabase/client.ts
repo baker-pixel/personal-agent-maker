@@ -8,10 +8,14 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-// Every supabase request gets a hard 20s ceiling. After a tab/PWA suspend the
+// Every supabase request gets a hard 60s ceiling. After a tab/PWA suspend the
 // underlying socket can be dead, and a fetch on a dead socket hangs forever —
 // which leaves queries (and the auth refresh that all queries wait on) stuck.
-const FETCH_TIMEOUT_MS = 20_000;
+// 60s (not lower) because LLM-heavy edge functions (email-triage,
+// morning-briefing, contacts-sync, steno-summarize) and slow mobile uploads
+// can legitimately run tens of seconds — this is an anti-hang backstop, not a
+// latency budget. Features that need snappier failure race their own timeouts.
+const FETCH_TIMEOUT_MS = 60_000;
 const fetchWithTimeout = (input: RequestInfo | URL, init: RequestInit = {}) =>
   fetch(input, {
     ...init,

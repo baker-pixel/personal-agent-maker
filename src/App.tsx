@@ -10,6 +10,7 @@ import { IntegrationsProvider } from "@/contexts/IntegrationsContext";
 import { AgentProvider } from "@/contexts/AgentContext";
 import { useAppStateMachine } from "@/hooks/useAppStateMachine";
 import { useClientHealthWatchdog } from "@/hooks/useClientHealthWatchdog";
+import { useFunctionWarmup } from "@/hooks/useFunctionWarmup";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
@@ -83,6 +84,8 @@ const App = () => {
 
   // Detect a deadlocked supabase client after background suspend and hard-reload.
   useClientHealthWatchdog();
+  // Keep hot-path edge function isolates warm while the app is in use.
+  useFunctionWarmup();
 
   const authenticated = !!state.session;
 

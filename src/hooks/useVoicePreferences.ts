@@ -64,8 +64,10 @@ export function useVoicePreferences(opts?: VoicePrefsOptions) {
     let cancelled = false;
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { if (!cancelled) setLoaded(true); return; }
-      if (cancelled) return;
+      // No user yet (session still restoring at boot): do NOT publish defaults
+      // as "loaded" — consumers would hydrate from them and ignore the real
+      // prefs that arrive via the auth listener moments later.
+      if (!user || cancelled) return;
       setUserId(user.id);
       const { data } = await supabase
         .from("user_preferences")

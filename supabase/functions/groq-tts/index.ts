@@ -33,6 +33,12 @@ const json = (body: unknown, status: number) =>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // Warm-up ping: lets the frontend boot this isolate ahead of real use so
+  // the first user action doesn't pay the cold-start cost.
+  if (req.method === "GET" && new URL(req.url).searchParams.has("warmup")) {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ error: "Unauthorized" }, 401);
