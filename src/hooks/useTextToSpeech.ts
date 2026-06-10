@@ -220,19 +220,35 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     window.speechSynthesis.cancel();
     markStage("tts_start");
     setIsSpeaking(true);
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: "AI Assistant", artist: "Normy" });
+      navigator.mediaSession.playbackState = "playing";
+    }
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = rate;
     utterance.pitch = pitch;
     const preferred = pickVoice();
     if (preferred) utterance.voice = preferred;
-    utterance.onend = () => { setIsSpeaking(false); onComplete?.(); };
-    utterance.onerror = () => { setIsSpeaking(false); onComplete?.(); };
+    utterance.onend = () => {
+      if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "none";
+      setIsSpeaking(false);
+      onComplete?.();
+    };
+    utterance.onerror = () => {
+      if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "none";
+      setIsSpeaking(false);
+      onComplete?.();
+    };
     utteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
     markStage("audio_play_start");
   }, [isSupported, rate, pitch, pickVoice]);
 
   const speakGroq = useCallback(async (text: string, onComplete?: () => void) => {
+    // Guard: onComplete called exactly once across all exit paths (normal, abort, error, mediaSession)
+    let completed = false;
+    const safeComplete = () => { if (!completed) { completed = true; onComplete?.(); } };
+
     try {
       markStage("tts_start");
       setIsSpeaking(true);
@@ -274,7 +290,9 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
         audioRef.current.crossOrigin = "anonymous";
       }
 
-      // Play a blob and wait for it to finish
+      // Play a blob and wait for it to finish.
+      // Resolves on natural end, error, OR abort signal — prevents promise from
+      // hanging forever when stop() clears el.onended or a mediaSession action fires.
       const playBlob = (blob: Blob): Promise<void> => new Promise((resolve) => {
         if (abort.signal.aborted) { resolve(); return; }
         const blobUrl = URL.createObjectURL(blob);
@@ -284,10 +302,30 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
         el.setAttribute("playsinline", "true");
         (el as any).playsInline = true;
         el.src = blobUrl;
-        el.onended = () => resolve();
+        el.onended = () => { resolve(); };
         el.onerror = () => { console.error("[Groq TTS] playback error"); resolve(); };
-        el.play().catch(() => resolve());
+        abort.signal.addEventListener("abort", () => resolve(), { once: true });
+        el.play().then(() => {
+          if ("mediaSession" in navigator) {
+            navigator.mediaSession.playbackState = "playing";
+          }
+        }).catch(() => resolve());
       });
+
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({ title: "AI Assistant", artist: "Normy" });
+        // Both pause and stop abort cleanly and release any pending onComplete so
+        // ttsStreamBusyRef doesn't get stuck true after an OS media interruption.
+        const handleInterrupt = () => {
+          abort.abort();
+          setIsSpeaking(false);
+          if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "none";
+          safeComplete();
+        };
+        navigator.mediaSession.setActionHandler("pause", handleInterrupt);
+        navigator.mediaSession.setActionHandler("play", () => { audioRef.current?.play().catch(() => {}); });
+        navigator.mediaSession.setActionHandler("stop", handleInterrupt);
+      }
 
       const chunks = splitSentences(text);
       const blobPromises = chunks.map(fetchChunk);
@@ -302,11 +340,12 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
       }
 
       if (!abort.signal.aborted) {
+        if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "none";
         setIsSpeaking(false);
-        onComplete?.();
+        safeComplete();
       }
     } catch (e: any) {
-      if (e?.name === "AbortError") { setIsSpeaking(false); return; }
+      if (e?.name === "AbortError") { setIsSpeaking(false); safeComplete(); return; }
       console.error("[Groq TTS] failed, falling back to browser:", e);
       setIsSpeaking(false);
       const msg = e instanceof Error ? e.message : String(e);
@@ -318,7 +357,7 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
           : "Premium voice unavailable — using browser voice instead.",
         { duration: 5000 }
       );
-      speakBrowser(text, onComplete);
+      speakBrowser(text, safeComplete);
     }
   }, [groqVoiceId, rate, speakBrowser]);
 

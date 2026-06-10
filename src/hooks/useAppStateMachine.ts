@@ -52,7 +52,8 @@ export function useAppStateMachine() {
 
     const { data: grants } = await supabase
       .from("nylas_grants")
-      .select("email, provider");
+      .select("email, provider")
+      .eq("status", "valid");
 
     const connectedEmails: string[] = [];
     for (const g of grants ?? []) {

@@ -15,7 +15,8 @@ async function getAllNylasGrants(adminClient: any, userId: string): Promise<Arra
     .from("nylas_grants")
     .select("grant_id, email")
     .eq("user_id", userId)
-    .eq("provider", "google");
+    .eq("provider", "google")
+    .eq("status", "valid");
   if (!rows?.length) return [];
   return rows.map((r: any) => ({ grantId: r.grant_id, email: r.email || "primary" }));
 }

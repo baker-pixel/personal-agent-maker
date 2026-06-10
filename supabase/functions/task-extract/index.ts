@@ -21,6 +21,7 @@ async function getNylasGrant(admin: any, userId: string): Promise<{ grantId: str
     .select("grant_id")
     .eq("user_id", userId)
     .eq("provider", "google")
+    .eq("status", "valid")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

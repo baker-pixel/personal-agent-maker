@@ -2,3 +2,6 @@ project_id = "hkkejeegacinadsavnjh"
 
 [functions.daily-briefing-cron]
 verify_jwt = false
+
+[functions.nylas-webhook]
+verify_jwt = false

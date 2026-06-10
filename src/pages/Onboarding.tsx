@@ -234,6 +234,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
         .select("id")
         .eq("user_id", session.user.id)
         .eq("provider", "google")
+        .eq("status", "valid")
         .limit(1)
         .then(({ data }) => {
           if (data?.length) {

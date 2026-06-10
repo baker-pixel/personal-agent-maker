@@ -25,8 +25,6 @@ export default function DecisionVoice() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [firstName, setFirstName] = useState<string>("");
-  const [hasGreeted, setHasGreeted] = useState(false);
-  const autoStartedRef = useRef(false);
   const greetedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -100,30 +98,12 @@ export default function DecisionVoice() {
   useEffect(() => {
     if (voice.conversationActive && voice.prefsLoaded && !greetedRef.current && chat.messages.length === 0) {
       greetedRef.current = true;
-      setHasGreeted(true);
       setPendingGreeting(greeting);
       const t = setTimeout(() => setPendingGreeting(null), 500);
       return () => clearTimeout(t);
     }
   }, [voice.conversationActive, voice.prefsLoaded, greeting, chat.messages.length]);
 
-  // Auto-start recording once the greeting finishes (first turn only).
-  // Subsequent turns the user taps the mic manually.
-  useEffect(() => {
-    if (
-      hasGreeted &&
-      voice.conversationActive &&
-      !voice.isSpeaking &&
-      !voice.isListening &&
-      !chat.thinking &&
-      chat.messages.length === 0 &&
-      !autoStartedRef.current
-    ) {
-      autoStartedRef.current = true;
-      voice.startRecordingTurn();
-    }
-    if (!voice.conversationActive) autoStartedRef.current = false;
-  }, [hasGreeted, voice.conversationActive, voice.isSpeaking, voice.isListening, chat.thinking, chat.messages.length]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -191,7 +171,7 @@ export default function DecisionVoice() {
               onGroqVoiceChange={voice.setGroqVoiceId}
             />
             <button
-              onClick={() => { voice.stopConversation(); chat.reset(); greetedRef.current = false; setHasGreeted(false); autoStartedRef.current = false; }}
+              onClick={() => { voice.stopConversation(); chat.reset(); greetedRef.current = false; }}
               className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-accent/50"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -363,7 +343,6 @@ export default function DecisionVoice() {
             {/* Mic / PTT button */}
             <button
               onClick={() => {
-                if (voice.isTranscribing) return;
                 if (!voice.isSupported && !voice.speechRecognitionBlockedByPwa) return;
 
                 // iOS PWA: TTS-only toggle
@@ -377,26 +356,25 @@ export default function DecisionVoice() {
                 }
 
                 if (!voice.conversationActive) {
-                  // Start session — greeting will play, then auto-starts recording
                   chat.reset();
                   greetedRef.current = false;
-                  setHasGreeted(false);
-                  autoStartedRef.current = false;
                   voice.startConversation();
                   return;
                 }
 
-                // PTT: toggle recording turn
+                // PTT: toggle recording turn. Tapping while a transcription is
+                // in flight cancels it and starts a fresh recording — the button
+                // must never be a dead end (same behavior as ModeSelect).
                 if (voice.isListening) {
                   voice.stopRecordingTurn();
                 } else {
                   voice.startRecordingTurn();
                 }
               }}
-              disabled={voice.isTranscribing || (!voice.isSupported && !voice.speechRecognitionBlockedByPwa)}
+              disabled={!voice.isSupported && !voice.speechRecognitionBlockedByPwa}
               title={
                 voice.isTranscribing
-                  ? "Transcribing…"
+                  ? "Transcribing — tap to record again"
                   : voice.speechRecognitionBlockedByPwa
                   ? voice.conversationActive ? "Mute voice replies" : "Enable voice replies"
                   : !voice.isSupported
@@ -411,7 +389,7 @@ export default function DecisionVoice() {
                 !voice.isSupported && !voice.speechRecognitionBlockedByPwa
                   ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
                   : voice.isTranscribing
-                    ? "bg-accent text-accent-foreground opacity-70 cursor-wait"
+                    ? "bg-accent text-accent-foreground opacity-70"
                     : voice.isListening
                       ? "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/40 animate-pulse"
                       : voice.conversationActive

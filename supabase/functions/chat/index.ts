@@ -31,6 +31,7 @@ async function getNylasGrant(adminClient: any, userId: string): Promise<{ grantI
       .select("grant_id, email")
       .eq("user_id", userId)
       .eq("provider", "google")
+      .eq("status", "valid")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -47,7 +48,8 @@ async function getAllNylasGrants(adminClient: any, userId: string): Promise<{ gr
     .from("nylas_grants")
     .select("grant_id, email")
     .eq("user_id", userId)
-    .eq("provider", "google");
+    .eq("provider", "google")
+    .eq("status", "valid");
   if (error) {
     console.error("[chat] getAllNylasGrants error:", error.message ?? error);
     return [];

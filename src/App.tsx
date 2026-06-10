@@ -37,6 +37,7 @@ import AppHeader from "./components/AppHeader";
 import InstallBanner from "./components/InstallBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { UpdatePrompt } from "./components/UpdatePrompt";
+import { GrantExpiredBanner } from "./components/GrantExpiredBanner";
 import NotFound from "./pages/NotFound";
 import Pricing from "./pages/Pricing";
 import Investors from "./pages/Investors";
@@ -107,6 +108,7 @@ const App = () => {
                   <Spinner />
                 ) : (
                   <BrowserRouter>
+                    <GrantExpiredBanner />
                     <Routes>
                       {/* ── Public ───────────────────────────────────────── */}
                       <Route

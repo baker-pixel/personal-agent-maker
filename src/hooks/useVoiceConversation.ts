@@ -93,6 +93,20 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
   const ttsStreamQueueRef = useRef<string[]>([]);
   const ttsStreamBusyRef = useRef(false);
   const postDrainCallbackRef = useRef<(() => void) | null>(null);
+  // True after the user interrupts (barge-in / PTT recording / submit): the rest
+  // of the CURRENT agent reply stays silent. Without this, the streamingText
+  // effect re-queues sentences right after startRecordingTurn() cleared them,
+  // and onResult then drops the user's transcript as "TTS echo".
+  const streamMutedRef = useRef(false);
+  const prevThinkingForStreamRef = useRef(false);
+  useEffect(() => {
+    // New agent turn starting → unmute and reset streaming progress
+    if (thinking && !prevThinkingForStreamRef.current) {
+      streamMutedRef.current = false;
+      streamingSpokenUpToRef.current = 0;
+    }
+    prevThinkingForStreamRef.current = !!thinking;
+  }, [thinking]);
   // Real-time VAD signal — updated before React re-renders, used in drainStreamQueue closure.
   const isSpeechActiveRef = useRef(false);
 
@@ -138,10 +152,11 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     pendingTranscriptRef.current = "";
     if (!buffered) return;
     errorCountRef.current = 0;
-    // Barge-in: discard streaming TTS queue and reset state for next turn
+    // Barge-in: discard streaming TTS queue and mute the rest of this reply
     ttsStreamQueueRef.current = [];
     ttsStreamBusyRef.current = false;
     postDrainCallbackRef.current = null;
+    streamMutedRef.current = true;
     streamingSpokenUpToRef.current = 0;
     // Stop mic immediately — prevents noise during LLM thinking from racing into
     // the next turn. The agentReply effect restarts it after TTS finishes.
@@ -169,10 +184,18 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     onResult: (text) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      // Drop transcripts that arrive while TTS is playing or streaming — the mic
-      // should be off but echoes can still arrive during the stop↔speak transition.
-      // This is the primary defence against the TTS feedback loop.
-      if (ttsSpeakingRef.current || ttsStreamBusyRef.current || ttsStreamQueueRef.current.length > 0) return;
+      // TTS still playing or queued when the transcript lands:
+      // - Hands-free: almost certainly mic echo of the agent's own voice — drop it.
+      // - PTT: the user deliberately recorded and submitted this turn — silence
+      //   the agent and accept the transcript instead of dropping it.
+      if (ttsSpeakingRef.current || ttsStreamBusyRef.current || ttsStreamQueueRef.current.length > 0) {
+        if (!pushToTalkRef.current) return;
+        ttsStreamQueueRef.current = [];
+        ttsStreamBusyRef.current = false;
+        postDrainCallbackRef.current = null;
+        streamMutedRef.current = true;
+        try { ttsRef.current?.stop(); } catch { /* ignore */ }
+      }
       pendingTranscriptRef.current = (
         pendingTranscriptRef.current ? pendingTranscriptRef.current + " " : ""
       ) + trimmed;
@@ -183,6 +206,15 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
       }, PAUSE_MS);
     },
     onError: (err) => {
+      // Recoverable, user-actionable outcomes — toast and skip the failure counter
+      if (err === "stt-timeout") {
+        toast.error("Transcription took too long — tap the mic and try again.");
+        return;
+      }
+      if (err === "no-speech") {
+        toast.info("Didn't catch that — tap the mic and try speaking again.");
+        return;
+      }
       errorCountRef.current += 1;
       lastErrorAtRef.current = Date.now();
       // Critical errors: stop the loop and tell the user
@@ -248,6 +280,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     ttsStreamQueueRef.current = [];
     ttsStreamBusyRef.current = false;
     postDrainCallbackRef.current = null;
+    streamMutedRef.current = true;
     try { ttsRef.current.stop(); } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [speech.isSpeechActive]);
@@ -271,6 +304,8 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
   // This slashes perceived latency — user hears sentence 1 while sentence 2 is still generating.
   useEffect(() => {
     if (!streamingText || !conversationActive) return;
+    // User interrupted this reply — stay silent until the next turn starts
+    if (streamMutedRef.current) return;
     const { sentences, newFrom } = extractCompleteSentences(streamingText, streamingSpokenUpToRef.current);
     if (!sentences.length) return;
     streamingSpokenUpToRef.current = newFrom;
@@ -288,6 +323,13 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     if (!agentReply || agentReply === lastSpokenReplyRef.current) return;
     if (!conversationActive) return;
     lastSpokenReplyRef.current = agentReply;
+
+    // User interrupted this reply mid-stream — don't speak the tail. The
+    // hands-free watchdog (or the user's next PTT tap) handles the mic.
+    if (streamMutedRef.current) {
+      streamingSpokenUpToRef.current = 0;
+      return;
+    }
 
     // How much was already queued via streaming TTS
     const alreadyQueued = streamingSpokenUpToRef.current;
@@ -345,15 +387,14 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
       if (document.hidden) {
         if (conversationActiveRef.current) {
           pausedByVisibilityRef.current = true;
+          // Stop mic (no point recording in background) but let TTS keep playing.
           try { speechRef.current?.stopListening(); } catch { /* ignore */ }
-          try { ttsRef.current?.stop(); } catch { /* ignore */ }
         }
       } else if (pausedByVisibilityRef.current) {
         pausedByVisibilityRef.current = false;
-        // Reset error count after a visibility-driven pause; the previous
-        // failures are stale.
         errorCountRef.current = 0;
-        if (conversationActiveRef.current) {
+        // PTT: user must tap the mic button — never auto-restart on focus.
+        if (conversationActiveRef.current && !pushToTalkRef.current) {
           setTimeout(() => {
             lastStartAttemptRef.current = Date.now();
             try { speechRef.current?.startListening(); } catch { /* ignore */ }
@@ -402,6 +443,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     conversationActiveRef.current = true;
     errorCountRef.current = 0;
     pausedByVisibilityRef.current = false;
+    streamMutedRef.current = false; // fresh session — greeting must be audible
     voicePrefs.update({ voice_conversation_enabled: true });
     // Unlock iOS SpeechSynthesis + <audio> on the user gesture (required for PWA).
     // MUST happen synchronously inside the gesture handler — never after `await`.
@@ -443,6 +485,9 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
   /** PTT: start recording the user's current speaking turn. Interrupts TTS if playing. */
   const startRecordingTurn = useCallback(() => {
     if (!conversationActiveRef.current) return;
+    // User is taking the floor: mute the rest of the current agent reply so the
+    // streamingText effect can't re-queue sentences while they're recording.
+    streamMutedRef.current = true;
     // Interrupt agent speech (barge-in)
     if (ttsSpeakingRef.current || ttsStreamBusyRef.current || ttsStreamQueueRef.current.length > 0) {
       ttsStreamQueueRef.current = [];

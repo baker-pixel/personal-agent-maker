@@ -137,6 +137,16 @@ Deno.serve(async (req) => {
         .is("email", null);
     }
 
+    // If this reconnect replaces an existing grant, revoke the old one at Nylas
+    // afterwards — otherwise zombie grants accumulate and keep firing webhooks.
+    const { data: prior } = await admin
+      .from("nylas_grants")
+      .select("grant_id")
+      .eq("user_id", user.id)
+      .eq("provider", "google")
+      .eq("email", email)
+      .maybeSingle();
+
     // Upsert: if a grant already exists for this user+google+email, replace grant_id
     const { error: upsertErr } = await admin
       .from("nylas_grants")
@@ -146,6 +156,7 @@ Deno.serve(async (req) => {
           provider: "google",
           grant_id: grantId,
           email,
+          status: "valid", // re-auth heals an expired/revoked grant
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id,provider,email" }
@@ -156,6 +167,23 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Failed to store grant", detail: upsertErr.message }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Best-effort: the new grant is stored, so losing the old one is safe
+    // even if this call fails (it just lingers at Nylas until it expires).
+    if (prior?.grant_id && prior.grant_id !== grantId) {
+      const apiKey = Deno.env.get("NYLAS_API_KEY");
+      if (apiKey) {
+        try {
+          const res = await fetch(`${NYLAS_BASE}/v3/grants/${prior.grant_id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${apiKey}` },
+          });
+          console.log(`nylas-callback: revoked replaced grant ${prior.grant_id} (HTTP ${res.status})`);
+        } catch (e) {
+          console.warn("nylas-callback: failed to revoke replaced grant:", e);
+        }
+      }
     }
 
     // Return shape compatible with GoogleCallback.tsx expectations

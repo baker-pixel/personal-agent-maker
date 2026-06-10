@@ -25,6 +25,7 @@ async function getNylasGrant(adminClient: any, userId: string, logs: LogEntry[])
       .select("grant_id, email")
       .eq("user_id", userId)
       .eq("provider", "google")
+      .eq("status", "valid")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();

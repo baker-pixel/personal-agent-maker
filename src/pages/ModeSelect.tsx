@@ -27,8 +27,6 @@ export default function ModeSelect() {
   const [textInput, setTextInput] = useState("");
   const [voiceJustFilled, setVoiceJustFilled] = useState(false);
   const [pendingGreeting, setPendingGreeting] = useState<string | null>(null);
-  const [hasGreeted, setHasGreeted] = useState(false);
-  const autoStartedRef = useRef(false);
   const greetedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -66,29 +64,11 @@ export default function ModeSelect() {
   useEffect(() => {
     if (voice.conversationActive && voice.prefsLoaded && !greetedRef.current && chat.messages.length === 0) {
       greetedRef.current = true;
-      setHasGreeted(true);
       setPendingGreeting(greeting);
       const t = setTimeout(() => setPendingGreeting(null), 500);
       return () => clearTimeout(t);
     }
   }, [voice.conversationActive, voice.prefsLoaded, greeting, chat.messages.length]);
-
-  // Auto-start recording once the greeting finishes playing (first turn only)
-  useEffect(() => {
-    if (
-      hasGreeted &&
-      voice.conversationActive &&
-      !voice.isSpeaking &&
-      !voice.isListening &&
-      !chat.thinking &&
-      chat.messages.length === 0 &&
-      !autoStartedRef.current
-    ) {
-      autoStartedRef.current = true;
-      voice.startRecordingTurn();
-    }
-    if (!voice.conversationActive) autoStartedRef.current = false;
-  }, [hasGreeted, voice.conversationActive, voice.isSpeaking, voice.isListening, chat.thinking, chat.messages.length]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -98,8 +78,6 @@ export default function ModeSelect() {
     if (!hookEnabled) setHookEnabled(true);
     chat.reset();
     greetedRef.current = false;
-    setHasGreeted(false);
-    autoStartedRef.current = false;
     setVoiceOpen(true);
     if (!voice.conversationActive) voice.startConversation();
   };
@@ -109,8 +87,6 @@ export default function ModeSelect() {
     setVoiceOpen(false);
     chat.reset();
     greetedRef.current = false;
-    setHasGreeted(false);
-    autoStartedRef.current = false;
   };
 
   const handleSend = () => {

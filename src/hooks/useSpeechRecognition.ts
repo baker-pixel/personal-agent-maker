@@ -43,6 +43,9 @@ function rms(data: Uint8Array): number {
 const SPEECH_THRESHOLD = 0.015;
 const UTTERANCE_END_MS = 600; // silence after speech → send chunk
 const VAD_INTERVAL_MS = 100;
+// Hard cap on a single STT round-trip. A hung fetch (or hung auth refresh)
+// would otherwise leave isTranscribing stuck true forever, disabling the UI.
+const STT_TIMEOUT_MS = 15000;
 
 const SUPABASE_URL = (import.meta as any).env.VITE_SUPABASE_URL as string;
 
@@ -183,7 +186,13 @@ export function useSpeechRecognition({
 
       const blob = new Blob(chunks, { type: mT });
       if (blob.size < 1000) {
-        if (isListeningRef.current && streamRef.current) startRecorder(streamRef.current);
+        if (pushToTalkRef.current) {
+          // PTT: user explicitly submitted — surface that nothing was captured
+          // instead of failing silently.
+          onErrorRef.current?.("no-speech");
+        } else if (isListeningRef.current && streamRef.current) {
+          startRecorder(streamRef.current);
+        }
         return;
       }
 
@@ -192,40 +201,68 @@ export function useSpeechRecognition({
       abortRef.current = abort;
       setIsTranscribing(true);
 
+      // Watchdog: race the STT round-trip against a hard timeout. Covers both a
+      // hung fetch and a hung getSession() so isTranscribing always resets.
+      let timedOut = false;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const sttTimeout = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          timedOut = true;
+          abort.abort();
+          reject(new Error("stt-timeout"));
+        }, STT_TIMEOUT_MS);
+      });
+
       try {
-        const text = await transcribe(blob, langRef.current, abort.signal);
+        const text = await Promise.race([transcribe(blob, langRef.current, abort.signal), sttTimeout]);
         if (abort.signal.aborted) return;
         // Re-check after async gap: stopListening() or a new session may have started.
         if (stoppingRef.current || recorderGenRef.current !== myGen) return;
         // Filter Whisper hallucinations: silence, room noise, and TTS echo all
         // produce recognizable false-positive phrases. Drop them before onResult.
         const normalized = text.trim().toLowerCase().replace(/[.!?,;…\s]+$/, "").replace(/^[.!?,;…\s]+/, "");
-        const isHallucination =
-          // Too short to be real speech
-          text.length < 4 ||
+        // Junk that's never real speech regardless of mode
+        const isJunk =
           // No alphabetic content at all (pure punctuation / digits)
           !/[a-zA-Z]/.test(text) ||
           // Whisper metadata tags: [Music], [Applause], [BLANK_AUDIO], (silence), etc.
           /^\[.*\]$/.test(text.trim()) ||
           /^\(.*\)$/.test(text.trim()) ||
-          // Single filler words / backchannels
-          /^(you|thanks?|thank you|ok|okay|hmm+|uh+|ah+|um+|er+|oh|hm+|ah|eh|right|sure|yes|no|bye|hi|hey|alright|yep|nope|cool|great|wow|well|so|and|the|a)$/i.test(normalized) ||
           // Common Whisper silence hallucinations
           /^(thank you for watching|thanks for watching|please subscribe|like and subscribe|don'?t forget to subscribe|see you next time|see you in the next video|have a nice day|you'?re welcome|take care|good luck|goodbye|good bye|i'?ll see you|until next time|this video|that'?s all|stay tuned|keep watching|music playing|background music)$/i.test(normalized);
+        // Echo/backchannel filters only apply in hands-free mode. In PTT the user
+        // deliberately recorded and submitted — short answers like "yes" are real.
+        const isHallucination = isJunk || (!pushToTalkRef.current && (
+          // Too short to be real speech
+          text.length < 4 ||
+          // Single filler words / backchannels
+          /^(you|thanks?|thank you|ok|okay|hmm+|uh+|ah+|um+|er+|oh|hm+|ah|eh|right|sure|yes|no|bye|hi|hey|alright|yep|nope|cool|great|wow|well|so|and|the|a)$/i.test(normalized)
+        ));
         if (text && !isHallucination) {
           setTranscript(text);
           onResultRef.current?.(text);
           armSilenceTimer();
+        } else if (pushToTalkRef.current) {
+          // PTT: deliberate submit produced nothing usable — tell the user
+          onErrorRef.current?.("no-speech");
         }
       } catch (err: any) {
+        if (timedOut || err?.message === "stt-timeout") {
+          console.warn("[STT] transcription timed out after", STT_TIMEOUT_MS, "ms");
+          onErrorRef.current?.("stt-timeout");
+          return;
+        }
         if (err?.name === "AbortError") return;
         console.error("STT transcription error:", err);
         onErrorRef.current?.(err?.message ?? "network");
       } finally {
+        if (timeoutId) clearTimeout(timeoutId);
         setIsTranscribing(false);
         if (!continuousRef.current) {
           stopListeningRef.current();
-        } else if (isListeningRef.current && streamRef.current && !stoppingRef.current && recorderGenRef.current === myGen) {
+        } else if (!pushToTalkRef.current && isListeningRef.current && streamRef.current && !stoppingRef.current && recorderGenRef.current === myGen) {
+          // Hands-free only: PTT never auto-restarts the recorder — doing so could
+          // double-start when the user began a new turn while STT was in flight.
           startRecorder(streamRef.current);
         }
       }
@@ -305,6 +342,9 @@ export function useSpeechRecognition({
     if (!isSupported) { onErrorRef.current?.("not-supported"); return; }
 
     stoppingRef.current = false;
+    // Cancel any in-flight transcription — the user starting a new turn
+    // supersedes a pending (possibly stuck) STT request.
+    if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
     isListeningRef.current = true;
     setIsListening(true);
     setIsSpeechActive(false);

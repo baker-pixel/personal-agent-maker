@@ -160,6 +160,7 @@ Deno.serve(async (req) => {
     .from("nylas_grants")
     .select("user_id, grant_id, email, created_at")
     .eq("provider", "google")
+    .eq("status", "valid")
     .order("created_at", { ascending: false });
 
   if (grantErr) {
