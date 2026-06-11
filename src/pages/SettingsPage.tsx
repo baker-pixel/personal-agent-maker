@@ -757,6 +757,10 @@ export default function Settings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <p className="pt-6 pb-2 text-center text-[10px] text-muted-foreground/60 select-all">
+        Normy v{__APP_VERSION__} ({__COMMIT_HASH__}) · built {new Date(__BUILD_TIME__).toLocaleString()}
+      </p>
     </div>
   );
 }
