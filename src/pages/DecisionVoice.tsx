@@ -25,7 +25,7 @@ export default function DecisionVoice() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Shared voice session — same greeting, TTS, and mic behavior as ModeSelect
-  const { chat, voice, resetSession, handleMicTap } = useVoiceSession(agentName, {
+  const { chat, voice, resetSession, handleMicTap, voiceEngine } = useVoiceSession(agentName, {
     onUserUtterance: (text) => {
       setInput(text);
       setVoiceJustFilled(true);
@@ -34,6 +34,8 @@ export default function DecisionVoice() {
       // Enter/Go key submission. User explicitly taps Send to confirm.
     },
   });
+
+  const handsFree = voiceEngine === "sonic";
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -158,9 +160,11 @@ export default function DecisionVoice() {
                 {voice.isSpeaking ? `${agentName} is speaking…` : voice.isListening ? "Listening…" : "Ready"}
               </p>
               <p className="text-sm text-muted-foreground max-w-xs">
-                {voice.isListening
-                  ? `Tap mic to send — ${agentName} will reply out loud.`
-                  : `Tap mic to speak. ${agentName} will reply out loud.`}
+                {handsFree
+                  ? `Hands-free — just talk, ${agentName} hears you. Talk over ${agentName} to interrupt. Tap mic to end.`
+                  : voice.isListening
+                    ? `Tap mic to send — ${agentName} will reply out loud.`
+                    : `Tap mic to speak. ${agentName} will reply out loud.`}
               </p>
             </motion.div>
           )}
@@ -236,16 +240,16 @@ export default function DecisionVoice() {
                   "bg-muted-foreground"
                 }`} />
                 {voice.isSpeaking
-                  ? `${agentName} speaking…`
+                  ? handsFree ? `${agentName} speaking — talk to interrupt` : `${agentName} speaking…`
                   : voice.isTranscribing
                     ? "Transcribing…"
                     : voice.isListening
-                      ? "Recording — tap mic to stop"
+                      ? handsFree ? "Listening — just speak" : "Recording — tap mic to stop"
                       : chat.thinking
                         ? "Thinking…"
                         : input.trim()
                           ? "Review your message, then tap Send →"
-                          : "Tap mic to speak"}
+                          : handsFree ? "Listening — just speak" : "Tap mic to speak"}
               </div>
               <button
                 onClick={() => voice.stopConversation()}

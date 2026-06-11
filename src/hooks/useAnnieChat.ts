@@ -44,6 +44,7 @@ export function useAnnieChat(
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const convIdRef = useRef<string | null>(null);
+  const ensureConversationRef = useRef<Promise<string | null> | null>(null);
   // Bumped by reset() — an in-flight initial load from a previous "generation"
   // must not repopulate messages after the user started a fresh session.
   const resetGenRef = useRef(0);
@@ -60,6 +61,38 @@ export function useAnnieChat(
       .limit(50);
     if (data) setConversations(data);
   }, [conversationTitle]);
+
+  const ensureConversation = useCallback(async (): Promise<string | null> => {
+    if (convIdRef.current) return convIdRef.current;
+    if (ensureConversationRef.current) return ensureConversationRef.current;
+
+    ensureConversationRef.current = (async () => {
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        const { data } = await supabase.auth.refreshSession();
+        session = data.session;
+      }
+      if (!session?.user) return null;
+
+      const { data: created } = await supabase
+        .from("chat_conversations")
+        .insert({ user_id: session.user.id, title: conversationTitle })
+        .select("id")
+        .single();
+
+      if (!created?.id) return null;
+      convIdRef.current = created.id;
+      setActiveConversationId(created.id);
+      fetchConversations();
+      return created.id;
+    })();
+
+    try {
+      return await ensureConversationRef.current;
+    } finally {
+      ensureConversationRef.current = null;
+    }
+  }, [conversationTitle, fetchConversations]);
 
   const loadConversation = useCallback(async (conversationId: string) => {
     // Bump the generation: this load supersedes any in-flight initial load or
@@ -181,20 +214,7 @@ export function useAnnieChat(
       if (stale()) return;
 
       // Create conversation if needed
-      if (!convIdRef.current) {
-        if (session?.user) {
-          const { data: created } = await supabase
-            .from("chat_conversations")
-            .insert({ user_id: session.user.id, title: conversationTitle })
-            .select("id")
-            .single();
-          if (created) {
-            convIdRef.current = created.id;
-            setActiveConversationId(created.id);
-            fetchConversations();
-          }
-        }
-      }
+      if (!convIdRef.current && session?.user) await ensureConversation();
 
       // Persist user message
       if (convIdRef.current) {
@@ -339,8 +359,8 @@ export function useAnnieChat(
         if (convIdRef.current && assistantSoFar && !stale()) {
           persistMessage(convIdRef.current, "assistant", assistantSoFar);
         }
-      } catch (err: any) {
-        if (err?.name === "AbortError") {
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") {
           // Timeout from our safetyTimer — show recoverable message so user knows to retry
           if (timerFired && !stale()) {
             const msg = "Request timed out. Please try again.";
@@ -350,7 +370,7 @@ export function useAnnieChat(
           return;
         }
         console.error("Agent chat error:", err);
-        const errorMsg = err?.message || "Something went wrong. Try again!";
+        const errorMsg = err instanceof Error ? err.message : "Something went wrong. Try again!";
         toast({ title: "Oops", description: errorMsg, variant: "destructive" });
         upsertAssistant("Sorry, I had trouble connecting. Try again?");
       } finally {
@@ -362,7 +382,7 @@ export function useAnnieChat(
         if (!stale()) setThinking(false);
       }
     },
-    [messages, thinking, agentName, fetchConversations]
+    [messages, thinking, agentName, mode, ensureConversation]
   );
 
   const reset = useCallback(async () => {
@@ -371,14 +391,34 @@ export function useAnnieChat(
     setMessages([]);
     setThinking(false);
     setLoading(false);
+    ensureConversationRef.current = null;
     convIdRef.current = null;
     setActiveConversationId(null);
   }, []);
 
   const injectAgentMessage = useCallback((text: string) => {
     setMessages((prev) => [...prev, { role: "agent", text }]);
-    if (convIdRef.current) persistMessage(convIdRef.current, "assistant", text);
-  }, []);
+    if (convIdRef.current) {
+      void persistMessage(convIdRef.current, "assistant", text);
+      return;
+    }
+    void ensureConversation().then((conversationId) => {
+      if (conversationId) return persistMessage(conversationId, "assistant", text);
+    });
+  }, [ensureConversation]);
+
+  // Voice transcripts from the speech-to-speech engine — the turn already
+  // happened server-side, so this only records it (never triggers a send).
+  const injectUserMessage = useCallback((text: string) => {
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    if (convIdRef.current) {
+      void persistMessage(convIdRef.current, "user", text);
+      return;
+    }
+    void ensureConversation().then((conversationId) => {
+      if (conversationId) return persistMessage(conversationId, "user", text);
+    });
+  }, [ensureConversation]);
 
   return {
     messages,
@@ -387,6 +427,7 @@ export function useAnnieChat(
     send,
     reset,
     injectAgentMessage,
+    injectUserMessage,
     conversations,
     activeConversationId,
     loadConversation,

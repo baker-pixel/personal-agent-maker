@@ -23,7 +23,7 @@ export default function ModeSelect() {
 
   // Shared voice session — same greeting, TTS, and mic behavior as DecisionVoice.
   // Separate conversation title so quick sessions don't pollute Delegate history.
-  const { chat, voice, startSession, resetSession, handleMicTap } = useVoiceSession(displayName, {
+  const { chat, voice, startSession, resetSession, handleMicTap, voiceEngine } = useVoiceSession(displayName, {
     conversationTitle: "Quick Chat",
     enabled: hookEnabled,
     skipInitialLoad: true,
@@ -56,16 +56,20 @@ export default function ModeSelect() {
     setTextInput("");
   };
 
+  const handsFree = voiceEngine === "sonic";
+
   const statusLabel = voice.isSpeaking
-    ? `${displayName} is speaking…`
+    ? handsFree ? `${displayName} speaking — talk to interrupt` : `${displayName} is speaking…`
     : voice.isTranscribing
     ? "Transcribing…"
     : voice.isListening
-    ? "Recording — tap mic to stop"
+    ? handsFree ? "Listening — just speak" : "Recording — tap mic to stop"
     : textInput.trim()
     ? "Review your message, then tap Send →"
     : chat.thinking
     ? "Thinking…"
+    : handsFree && voice.conversationActive
+    ? "Listening — just speak"
     : "Tap mic to speak";
 
   return (
@@ -179,19 +183,23 @@ export default function ModeSelect() {
                   </motion.div>
                   <p className="font-display text-lg font-semibold text-foreground">
                     {voice.isListening
-                      ? "Recording…"
+                      ? handsFree ? "Listening…" : "Recording…"
                       : voice.isSpeaking
                         ? `${displayName} is speaking…`
                         : chat.thinking
                           ? "Thinking…"
-                          : "Tap mic to speak"}
+                          : handsFree && voice.conversationActive
+                            ? "Listening…"
+                            : "Tap mic to speak"}
                   </p>
                   <p className="text-sm text-muted-foreground max-w-xs">
                     {voice.speechRecognitionBlockedByPwa
                       ? "Mic unavailable in installed app — type below."
-                      : voice.isListening
-                        ? `Tap mic again to send to ${displayName}.`
-                        : `Tap the mic, speak, then tap again to send.`}
+                      : handsFree
+                        ? `Hands-free — just talk, ${displayName} hears you. Tap mic to end.`
+                        : voice.isListening
+                          ? `Tap mic again to send to ${displayName}.`
+                          : `Tap the mic, speak, then tap again to send.`}
                   </p>
                 </div>
               )}

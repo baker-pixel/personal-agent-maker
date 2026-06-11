@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { useAnnieChat } from "./useAnnieChat";
 import { useVoiceConversation } from "./useVoiceConversation";
+import { useSonicVoice, sonicEnabled } from "./useSonicVoice";
 import { useUserDisplayName } from "./useUserDisplayName";
 import { stripMarkdown } from "@/lib/stripMarkdown";
 
@@ -78,6 +79,30 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
     pushToTalk: true,
   });
 
+  // Nova Sonic speech-to-speech engine — replaces the whole STT→LLM→TTS loop
+  // when VITE_VOICE_SERVER_URL is configured. The Groq pipeline above stays
+  // mounted as the fallback (rules of hooks: both are always called).
+  const sonic = useSonicVoice({
+    agentName,
+    onTranscript: (role, text) => {
+      // Sonic occasionally emits JSON control markers as text — never show them.
+      if (!text || text.trim().startsWith("{")) return;
+      // Note: onUserUtterance deliberately NOT called here — in the Groq PTT
+      // flow it prefills the input box for confirmation, but Sonic turns are
+      // already processed; mirroring them into the textbox just confuses.
+      if (role === "USER") chat.injectUserMessage(text);
+      else chat.injectAgentMessage(text);
+    },
+    // Skip the note when nothing was said — injecting would persist a junk
+    // one-message conversation into history.
+    onAutoEnd: () => {
+      if (chat.messages.length > 0) {
+        chat.injectAgentMessage("Voice session ended — I didn't hear anything for a while. Tap the mic when you need me.");
+      }
+    },
+  });
+  const useSonic = sonicEnabled();
+
   const greeting = userName
     ? `Hey ${userName}, how can I help?`
     : "Hey there, how can I help?";
@@ -89,6 +114,7 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
   // - !chat.loading + empty messages: only greet a genuinely fresh conversation
   useEffect(() => {
     if (
+      !useSonic &&
       voice.conversationActive &&
       voice.prefsLoaded &&
       voice.ttsEnabled &&
@@ -122,18 +148,27 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
   const startSession = useCallback(() => {
     chat.reset();
     resetGreeting();
-    voice.startConversation();
-  }, [chat.reset, resetGreeting, voice.startConversation]);
+    if (useSonic) sonic.startConversation();
+    else voice.startConversation();
+  }, [chat.reset, resetGreeting, voice.startConversation, sonic.startConversation, useSonic]);
 
   /** Stop the voice loop AND clear the transcript (New chat / close overlay). */
   const resetSession = useCallback(() => {
-    voice.stopConversation();
+    if (useSonic) sonic.stopConversation();
+    else voice.stopConversation();
     chat.reset();
     resetGreeting();
-  }, [voice.stopConversation, chat.reset, resetGreeting]);
+  }, [voice.stopConversation, sonic.stopConversation, useSonic, chat.reset, resetGreeting]);
 
   /** Unified mic-button behavior — every surface routes its mic tap here. */
   const handleMicTap = useCallback(() => {
+    // Sonic is hands-free: one tap starts the session, the next tap ends it.
+    if (useSonic) {
+      if (sonic.conversationActive) sonic.stopConversation();
+      else startSession();
+      return;
+    }
+
     if (!voice.isSupported && !voice.speechRecognitionBlockedByPwa) return;
 
     // iOS PWA: SpeechRecognition unavailable — mic button toggles TTS-only mode
@@ -156,6 +191,9 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
     if (voice.isListening) voice.stopRecordingTurn();
     else voice.startRecordingTurn();
   }, [
+    useSonic,
+    sonic.conversationActive,
+    sonic.stopConversation,
     voice.isSupported,
     voice.speechRecognitionBlockedByPwa,
     voice.conversationActive,
@@ -170,9 +208,27 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
 
   // Surfaces must send through sendInSession so the per-session "user actually
   // spoke" gate opens — expose it as chat.send so call sites can't bypass it.
+  // In Sonic mode the voice-state fields surfaces render from (active /
+  // listening / speaking) come from the Sonic engine; settings fields (voices,
+  // rate, provider…) still come from the Groq hook so the settings panel works.
   return {
     chat: { ...chat, send: sendInSession },
-    voice,
+    voice: useSonic
+      ? {
+          ...voice,
+          conversationActive: sonic.conversationActive,
+          isListening: sonic.isListening,
+          isSpeaking: sonic.isSpeaking,
+          isTranscribing: false,
+          isSupported: true,
+          speechRecognitionBlockedByPwa: false,
+          startConversation: sonic.startConversation,
+          stopConversation: sonic.stopConversation,
+          toggleConversation: sonic.toggleConversation,
+        }
+      : voice,
+    voiceEngine: useSonic ? ("sonic" as const) : ("groq" as const),
+    voiceError: useSonic ? sonic.error : null,
     startSession,
     resetSession,
     resetGreeting,
