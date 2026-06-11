@@ -45,7 +45,7 @@ const buildClient = () => createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHA
     // Recover orphaned refresh/session locks faster after suspend/resume.
     // The auth client will steal the lock after this timeout instead of
     // waiting forever on a tab that was frozen mid-refresh.
-    lockAcquireTimeout: 2000,
+    lock: undefined
   },
   global: {
     fetch: fetchWithTimeout,
