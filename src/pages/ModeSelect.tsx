@@ -38,11 +38,16 @@ export default function ModeSelect() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat.messages, chat.thinking]);
 
-  // "Talk to {agent}" / big mic circle: open the overlay and start a session
+  // "Talk to {agent}" / big mic circle: open the overlay. The session itself
+  // starts in onAnimationComplete — getUserMedia + audio-engine spin-up mid
+  // slide-up stalls the spring on mobile and leaves the overlay stuck halfway.
   const handleOpenVoice = () => {
     if (!hookEnabled) setHookEnabled(true);
     setVoiceOpen(true);
-    if (!voice.conversationActive) startSession();
+  };
+
+  const handleOverlayShown = () => {
+    if (voiceOpen && !voice.conversationActive) startSession();
   };
 
   const handleClose = () => {
@@ -89,7 +94,9 @@ export default function ModeSelect() {
         {/* Tap to talk */}
         <div className="flex flex-col items-center gap-3 py-4">
           <button onClick={handleOpenVoice} className="relative flex items-center justify-center">
-            {[0, 1, 2].map((i) => (
+            {/* Ripples pause while the overlay is up — they otherwise keep
+                animating behind it and steal mobile GPU frames. */}
+            {!voiceOpen && [0, 1, 2].map((i) => (
               <motion.div
                 key={i}
                 className="absolute rounded-full"
@@ -141,6 +148,7 @@ export default function ModeSelect() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
+            onAnimationComplete={handleOverlayShown}
             className="fixed inset-0 z-[80] bg-background flex flex-col"
             style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
           >
