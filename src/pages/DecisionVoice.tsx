@@ -25,7 +25,7 @@ export default function DecisionVoice() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Shared voice session — same greeting, TTS, and mic behavior as ModeSelect
-  const { chat, voice, resetSession, handleMicTap, voiceEngine } = useVoiceSession(agentName, {
+  const { chat, voice, startSession, resetSession, handleMicTap, voiceEngine } = useVoiceSession(agentName, {
     onUserUtterance: (text) => {
       setInput(text);
       setVoiceJustFilled(true);
@@ -36,6 +36,15 @@ export default function DecisionVoice() {
   });
 
   const handsFree = voiceEngine === "sonic";
+
+  // Hands-free engine: start listening as soon as the page opens — no mic tap
+  // required. Once only; after a silence auto-end the user taps to restart.
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    if (!handsFree || autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    startSession();
+  }, [handsFree, startSession]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -137,9 +146,15 @@ export default function DecisionVoice() {
               <div className="w-14 h-14 rounded-full bg-accent flex items-center justify-center text-accent-foreground font-bold text-xl mb-4">
                 {agentName.charAt(0)}
               </div>
-              <p className="font-display text-lg font-semibold text-foreground mb-1">Ready to chat</p>
+              <p className="font-display text-lg font-semibold text-foreground mb-1">
+                {handsFree && voice.isConnecting ? "Starting voice session…" : "Ready to chat"}
+              </p>
               <p className="text-sm text-muted-foreground max-w-xs mb-6">
-                Tap the mic to start a voice session with {agentName}, or type below.
+                {handsFree
+                  ? voice.isConnecting
+                    ? `Connecting to ${agentName} — just start talking in a moment.`
+                    : `Tap the mic to talk hands-free with ${agentName}, or type below.`
+                  : `Tap the mic to start a voice session with ${agentName}, or type below.`}
               </p>
               <p className="text-xs text-muted-foreground/70 max-w-xs">
                 Tip: on iPhone, set up "Hey Siri, talk to {agentName}" — see <a href="/normy-siri-shortcut.txt" target="_blank" rel="noreferrer" className="underline hover:text-foreground">setup guide</a>.
@@ -161,7 +176,7 @@ export default function DecisionVoice() {
               </p>
               <p className="text-sm text-muted-foreground max-w-xs">
                 {handsFree
-                  ? `Hands-free — just talk, ${agentName} hears you. Talk over ${agentName} to interrupt. Tap mic to end.`
+                  ? `Hands-free — just talk. Tap mic to end.`
                   : voice.isListening
                     ? `Tap mic to send — ${agentName} will reply out loud.`
                     : `Tap mic to speak. ${agentName} will reply out loud.`}
@@ -219,7 +234,7 @@ export default function DecisionVoice() {
           {/* Status bar — only when conversation is active */}
           {voice.conversationActive && (
             <div className="container max-w-lg flex items-center justify-between gap-2 pt-3 px-4">
-              <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full ${
+              <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full min-w-0 flex-1 ${
                 voice.isSpeaking
                   ? "bg-primary/10 text-primary"
                   : voice.isTranscribing
@@ -232,29 +247,31 @@ export default function DecisionVoice() {
                           ? "bg-muted text-muted-foreground"
                           : "bg-muted text-muted-foreground"
               }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${
+                <span className={`shrink-0 w-1.5 h-1.5 rounded-full ${
                   voice.isSpeaking ? "bg-primary animate-pulse" :
                   voice.isTranscribing ? "bg-accent animate-pulse" :
                   voice.isListening ? "bg-destructive animate-pulse" :
                   input.trim() ? "bg-accent" :
                   "bg-muted-foreground"
                 }`} />
-                {voice.isSpeaking
-                  ? handsFree ? `${agentName} speaking — talk to interrupt` : `${agentName} speaking…`
-                  : voice.isTranscribing
-                    ? "Transcribing…"
-                    : voice.isListening
-                      ? handsFree ? "Listening — just speak" : "Recording — tap mic to stop"
-                      : chat.thinking
-                        ? "Thinking…"
-                        : input.trim()
-                          ? "Review your message, then tap Send →"
-                          : handsFree ? "Listening — just speak" : "Tap mic to speak"}
+                <span className="truncate">
+                  {voice.isSpeaking
+                    ? handsFree ? "Speaking — talk to interrupt" : `${agentName} speaking…`
+                    : voice.isTranscribing
+                      ? "Transcribing…"
+                      : voice.isListening
+                        ? handsFree ? "Listening — just speak" : "Recording — tap mic to stop"
+                        : chat.thinking
+                          ? "Thinking…"
+                          : input.trim()
+                            ? "Review your message, then tap Send →"
+                            : handsFree ? "Listening — just speak" : "Tap mic to speak"}
+                </span>
               </div>
               <button
                 onClick={() => voice.stopConversation()}
                 title="End voice session"
-                className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive transition-colors px-2 py-1.5 rounded-lg hover:bg-destructive/10"
+                className="shrink-0 flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive transition-colors px-2 py-1.5 rounded-lg hover:bg-destructive/10"
               >
                 <PhoneOff className="w-3.5 h-3.5" />
                 End
@@ -293,9 +310,11 @@ export default function DecisionVoice() {
                     ? "Voice not supported — try Chrome, Edge, or Safari"
                     : !voice.conversationActive
                       ? `Start a voice session with ${agentName}`
-                      : voice.isListening
-                        ? "Tap to stop recording"
-                        : "Tap to speak"
+                      : handsFree
+                        ? "End voice session"
+                        : voice.isListening
+                          ? "Tap to stop recording"
+                          : "Tap to speak"
               }
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 flex-shrink-0 ${
                 !voice.isSupported && !voice.speechRecognitionBlockedByPwa

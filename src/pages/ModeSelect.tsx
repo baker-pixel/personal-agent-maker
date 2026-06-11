@@ -59,7 +59,7 @@ export default function ModeSelect() {
   const handsFree = voiceEngine === "sonic";
 
   const statusLabel = voice.isSpeaking
-    ? handsFree ? `${displayName} speaking — talk to interrupt` : `${displayName} is speaking…`
+    ? handsFree ? "Speaking — talk to interrupt" : `${displayName} is speaking…`
     : voice.isTranscribing
     ? "Transcribing…"
     : voice.isListening
@@ -68,6 +68,8 @@ export default function ModeSelect() {
     ? "Review your message, then tap Send →"
     : chat.thinking
     ? "Thinking…"
+    : voice.isConnecting
+    ? "Starting voice session…"
     : handsFree && voice.conversationActive
     ? "Listening — just speak"
     : "Tap mic to speak";
@@ -144,20 +146,20 @@ export default function ModeSelect() {
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
                 <motion.div
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-accent-foreground font-bold text-sm shadow"
+                  className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-accent-foreground font-bold text-sm shadow"
                   style={{ background: "linear-gradient(135deg, hsl(16 80% 52%), hsl(16 60% 32%))" }}
                   animate={voice.isListening ? { scale: [1, 1.08, 1] } : voice.isSpeaking ? { scale: [1, 1.05, 1] } : { scale: 1 }}
                   transition={{ repeat: voice.isListening || voice.isSpeaking ? Infinity : 0, duration: 0.8 }}
                 >
                   {displayName.charAt(0)}
                 </motion.div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground leading-tight">{displayName}</p>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${voice.isSpeaking ? "bg-primary" : voice.isListening ? "bg-destructive animate-pulse" : chat.thinking ? "bg-accent animate-pulse" : "bg-green-500"}`} />
-                    <p className="text-xs text-muted-foreground">{statusLabel}</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground leading-tight truncate">{displayName}</p>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={`shrink-0 w-1.5 h-1.5 rounded-full ${voice.isSpeaking ? "bg-primary" : voice.isListening ? "bg-destructive animate-pulse" : chat.thinking ? "bg-accent animate-pulse" : "bg-green-500"}`} />
+                    <p className="text-xs text-muted-foreground truncate">{statusLabel}</p>
                   </div>
                 </div>
               </div>
@@ -188,15 +190,19 @@ export default function ModeSelect() {
                         ? `${displayName} is speaking…`
                         : chat.thinking
                           ? "Thinking…"
-                          : handsFree && voice.conversationActive
-                            ? "Listening…"
-                            : "Tap mic to speak"}
+                          : voice.isConnecting
+                            ? "Starting voice session…"
+                            : handsFree && voice.conversationActive
+                              ? "Listening…"
+                              : "Tap mic to speak"}
                   </p>
                   <p className="text-sm text-muted-foreground max-w-xs">
                     {voice.speechRecognitionBlockedByPwa
                       ? "Mic unavailable in installed app — type below."
                       : handsFree
-                        ? `Hands-free — just talk, ${displayName} hears you. Tap mic to end.`
+                        ? voice.isConnecting
+                          ? "Connecting — you can start talking in a moment."
+                          : `Hands-free — just talk. Tap mic to end.`
                         : voice.isListening
                           ? `Tap mic again to send to ${displayName}.`
                           : `Tap the mic, speak, then tap again to send.`}
