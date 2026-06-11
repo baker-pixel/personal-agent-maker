@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { registerPoisonHandler } from "@/integrations/supabase/clientHealth";
 
@@ -14,14 +13,7 @@ import { registerPoisonHandler } from "@/integrations/supabase/clientHealth";
 // considered poisoned and we hard-reload — the PWA is precached so the reload
 // is near-instant and lands on the same route.
 
-// Must comfortably exceed the auth lock steal timeout (lockAcquireTimeout:
-// 2000 in client.ts) — an orphaned lock is stolen at 2s and getSession then
-// proceeds, so a tighter probe would misread a *recovering* client as dead.
-const PROBE_TIMEOUT_MS = 5_000;
-// A failed probe right after resume is often just the radio waking up, not a
-// poisoned client. Wait and confirm with a second probe before the
-// user-visible reload.
-const RECHECK_DELAY_MS = 5_000;
+const PROBE_TIMEOUT_MS = 3_000;
 // Network probe is more generous — on resume the radio may take a moment to
 // wake, and we only want to reload on a genuine hang, not a slow first packet.
 const NETWORK_PROBE_TIMEOUT_MS = 8_000;
@@ -90,10 +82,7 @@ function reloadOnce() {
     /* ignore sessionStorage access failures */
   }
   console.warn("Supabase client unresponsive after resume — reloading");
-  // Brief heads-up so the reload reads as recovery, not a glitch. The PWA is
-  // precached, so the reload itself is near-instant and lands on the same route.
-  toast.info("Reconnecting…", { duration: 1_000 });
-  setTimeout(() => window.location.reload(), 1_000);
+  window.location.reload();
 }
 
 // Only probe after a meaningful suspend — quick tab flicks can't poison the
@@ -110,13 +99,8 @@ export function useClientHealthWatchdog() {
       if (probing || document.visibilityState !== "visible") return;
       probing = true;
       try {
-        if (await probeClient()) return;
-        // Double-check: give the network a moment, then probe again. Only a
-        // client that fails twice in a row earns the reload.
-        await new Promise((r) => setTimeout(r, RECHECK_DELAY_MS));
-        if (document.visibilityState !== "visible") return;
-        if (await probeClient()) return;
-        reloadOnce();
+        const healthy = await probeClient();
+        if (!healthy) reloadOnce();
       } finally {
         probing = false;
       }
