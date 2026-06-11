@@ -20,6 +20,17 @@ export const SONIC_TOOLS = [
   },
   {
     toolSpec: {
+      name: "read_email",
+      description: "Fetch the full text of an email so you can read or summarize it for the user. Read-only — executes immediately, no confirmation needed. Only use messageId values from the INBOX list.",
+      inputSchema: {
+        json: schema({
+          messageId: { type: "string", description: "Message ID from the INBOX list" },
+        }, ["messageId"]),
+      },
+    },
+  },
+  {
+    toolSpec: {
       name: "send_email",
       description: "Stage an email for sending. It is NOT sent until the user says confirm. Use a recipient address ONLY from CONTACTS — if unknown, ask the user for it first, never guess.",
       inputSchema: {

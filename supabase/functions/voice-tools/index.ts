@@ -247,6 +247,36 @@ async function executeToolCall(
       return { success: true, message: `Contact "${args.name}" saved` };
     }
 
+    if (name === "read_email") {
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/messages/${args.messageId}`, {
+        headers: { Authorization: `Bearer ${nylasApiKey}` },
+      });
+      if (!res.ok) {
+        if (res.status === 401) return { success: false, message: "Email connection expired. Please reconnect via Integrations." };
+        if (res.status === 404) return { success: false, message: "That email was not found — it may have been deleted." };
+        return { success: false, message: "Could not fetch the email right now." };
+      }
+      const data = await res.json();
+      const msg = data.data || {};
+      // Nylas returns HTML — strip to plain text for a voice readout
+      const text = String(msg.body || msg.snippet || "")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 2000);
+      const from = (msg.from || [])[0];
+      return {
+        success: true,
+        message: `Email from ${from?.name || from?.email || "unknown"}, subject "${msg.subject || ""}": ${text || "(no readable content)"}`,
+      };
+    }
+
     if (name === "delete_email") {
       if (!grantId) return { success: false, message: "Google account not connected. Please reconnect via Integrations." };
       const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/messages/${args.messageId}`, {

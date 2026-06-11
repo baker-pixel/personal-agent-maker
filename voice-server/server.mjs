@@ -31,6 +31,7 @@ for (const [k, v] of Object.entries({ AWS_REGION, SUPABASE_URL, SUPABASE_ANON_KE
 const MAX_SESSION_MS = 10 * 60 * 1000; // hard cap per voice session
 const CONTEXT_TTL_MS = 60 * 1000;
 const contextCache = new Map(); // token -> { systemPrompt, ts }
+const READ_TOOLS = new Set(["read_email"]);
 const FALLBACK_PROMPT = "You are a helpful executive assistant on a voice call. Keep replies to 1-3 short spoken sentences, no formatting.";
 
 async function supabaseFn(name, token, body) {
@@ -197,6 +198,15 @@ wss.on("connection", (ws, req) => {
               pendingAction = null;
               session?.sendToolResult(toolUseId, { success: true, message: had ? `${had} cancelled. Acknowledge briefly.` : "Nothing was pending." });
               console.log(`${tag} cancelled pending ${had ?? "(none)"}`);
+              return;
+            }
+
+            // Read-only tools execute immediately — confirmation is for
+            // actions that change something, not for looking things up.
+            if (READ_TOOLS.has(toolName)) {
+              const result = await runToolOnce(toolName, args);
+              console.log(`${tag} read ${toolName} -> ${result.success ? "ok" : `fail: ${result.message}`}`);
+              session?.sendToolResult(toolUseId, result);
               return;
             }
 
