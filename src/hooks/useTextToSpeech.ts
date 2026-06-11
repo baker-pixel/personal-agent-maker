@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { authedFetch } from "@/lib/authedFetch";
 import { toast } from "sonner";
 import { DEFAULT_GROQ_VOICE } from "@/lib/groqVoices";
 import { markStage } from "@/lib/voiceLatency";
@@ -265,28 +265,18 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
       const abort = new AbortController();
       fetchAbortRef.current = abort;
 
-      // Race getSession against a timeout — after a background suspend the auth
-      // client can deadlock on its internal lock and this await would hang
-      // forever, killing TTS silently. A null session falls back to the anon key.
-      const session = await Promise.race([
-        supabase.auth.getSession().then(({ data }) => data.session),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
-      ]);
       const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
-      const anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const headers = {
-        "Content-Type": "application/json",
-        "apikey": anonKey,
-        "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
-      };
       const url = `${supabaseUrl}/functions/v1/groq-tts`;
 
-      // Fetch one sentence chunk — returns null if aborted
+      // Fetch one sentence chunk — returns null if aborted.
+      // authedFetch refreshes a stale post-resume token up front and retries
+      // once on 401 — a resumed PWA otherwise fires this with an expired JWT
+      // and TTS dies silently (observed as groq-tts 401s in edge logs).
       const fetchChunk = async (chunk: string): Promise<Blob | null> => {
         if (abort.signal.aborted) return null;
-        const res = await fetch(url, {
+        const res = await authedFetch(url, {
           method: "POST",
-          headers,
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: chunk, voice: groqVoiceId, speed: rate }),
           signal: abort.signal,
         });

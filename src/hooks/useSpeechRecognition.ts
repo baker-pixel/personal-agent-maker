@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { authedFetch } from "@/lib/authedFetch";
 import { startTurn, markStage } from "@/lib/voiceLatency";
 
 interface UseSpeechRecognitionOptions {
@@ -51,24 +51,15 @@ const SUPABASE_URL = (import.meta as any).env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 
 async function transcribe(blob: Blob, lang: string, signal: AbortSignal): Promise<string> {
-  // Race getSession against a timeout — after a background suspend the auth
-  // client can deadlock on its internal lock; fall back to the anon key
-  // (same guard speakGroq uses) instead of eating the full STT timeout.
-  const session = await Promise.race([
-    supabase.auth.getSession().then(({ data }) => data.session),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
-  ]);
   const form = new FormData();
   form.append("audio", blob, `audio.${blob.type.includes("mp4") ? "mp4" : "webm"}`);
   if (lang) form.append("language", lang);
 
   markStage("stt_start");
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/groq-stt`, {
+  // authedFetch refreshes a stale post-resume token up front and retries once
+  // on 401 — a resumed PWA otherwise fires this with an expired JWT and dies.
+  const res = await authedFetch(`${SUPABASE_URL}/functions/v1/groq-stt`, {
     method: "POST",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session?.access_token ?? SUPABASE_ANON_KEY}`,
-    },
     body: form,
     signal,
   });

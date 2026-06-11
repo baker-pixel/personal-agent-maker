@@ -24,13 +24,6 @@ const fetchWithTimeout = (input: RequestInfo | URL, init: RequestInit = {}) =>
       : AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
-// Web Lock intentionally disabled — single-window PWA, and a lock orphaned by
-// an OS suspend deadlocks every auth call until full reload. NOTE: omitting
-// `lock` (or passing undefined) does NOT disable it — auth-js falls back to
-// its default navigatorLock. A passthrough is the only real off switch.
-const noOpLock = <R,>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> =>
-  fn();
-
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
@@ -38,7 +31,10 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: "pkce",
-    lock: noOpLock,
+    // Deliberate: undefined = auth-js default navigatorLock. A lock orphaned
+    // by an OS suspend can deadlock auth calls; accepted because the resume
+    // watchdog (useClientHealthWatchdog) detects that state and auto-reloads.
+    lock: undefined,
   },
   global: {
     fetch: fetchWithTimeout,

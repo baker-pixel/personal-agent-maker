@@ -46,11 +46,19 @@ export function useTriagedEmails() {
   const [emails, setEmails] = useState<TriagedEmail[]>([]);
   const [snoozedEmails, setSnoozedEmails] = useState<TriagedEmail[]>([]);
   const [loading, setLoading] = useState(true);
+  // True when the last fetch attempt failed. Consumers MUST treat an empty
+  // list with loadFailed=true as "unknown", not "inbox empty" — on PWA resume
+  // the first fetch often fires before the radio is awake and fails, and
+  // mistaking that for an empty inbox used to auto-trigger a full re-triage.
+  const [loadFailed, setLoadFailed] = useState(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const snoozeTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const hasLoadedRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchEmails = useCallback(async () => {
+    if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
     // Background refetches (visibility/online/realtime catch-up) stay silent so
     // an already-rendered list doesn't flip back to the loading skeleton.
     if (!hasLoadedRef.current) setLoading(true);
@@ -82,16 +90,33 @@ export function useTriagedEmails() {
         ),
       ]);
 
+      // A PostgREST-level error must count as a failure too — previously it
+      // was skipped silently and the empty list read as "inbox empty".
+      if (activeRes.error) throw activeRes.error;
+
       const archivedIds = getArchivedIds();
-      if (!activeRes.error && activeRes.data) {
+      if (activeRes.data) {
         setEmails((activeRes.data as TriagedEmail[]).filter(e => !archivedIds.has(e.nylas_message_id)));
         hasLoadedRef.current = true;
       }
       if (!snoozedRes.error && snoozedRes.data) {
         setSnoozedEmails(snoozedRes.data as TriagedEmail[]);
       }
+      setLoadFailed(false);
+      retryCountRef.current = 0;
     } catch (err) {
       console.warn("fetchEmails failed or timed out:", err);
+      setLoadFailed(true);
+      // Auto-retry with backoff: a resume-time failure is usually just the
+      // network waking up — without this one failure stuck the UI on an empty
+      // list until the app was killed and reopened.
+      if (retryCountRef.current < 3) {
+        const delay = 2_000 * 2 ** retryCountRef.current;
+        retryCountRef.current += 1;
+        retryTimerRef.current = setTimeout(() => {
+          if (document.visibilityState === "visible") fetchEmails();
+        }, delay);
+      }
     } finally {
       setLoading(false);
     }
@@ -168,6 +193,7 @@ export function useTriagedEmails() {
       window.removeEventListener("online", resync);
       if (channelRef.current) supabase.removeChannel(channelRef.current);
       Object.values(snoozeTimers.current).forEach(clearTimeout);
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     };
   }, [fetchEmails]);
 
@@ -246,6 +272,7 @@ export function useTriagedEmails() {
     snoozedEmails,
     byCategory,
     loading,
+    loadFailed,
     refetch: fetchEmails,
     updateEmailCategory,
     markEmailRead,

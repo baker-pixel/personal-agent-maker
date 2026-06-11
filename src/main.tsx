@@ -2,6 +2,19 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import { preparePasswordRecoveryUrlForManualHandling } from "./lib/passwordRecovery";
 
+// On-device debug console for diagnosing mobile-only issues (resume hangs,
+// 401 bursts) where no desktop devtools can attach. Open the site with
+// ?debug=1 once to enable (persists via localStorage); ?debug=0 disables.
+// Lazy chunk — zero cost unless enabled.
+try {
+  const dbg = new URLSearchParams(location.search).get("debug");
+  if (dbg === "1") localStorage.setItem("normy_debug", "1");
+  if (dbg === "0") localStorage.removeItem("normy_debug");
+  if (localStorage.getItem("normy_debug") === "1") {
+    import("eruda").then(({ default: eruda }) => eruda.init());
+  }
+} catch { /* storage unavailable — skip */ }
+
 const rootElement = document.getElementById("root");
 
 const renderStartupFallback = () => {

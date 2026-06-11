@@ -153,6 +153,7 @@ export default function EmailView() {
     emails: allEmails,
     byCategory,
     loading: dbLoading,
+    loadFailed: dbLoadFailed,
     refetch,
     updateEmailCategory,
     markEmailRead,
@@ -326,12 +327,16 @@ export default function EmailView() {
   // Guard with a ref so refetch() toggling dbLoading false→true→false doesn't
   // re-trigger this and create an infinite triage loop on empty inboxes.
   useEffect(() => {
-    if (!gmailConnected || dbLoading || autoTriaged.current) return;
+    // dbLoadFailed: an empty list after a FAILED fetch is "unknown", not
+    // "inbox empty" — auto-triaging on it ran a 30-90s full triage on every
+    // PWA resume where the first fetch lost the network-wake race, which
+    // looked like the app frozen on the loading spinner.
+    if (!gmailConnected || dbLoading || dbLoadFailed || autoTriaged.current) return;
     autoTriaged.current = true;
     const totalCached = Object.values(byCategory).reduce((s, arr) => s + arr.length, 0);
     if (totalCached === 0) runTriage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gmailConnected, dbLoading]);
+  }, [gmailConnected, dbLoading, dbLoadFailed]);
 
   // ── Open email — fetch full body from Nylas ──────────────────────────────
 
@@ -580,8 +585,17 @@ export default function EmailView() {
           </div>
         )}
 
-        {/* Initial triage loading */}
-        {(triaging && totalEmails === 0) || (dbLoading && totalEmails === 0) ? (
+        {/* Load failed — show retry instead of masquerading as an empty inbox */}
+        {dbLoadFailed && totalEmails === 0 && !dbLoading && !triaging ? (
+          <div className="glass-card rounded-2xl p-12 text-center mt-4">
+            <Mail className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+            <p className="text-foreground font-medium mb-1">Couldn't load your emails</p>
+            <p className="text-sm text-muted-foreground mb-4">Retrying automatically — or tap to retry now</p>
+            <Button onClick={() => refetch()} size="sm" className="bg-accent text-accent-foreground">
+              <RefreshCw className="w-4 h-4 mr-2" />Retry
+            </Button>
+          </div>
+        ) : (triaging && totalEmails === 0) || (dbLoading && totalEmails === 0) ? (
           <div className="glass-card rounded-2xl p-12 text-center mt-4" style={{ animation: "fade-up 0.3s ease-out both" }}>
             <Loader2 className="w-10 h-10 text-accent animate-spin mx-auto mb-4" />
             <p className="text-foreground font-medium">{agentName} is reading your inbox…</p>
