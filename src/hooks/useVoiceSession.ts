@@ -217,6 +217,7 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
       ? {
           ...voice,
           conversationActive: sonic.conversationActive,
+          isConnecting: sonic.isConnecting,
           isListening: sonic.isListening,
           isSpeaking: sonic.isSpeaking,
           isTranscribing: false,
@@ -225,8 +226,10 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
           startConversation: sonic.startConversation,
           stopConversation: sonic.stopConversation,
           toggleConversation: sonic.toggleConversation,
+          sonicVoiceId: sonic.sonicVoiceId,
+          setSonicVoiceId: sonic.setSonicVoiceId,
         }
-      : voice,
+      : { ...voice, isConnecting: false, sonicVoiceId: null, setSonicVoiceId: undefined },
     voiceEngine: useSonic ? ("sonic" as const) : ("groq" as const),
     voiceError: useSonic ? sonic.error : null,
     startSession,

@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { GROQ_VOICES } from "@/lib/groqVoices";
+import { SONIC_VOICES } from "@/lib/sonicVoices";
 
 type TtsProvider = "browser" | "groq";
 
@@ -33,6 +34,8 @@ interface VoiceSettingsPanelProps {
   onProviderChange?: (p: TtsProvider) => void;
   groqVoiceId?: string | null;
   onGroqVoiceChange?: (id: string) => void;
+  sonicVoiceId?: string | null;
+  onSonicVoiceChange?: (id: string) => void;
   inline?: boolean;
 }
 
@@ -104,9 +107,12 @@ export function VoiceSettingsPanel({
   onProviderChange,
   groqVoiceId,
   onGroqVoiceChange,
+  sonicVoiceId,
+  onSonicVoiceChange,
   inline = false,
 }: VoiceSettingsPanelProps) {
   const isPremium = provider === "groq";
+  const isSonic = !!onSonicVoiceChange;
 
   const voiceGroups = useMemo(() => {
     const groups = new Map<string, SpeechSynthesisVoice[]>();
@@ -181,6 +187,30 @@ export function VoiceSettingsPanel({
           ))}
         </div>
       </div>
+
+      {isSonic && (
+        <div className="space-y-1.5">
+          <Label className="text-xs">Conversation voice</Label>
+          <Select
+            value={sonicVoiceId ?? undefined}
+            onValueChange={(v) => onSonicVoiceChange?.(v)}
+          >
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="Pick a voice" />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              {SONIC_VOICES.map((v) => (
+                <SelectItem key={v.id} value={v.id} className="text-sm">
+                  {v.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            Takes effect when the next voice session starts.
+          </p>
+        </div>
+      )}
 
       {isPremium ? (
         <div className="space-y-1.5">

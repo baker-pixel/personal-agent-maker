@@ -32,6 +32,12 @@ const MAX_SESSION_MS = 10 * 60 * 1000; // hard cap per voice session
 const CONTEXT_TTL_MS = 60 * 1000;
 const contextCache = new Map(); // token -> { systemPrompt, ts }
 const READ_TOOLS = new Set(["read_email"]);
+// Nova 2 Sonic voice catalog — tiffany/matthew are polyglot.
+const SONIC_VOICES = new Set([
+  "tiffany", "matthew", "amy", "olivia", "kiara", "arjun",
+  "ambre", "florian", "beatrice", "lorenzo", "tina", "lennart",
+  "lupe", "carlos", "carolina", "leo",
+]);
 const FALLBACK_PROMPT = "You are a helpful executive assistant on a voice call. Keep replies to 1-3 short spoken sentences, no formatting.";
 
 async function supabaseFn(name, token, body) {
@@ -151,7 +157,7 @@ wss.on("connection", (ws, req) => {
 
       session = new SonicSession({
         region: AWS_REGION,
-        voiceId: msg.voiceId || "matthew",
+        voiceId: SONIC_VOICES.has(msg.voiceId) ? msg.voiceId : "matthew",
         systemPrompt,
         tools,
         onEvent: async (event) => {

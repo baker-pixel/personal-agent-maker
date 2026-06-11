@@ -116,6 +116,8 @@ export default function DecisionVoice() {
               onProviderChange={voice.setProvider}
               groqVoiceId={voice.groqVoiceId}
               onGroqVoiceChange={voice.setGroqVoiceId}
+              sonicVoiceId={voice.sonicVoiceId}
+              onSonicVoiceChange={voice.setSonicVoiceId}
             />
             <button
               onClick={resetSession}

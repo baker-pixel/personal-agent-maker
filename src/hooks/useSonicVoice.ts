@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getFreshAccessToken } from "@/lib/authedFetch";
+import { useVoicePreferences } from "./useVoicePreferences";
 
 const VOICE_SERVER_URL: string | undefined = import.meta.env.VITE_VOICE_SERVER_URL;
 
@@ -34,6 +35,12 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Per-user Sonic voice preference (16 Nova voices). Ref so the async
+  // startConversation reads the current value, not a stale closure.
+  const { prefs: voicePrefs, update: updateVoicePrefs } = useVoicePreferences();
+  const voiceIdRef = useRef(voicePrefs.sonic_voice_id);
+  useEffect(() => { voiceIdRef.current = voicePrefs.sonic_voice_id; }, [voicePrefs.sonic_voice_id]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const micCtxRef = useRef<AudioContext | null>(null);
@@ -138,6 +145,7 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
           type: "start",
           token: await tokenP,
           agentName: optsRef.current.agentName,
+          voiceId: voiceIdRef.current,
           tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }));
       });
@@ -271,5 +279,8 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
     startConversation,
     stopConversation,
     toggleConversation,
+    /** Sonic voice (per-user pref). Takes effect on the next session start. */
+    sonicVoiceId: voicePrefs.sonic_voice_id,
+    setSonicVoiceId: (id: string) => updateVoicePrefs({ sonic_voice_id: id }),
   };
 }
