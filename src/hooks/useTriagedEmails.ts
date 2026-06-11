@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { reportClientHang, reportClientOk } from "@/integrations/supabase/clientHealth";
 
 export type EmailCategory = "urgent" | "needs_reply" | "fyi" | "newsletter";
 
@@ -104,9 +105,13 @@ export function useTriagedEmails() {
       }
       setLoadFailed(false);
       retryCountRef.current = 0;
+      reportClientOk();
     } catch (err) {
       console.warn("fetchEmails failed or timed out:", err);
       setLoadFailed(true);
+      // Only the race timeout counts as a hang — a PostgREST error reached the
+      // server and back, which proves the client isn't poisoned.
+      if (err instanceof Error && err.message === "email fetch timed out") reportClientHang();
       // Auto-retry with backoff: a resume-time failure is usually just the
       // network waking up — without this one failure stuck the UI on an empty
       // list until the app was killed and reopened.

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { registerPoisonHandler } from "@/integrations/supabase/clientHealth";
 
 // After a background suspend (iOS PWA eviction, desktop tab freezing) the
 // supabase-js client can deadlock: auth uses a Web Lock (navigatorLock), and a
@@ -77,7 +78,9 @@ function reloadOnce() {
     const last = Number(sessionStorage.getItem(RELOAD_STAMP_KEY) || 0);
     if (Date.now() - last < RELOAD_COOLDOWN_MS) return;
     sessionStorage.setItem(RELOAD_STAMP_KEY, String(Date.now()));
-  } catch {}
+  } catch {
+    /* ignore sessionStorage access failures */
+  }
   console.warn("Supabase client unresponsive after resume — reloading");
   window.location.reload();
 }
@@ -90,13 +93,17 @@ export function useClientHealthWatchdog() {
   useEffect(() => {
     let probing = false;
     let hiddenAt = 0;
+    let periodicTimer: ReturnType<typeof setInterval> | null = null;
 
     const checkHealth = async () => {
       if (probing || document.visibilityState !== "visible") return;
       probing = true;
-      const healthy = await probeClient();
-      probing = false;
-      if (!healthy) reloadOnce();
+      try {
+        const healthy = await probeClient();
+        if (!healthy) reloadOnce();
+      } finally {
+        probing = false;
+      }
     };
 
     const onVisibility = () => {
@@ -112,11 +119,35 @@ export function useClientHealthWatchdog() {
       if (e.persisted) checkHealth();
     };
 
+    const onFocus = () => {
+      if (document.visibilityState === "visible") checkHealth();
+    };
+
+    const startPeriodicProbe = () => {
+      if (periodicTimer) return;
+      periodicTimer = window.setInterval(() => {
+        if (document.visibilityState === "visible") {
+          void checkHealth();
+        }
+      }, 2 * 60_000);
+    };
+    startPeriodicProbe();
+
+    // Hang escalation: real queries reporting consecutive timeouts (via
+    // clientHealth) mean the client poisoned itself *after* the resume probe
+    // passed — re-probe immediately instead of waiting for the next interval.
+    registerPoisonHandler(() => void checkHealth());
+
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onFocus);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onFocus);
+      if (periodicTimer) clearInterval(periodicTimer);
     };
   }, []);
 }
