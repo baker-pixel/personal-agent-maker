@@ -17,6 +17,26 @@ const supported =
   "serviceWorker" in navigator &&
   "PushManager" in window;
 
+// Once-per-key dedup for local notifications. Callers pass a stable key
+// (e.g. `urgent-emails-2026-06-11`) so a notification fires once per key —
+// not again on every mount, reload, or PWA cold start.
+const NOTIFIED_KEYS_STORAGE = "normy_notified_keys";
+function alreadyNotified(key: string): boolean {
+  try {
+    return (JSON.parse(localStorage.getItem(NOTIFIED_KEYS_STORAGE) || "[]") as string[]).includes(key);
+  } catch {
+    return false;
+  }
+}
+function markNotified(key: string) {
+  try {
+    const keys = (JSON.parse(localStorage.getItem(NOTIFIED_KEYS_STORAGE) || "[]") as string[])
+      .filter((k) => k !== key);
+    keys.push(key);
+    localStorage.setItem(NOTIFIED_KEYS_STORAGE, JSON.stringify(keys.slice(-200)));
+  } catch {}
+}
+
 async function saveSubscription(sub: PushSubscription): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return;
@@ -76,20 +96,33 @@ export function usePushNotifications() {
     if (sub) await saveSubscription(sub);
   }, []);
 
-  // Fallback: direct browser notification while tab is open
+  // Local notification while the app is open. Fires at most once per `key`
+  // (persisted in localStorage) — without this, every mount / reload / PWA
+  // cold start re-announced the same urgent emails and overdue tasks.
   const notify = useCallback(
-    (title: string, body: string, _key: string, opts?: { tag?: string }) => {
+    async (title: string, body: string, key: string, opts?: { tag?: string }) => {
       if (!supported || Notification.permission !== "granted") return;
+      if (alreadyNotified(key)) return;
+      markNotified(key);
+      const options: NotificationOptions = {
+        body,
+        icon: "/icon-192.png",
+        badge: "/favicon.png",
+        // tag makes the OS replace a still-visible duplicate instead of stacking
+        tag: opts?.tag ?? key,
+      };
       try {
-        const n = new Notification(title, {
-          body,
-          icon: "/icon-192.png",
-          badge: "/favicon.png",
-          tag: opts?.tag,
-        });
-        n.onclick = () => { window.focus(); n.close(); };
-      } catch (e) {
-        console.warn("Notification failed:", e);
+        // Android forbids the `new Notification()` constructor in pages —
+        // notifications must go through the service worker registration.
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification(title, options);
+      } catch {
+        try {
+          const n = new Notification(title, options);
+          n.onclick = () => { window.focus(); n.close(); };
+        } catch (e) {
+          console.warn("Notification failed:", e);
+        }
       }
     },
     []
