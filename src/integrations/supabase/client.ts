@@ -24,96 +24,12 @@ const fetchWithTimeout = (input: RequestInfo | URL, init: RequestInit = {}) =>
       : AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
-// supabase-js's default navigatorLock waits 5s for the auth Web Lock, then
-// throws. A lock orphaned by a suspended PWA/tab context stays held after
-// resume, so every auth call stalls 5s and fails until a full page reload —
-// the watchdog reload recovers this, but with a visible freeze first.
-// This lock prevents the deadlock instead: if the lock can't be acquired
-// within LOCK_ACQUIRE_MS it is assumed orphaned and stolen. Stealing aborts
-// whoever held it (worst case another tab mid-refresh — tolerable, Supabase
-// grants a reuse window for rotated refresh tokens); the alternative is a
-// frozen app.
-// Healthy lock holds last milliseconds (a refresh round-trip at worst), so
-// waiting long buys nothing — it only stretches the freeze when the holder is
-// orphaned. 2s acquire + 4s queue wait caps worst-case recovery around 6s
-// (typical: steal at 2s, working again by ~3s).
-const LOCK_ACQUIRE_MS = 2_000;
-const LOCK_HELD_WARN_MS = 5_000;
-// How long a same-tab caller waits for the previous caller before going to
-// the lock anyway (where a hung previous holder will be stolen).
-const LOCAL_QUEUE_WAIT_MS = 4_000;
-
-function acquireWithSteal<R>(name: string, fn: () => Promise<R>): Promise<R> {
-  return new Promise<R>((resolve, reject) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), LOCK_ACQUIRE_MS);
-    let started = false;
-
-    const run = async () => {
-      started = true;
-      clearTimeout(timer);
-      const start = Date.now();
-      try {
-        resolve(await fn());
-      } catch (e) {
-        reject(e);
-      } finally {
-        const heldMs = Date.now() - start;
-        // A long hold here is the smoking gun for who starves everyone else.
-        if (heldMs > LOCK_HELD_WARN_MS) console.warn(`[auth-lock] ${name} held ${heldMs}ms`);
-      }
-    };
-
-    // Abort only cancels a *pending* acquisition — once granted it has no effect.
-    navigator.locks.request(name, { signal: controller.signal }, run).catch((err) => {
-      clearTimeout(timer);
-      // Rejection after fn started means our *held* lock was stolen by another
-      // context. fn keeps running and settles this promise — nothing to do.
-      if (started) return;
-      if (!controller.signal.aborted) {
-        reject(err);
-        return;
-      }
-      console.warn(`[auth-lock] ${name} blocked ${LOCK_ACQUIRE_MS}ms — stealing orphaned lock`);
-      navigator.locks.request(name, { steal: true }, run).catch((err2) => {
-        if (!started) reject(err2);
-      });
-    });
-  });
-}
-
-// Same-tab callers are serialized through this queue. Without it, auth-js's
-// resume handlers (_autoRefreshTokenTick + _onVisibilityChanged) request the
-// lock simultaneously, time out against EACH OTHER, and steal in a cascade —
-// each steal breaking the previous one's lock. The queue wait is bounded so a
-// genuinely hung holder doesn't freeze the queue: after LOCAL_QUEUE_WAIT_MS
-// the next caller proceeds and the steal path evicts the hung holder.
-const localLockQueues = new Map<string, Promise<unknown>>();
-
-async function stealingNavigatorLock<R>(
-  name: string,
-  _acquireTimeout: number,
-  fn: () => Promise<R>
-): Promise<R> {
-  if (typeof navigator === "undefined" || !navigator.locks) return fn();
-
-  const prev = localLockQueues.get(name) ?? Promise.resolve();
-  const next = (async () => {
-    await Promise.race([
-      prev.catch(() => {}),
-      new Promise((r) => setTimeout(r, LOCAL_QUEUE_WAIT_MS)),
-    ]);
-    return acquireWithSteal(name, fn);
-  })();
-  localLockQueues.set(
-    name,
-    next.then(
-      () => undefined,
-      () => undefined
-    )
-  );
-  return next;
-}
+// Web Lock intentionally disabled — single-window PWA, and a lock orphaned by
+// an OS suspend deadlocks every auth call until full reload. NOTE: omitting
+// `lock` (or passing undefined) does NOT disable it — auth-js falls back to
+// its default navigatorLock. A passthrough is the only real off switch.
+const noOpLock = <R,>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> =>
+  fn();
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -122,7 +38,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: "pkce",
-    lock: undefined,
+    lock: noOpLock,
   },
   global: {
     fetch: fetchWithTimeout,

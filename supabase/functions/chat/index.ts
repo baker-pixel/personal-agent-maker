@@ -1457,9 +1457,11 @@ Always use this live context to give specific, actionable answers — never say 
 ## TOOLS — USE THEM DIRECTLY (NO CONFIRMATION NEEDED)
 You have tools: **send_email**, **delete_email**, **create_calendar_event**, **update_calendar_event**, **delete_calendar_event**, **save_contact**, **delete_contact**, **create_task**.
 
-**CRITICAL: NEVER output tool call syntax, function tags, XML tags, or JSON payloads in your response.** Never write angle-bracket function tags or raw JSON in your message. Your response must be plain natural language only. Tools are called silently by the system — you just confirm in words after.
+**CRITICAL: The ONLY way to perform an action is to emit a real tool call.** Writing words like "Done — email sent" does NOT send anything. NEVER claim an action happened unless you called the tool in this conversation turn AND received a success result back. If you did not call the tool, the action did not happen — say so honestly instead of pretending.
 
-When the user asks to take an action, call the appropriate tool immediately — do not ask for confirmation, do not describe what you're about to do, just call it. After the tool executes, confirm in one short sentence ("Done — email sent to Sarah. Anything else?").
+**CRITICAL: NEVER output tool call syntax, function tags, XML tags, or JSON payloads in your response text.** Never write angle-bracket function tags or raw JSON in your message. Your message text must be plain natural language only — but that rule applies to your TEXT, not to tool calls: you must still emit actual tool calls to act.
+
+When the user asks to take an action, call the appropriate tool immediately — do not ask for confirmation, do not describe what you're about to do, just call it. Only after you see the tool's success result, confirm in one short sentence ("Done — email sent to Sarah. Anything else?"). If the tool returns an error, tell the user what failed — never say "Done".
 
 **send_email rules:**
 - Use when user asks to send/write/draft/reply to an email.
@@ -1498,7 +1500,7 @@ ${isVoice ? `
 You are speaking out loud through TTS. Sound like a real human EA on the phone — NOT a memo being read.
 - **NO bullet points. NO headers. NO "Next Steps:" labels. NO emojis. NO markdown.** Ever. Spoken speech only.
 - Use natural spoken English with contractions ("you've", "I'll", "let's"). Never read raw data, ISO dates, or URLs aloud — reference them naturally ("Sarah's email about the budget", "your 3 PM with Jay").
-- Confirm tool actions in 1 spoken sentence: "Done — sent that to Sarah. Anything else?", "Done — your 3pm is set.", "Done — Jay's saved."
+- Confirm tool actions in 1 spoken sentence — but ONLY after a real tool call returned success: "Done — sent that to Sarah. Anything else?", "Done — your 3pm is set.", "Done — Jay's saved." Never say "Done" without having called the tool.
 
 ### Pacing — match length to the request
 **Default (normal questions, status checks, quick asks): 1-2 short sentences, then one natural follow-up question.**
@@ -1586,6 +1588,16 @@ ${conversationMemoryNote}${realDataContext}`;
       const MAX_ROUNDS = 10;
       let rounds = 0;
       let finalContent: string | null = null;
+      let anyToolCalled = false;
+      let nudged = false;
+      // Llama sometimes emits the templated "Done — sent" confirmation WITHOUT
+      // calling the tool. When the user's message looks like an action request
+      // and the model produced zero tool calls, push a self-check round before
+      // accepting a text-only answer.
+      const lastUserText = String(
+        [...effectiveMessages].reverse().find((m: any) => m?.role === "user")?.content ?? ""
+      );
+      const ACTION_INTENT = /\b(send|mail|email|schedule|invite|book|create|add|set up|delete|remove|cancel|save|remind|task)\b/i;
 
       while (rounds < MAX_ROUNDS) {
         rounds++;
@@ -1624,11 +1636,25 @@ ${conversationMemoryNote}${realDataContext}`;
         const finishReason: string = choice?.finish_reason ?? "stop";
 
         if (finishReason !== "tool_calls") {
+          if (!anyToolCalled && !nudged && ACTION_INTENT.test(lastUserText)) {
+            nudged = true;
+            console.warn(`[chat] no-tool-call self-check fired (round ${rounds}) for: ${lastUserText.slice(0, 80)}`);
+            loopMessages.push(choice.message, {
+              role: "system",
+              content:
+                "SELF-CHECK: You produced no tool call this turn, so NO action has been performed. " +
+                "If the user's latest message asked you to perform an action (send an email, create/update/delete a calendar event, save/delete a contact, create a task), you MUST emit the corresponding tool call now — do not just describe or confirm it in words. " +
+                "If required info is missing (recipient email, subject, body, time) or multiple people match a name, ask the user instead — never call a tool with guessed values. " +
+                "If the message was only a question or small talk, answer it truthfully WITHOUT claiming any action was performed.",
+            });
+            continue;
+          }
           // Model is done — capture final text and exit loop
           finalContent = choice?.message?.content ?? "";
           break;
         }
 
+        anyToolCalled = true;
         const toolCalls: any[] = choice.message.tool_calls || [];
         console.log(`[chat] round ${rounds} tool_calls: ${toolCalls.map((tc: any) => tc.function.name).join(", ")}`);
 
