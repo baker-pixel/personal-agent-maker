@@ -31,6 +31,7 @@ const SPEECH_RMS = 0.02;
  */
 export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
   const [conversationActive, setConversationActive] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +58,7 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
   const stopConversation = useCallback(() => {
     activeRef.current = false;
     setConversationActive(false);
+    setIsConnecting(false);
     if (idleTimerRef.current) { clearInterval(idleTimerRef.current); idleTimerRef.current = null; }
     try { wsRef.current?.send(JSON.stringify({ type: "stop" })); } catch { /* socket gone */ }
     wsRef.current?.close();
@@ -73,9 +75,15 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
   const playChunk = useCallback((base64: string) => {
     const ctx = playCtxRef.current;
     if (!ctx) return;
-    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-    const i16 = new Int16Array(bytes.buffer, 0, Math.floor(bytes.byteLength / 2));
-    const f32 = Float32Array.from(i16, (v) => v / 32768);
+    // Hot path — runs for every audio chunk while the agent speaks. Manual
+    // decode (no per-element callbacks) keeps mobile main threads smooth.
+    const bin = atob(base64);
+    const f32 = new Float32Array(bin.length >> 1);
+    for (let i = 0; i < f32.length; i++) {
+      let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
+      if (v >= 0x8000) v -= 0x10000;
+      f32[i] = v / 32768;
+    }
     if (f32.length === 0) return;
     const buf = ctx.createBuffer(1, f32.length, 24000);
     buf.copyToChannel(f32, 0);
@@ -86,8 +94,9 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
     src.start(playHeadRef.current);
     playHeadRef.current += buf.duration;
     lastActivityRef.current = Date.now(); // agent speech counts as activity
+    const wasSilent = liveSourcesRef.current.size === 0;
     liveSourcesRef.current.add(src);
-    setIsSpeaking(true);
+    if (wasSilent) setIsSpeaking(true); // one render per burst, not per chunk
     src.onended = () => {
       liveSourcesRef.current.delete(src);
       if (liveSourcesRef.current.size === 0) setIsSpeaking(false);
@@ -98,6 +107,7 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
     if (activeRef.current || !sonicEnabled()) return;
     setError(null);
     activeRef.current = true;
+    setIsConnecting(true);
 
     try {
       // Everything slow runs in parallel: auth token, mic permission+stream,
@@ -166,9 +176,14 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
           const v = f32[Math.floor(i * ratio)];
           i16[i] = Math.max(-32768, Math.min(32767, v * 32768));
         }
-        let bin = "";
+        // Batch conversion — char-by-char string concat re-allocates the
+        // string every iteration and visibly stalls mobile main threads.
         const u8 = new Uint8Array(i16.buffer);
-        for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
+        let bin = "";
+        const STRIDE = 0x8000;
+        for (let i = 0; i < u8.length; i += STRIDE) {
+          bin += String.fromCharCode(...u8.subarray(i, i + STRIDE));
+        }
         ws.send(JSON.stringify({ type: "audio", data: btoa(bin) }));
       };
 
@@ -230,6 +245,7 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
       }, 5000);
 
       setConversationActive(true);
+      setIsConnecting(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Voice failed to start");
       stopConversation();
@@ -246,6 +262,8 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
   return {
     enabled: sonicEnabled(),
     conversationActive,
+    /** Session is starting up (mic + WS + Bedrock handshake) — mic not live yet. */
+    isConnecting,
     /** Mic is always open during an active Sonic session. */
     isListening: conversationActive && !isSpeaking,
     isSpeaking,
