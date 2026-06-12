@@ -13,7 +13,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 // Each function is its own isolate — warming one does not warm the others.
-const HOT_FUNCTIONS = ["chat", "groq-stt", "groq-tts", "calendar-fetch"];
+const HOT_FUNCTIONS = ["chat", "groq-stt", "polly-tts", "groq-tts", "calendar-fetch"];
 
 // Isolates live ~5–10 min idle; 4 min keeps them warm with minimal traffic.
 const WARM_INTERVAL_MS = 4 * 60_000;

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, Loader2, Mic, MicOff, Volume2, VolumeX, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck, Shield } from "lucide-react";
+import { Send, Loader2, Mic, MicOff, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck, Shield } from "lucide-react";
 import { ChatMessages } from "./chat/ChatMessages";
 import { ChatHero } from "./chat/ChatHero";
 import { QuickActionGrid } from "./chat/QuickActionGrid";
@@ -9,8 +9,6 @@ import { QuickActionPills } from "./chat/QuickActionPills";
 import { DashboardBriefing } from "./chat/DashboardBriefing";
 import { FileAttachmentButton, AttachmentPreview, type Attachment } from "./chat/FileAttachment";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
-import { useTextToSpeech } from "@/hooks/useTextToSpeech";
-import { useVoicePreferences } from "@/hooks/useVoicePreferences";
 import type { Conversation } from "@/hooks/useConversations";
 
 export type Message = { role: "user" | "assistant"; content: string; attachments?: any[] };
@@ -71,21 +69,6 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const { prefs, loaded: prefsLoaded, update: updateVoicePrefs } = useVoicePreferences();
-  const tts = useTextToSpeech({
-    remote: {
-      voiceURI: prefs.tts_voice_uri,
-      rate: prefs.tts_rate,
-      pitch: prefs.tts_pitch,
-      enabled: prefs.tts_enabled,
-      provider: prefs.tts_provider,
-      groqVoiceId: prefs.tts_groq_voice_id,
-      loaded: prefsLoaded,
-    },
-    // Persist toggles like every other voice surface — without this, muting
-    // here only hit localStorage and the rest of the app disagreed.
-    onChange: updateVoicePrefs,
-  });
   const [voiceJustFilled, setVoiceJustFilled] = useState(false);
 
   const handleVoiceResult = useCallback((text: string) => {
@@ -139,7 +122,6 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
   const handleSend = async (overrideText?: string) => {
     const text = (overrideText || input).trim();
     if (!text || isLoading) return;
-    tts.unlockAudio();
 
     const uploadedFiles = await uploadAttachments(attachments);
     const userMsg: Message = { role: "user", content: text, attachments: uploadedFiles.length > 0 ? uploadedFiles : undefined };
@@ -246,11 +228,6 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
 
       if (currentConvId && assistantSoFar) {
         await onSaveMessage(currentConvId, { role: "assistant", content: assistantSoFar });
-      }
-      if (assistantSoFar) {
-        // Don't read the trailing "Next Steps:" suggestion list aloud
-        const speakable = assistantSoFar.replace(/\n+\**next steps:?\**[\s\S]*$/i, "").trim();
-        if (speakable) tts.speak(speakable);
       }
     } catch (e: any) {
       if (e?.name === "AbortError") {
@@ -365,22 +342,6 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
                 type="button"
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              </button>
-            )}
-            {tts.isSupported && (
-              <button
-                onClick={tts.isSpeaking ? tts.stop : tts.toggle}
-                className={`shrink-0 p-2.5 rounded-xl transition-all duration-200 ${
-                  tts.isSpeaking
-                    ? "text-accent bg-accent/10 animate-pulse"
-                    : tts.enabled
-                      ? "text-accent/70 hover:text-accent hover:bg-accent/10"
-                      : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/40"
-                }`}
-                title={tts.isSpeaking ? "Stop speaking" : tts.enabled ? "Voice responses on" : "Voice responses off"}
-                type="button"
-              >
-                {tts.enabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
               </button>
             )}
             <textarea

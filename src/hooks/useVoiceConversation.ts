@@ -69,6 +69,7 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
       loaded: voicePrefs.loaded,
       provider: voicePrefs.prefs.tts_provider,
       groqVoiceId: voicePrefs.prefs.tts_groq_voice_id,
+      sonicVoiceId: voicePrefs.prefs.sonic_voice_id,
     },
     onChange: voicePrefs.update,
   });

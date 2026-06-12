@@ -410,38 +410,15 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
     previewAbortRef.current = abort;
 
     try {
-      // Real Nova voice via the voice server; Groq stand-in only as fallback.
-      let blob = await fetchSonicTts(text, voiceId, abort.signal);
+      // Real Nova voice only — no Groq stand-in: hearing a different engine
+      // here would mislead the pick.
+      const blob = await fetchSonicTts(text, voiceId, abort.signal);
       if (abort.signal.aborted) return;
 
       if (!blob) {
-        const { data: { session } } = await supabase.auth.getSession();
-        const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
-        const anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-        const res = await fetch(`${supabaseUrl}/functions/v1/groq-tts`, {
-          method: "POST",
-          signal: abort.signal,
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": anonKey,
-            "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
-          },
-          // groq-tts only speaks Orpheus voices — preview the gender-matched one
-          body: JSON.stringify({ text, voice: sonicToGroqVoiceId(voiceId), speed: 1.0 }),
-        });
-
-        if (abort.signal.aborted) return;
-
-        if (res.status === 429) {
-          toast({ title: "Too many previews", description: "Please wait a moment before previewing again.", variant: "destructive" });
-          setPreviewingVoiceId(null);
-          return;
-        }
-        if (!res.ok) throw new Error(`${res.status}`);
-
-        blob = await res.blob();
-        if (abort.signal.aborted) return;
+        setPreviewingVoiceId(null);
+        toast({ title: "Preview unavailable", description: "Voice server unreachable — try again in a moment.", variant: "destructive" });
+        return;
       }
 
       const url = URL.createObjectURL(blob);
@@ -454,7 +431,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
     } catch (e: any) {
       if (e?.name === "AbortError") return;
       setPreviewingVoiceId(null);
-      toast({ title: "Preview unavailable", description: "Voice API key not configured yet.", variant: "destructive" });
+      toast({ title: "Preview unavailable", description: "Voice server unreachable — try again in a moment.", variant: "destructive" });
     }
   };
 

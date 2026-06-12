@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic } from "lucide-react";
+import { toast } from "sonner";
 import { VoiceSettingsPanel } from "@/components/VoiceSettingsPanel";
 import { useVoicePreferences } from "@/hooks/useVoicePreferences";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
@@ -22,6 +23,7 @@ export function VoicePersonalizationSection({ initialData }: VoicePersonalizatio
       enabled: prefs.tts_enabled,
       provider: prefs.tts_provider,
       groqVoiceId: prefs.tts_groq_voice_id,
+      sonicVoiceId: prefs.sonic_voice_id,
       loaded,
     },
     onChange: (patch) => update(patch as any),
@@ -40,20 +42,20 @@ export function VoicePersonalizationSection({ initialData }: VoicePersonalizatio
   }, []);
 
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewAbortRef = useRef<AbortController | null>(null);
 
-  const handlePreview = () => {
+  // Always the real Nova voice — never a Groq stand-in. A stand-in misleads
+  // the pick, and racing fallbacks against late Nova audio double-played on
+  // rapid re-selects. If the voice server is unreachable, say so instead.
+  const previewSonicVoice = (voiceId: string) => {
     // Unlock audio in the same user-gesture tick (required by iOS / strict
-    // autoplay policies) BEFORE any async work happens inside previewVoice.
+    // autoplay policies) BEFORE any async work happens.
     tts.unlockAudio();
 
-    // Browser-voice mode previews the picked Web Speech voice as before.
-    if (tts.provider !== "groq") {
-      tts.previewVoice();
-      return;
-    }
+    previewAbortRef.current?.abort();
+    const abort = new AbortController();
+    previewAbortRef.current = abort;
 
-    // Premium mode: preview the real Nova voice via the voice server,
-    // falling back to the Groq stand-in when the server isn't reachable.
     const SILENT_WAV =
       "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
     if (!previewAudioRef.current) {
@@ -62,18 +64,39 @@ export function VoicePersonalizationSection({ initialData }: VoicePersonalizatio
       (previewAudioRef.current as any).playsInline = true;
     }
     const audio = previewAudioRef.current;
+    audio.onended = null;
+    audio.pause();
     audio.src = SILENT_WAV;
     audio.play().catch(() => {});
 
-    fetchSonicTts("Hi, I'm Normy. This is how I'll sound when we talk.", prefs.sonic_voice_id)
+    fetchSonicTts("Hi, I'm Normy. This is how I'll sound when we talk.", voiceId, abort.signal)
       .then((blob) => {
-        if (!blob) { tts.previewVoice(); return; }
+        if (abort.signal.aborted) return;
+        if (!blob) {
+          toast.error("Voice preview unavailable — voice server unreachable.");
+          return;
+        }
         const url = URL.createObjectURL(blob);
         audio.onended = () => URL.revokeObjectURL(url);
         audio.src = url;
-        audio.play().catch(() => { URL.revokeObjectURL(url); tts.previewVoice(); });
+        audio.play().catch(() => URL.revokeObjectURL(url));
       })
-      .catch(() => tts.previewVoice());
+      .catch((e) => {
+        if (e?.name !== "AbortError") {
+          toast.error("Voice preview unavailable — voice server unreachable.");
+        }
+      });
+  };
+
+  const handlePreview = () => {
+    // Browser-voice mode previews the picked Web Speech voice; premium mode
+    // previews the picked Nova voice.
+    if (tts.provider !== "groq") {
+      tts.unlockAudio();
+      tts.previewVoice();
+      return;
+    }
+    previewSonicVoice(prefs.sonic_voice_id);
   };
 
   return (
@@ -92,7 +115,7 @@ export function VoicePersonalizationSection({ initialData }: VoicePersonalizatio
             Speak responses out loud
           </Label>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Normy reads briefings and chat replies aloud.
+            Normy speaks replies aloud in voice mode.
           </p>
         </div>
         <Switch
@@ -119,11 +142,15 @@ export function VoicePersonalizationSection({ initialData }: VoicePersonalizatio
           provider={tts.provider}
           onProviderChange={tts.setProvider}
           sonicVoiceId={prefs.sonic_voice_id}
-          onSonicVoiceChange={(id) =>
-            // One Nova voice drives everything: live sessions use it directly,
-            // Groq readouts get the gender-matched Orpheus equivalent.
-            update({ sonic_voice_id: id, tts_groq_voice_id: sonicToGroqVoiceId(id) })
-          }
+          onSonicVoiceChange={(id) => {
+            // One Nova voice drives everything: live sessions and Polly
+            // readouts use it directly, the Groq fallback gets the
+            // gender-matched Orpheus equivalent.
+            update({ sonic_voice_id: id, tts_groq_voice_id: sonicToGroqVoiceId(id) });
+            // Speak the newly picked voice right away — prefs state is still
+            // stale in this tick, so pass the id explicitly.
+            previewSonicVoice(id);
+          }}
         />
       </div>
     </section>

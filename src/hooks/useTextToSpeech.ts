@@ -19,6 +19,7 @@ interface TtsRemoteOpts {
     loaded: boolean;
     provider?: TtsProvider;
     groqVoiceId?: string | null;
+    sonicVoiceId?: string | null;
   };
   onChange?: (patch: {
     tts_voice_uri?: string | null;
@@ -70,6 +71,9 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
   // runtime fallback when the Groq pipeline fails or audio is blocked.
   const [provider, setProviderState] = useState<TtsProvider>("groq");
   const [groqVoiceId, setGroqVoiceIdState] = useState<string | null>(DEFAULT_GROQ_VOICE);
+  // Read-only here: the picked Nova voice drives Polly readouts; it is edited
+  // via the voice picker (sonic_voice_id pref), never from this hook.
+  const sonicVoiceIdRef = useRef<string | null>(null);
 
   // Sync from remote prefs whenever they change, per field, until the user
   // edits that field in THIS surface. A one-shot hydrate is not enough (the
@@ -87,7 +91,8 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
     if (!edited.has("enabled")) setEnabledState(remote.enabled);
     if (!edited.has("provider") && remote.provider) setProviderState(remote.provider);
     if (!edited.has("groqVoiceId") && remote.groqVoiceId !== undefined) setGroqVoiceIdState(remote.groqVoiceId);
-  }, [remote?.loaded, remote?.voiceURI, remote?.rate, remote?.pitch, remote?.enabled, remote?.provider, remote?.groqVoiceId]);
+    if (remote.sonicVoiceId !== undefined) sonicVoiceIdRef.current = remote.sonicVoiceId;
+  }, [remote?.loaded, remote?.voiceURI, remote?.rate, remote?.pitch, remote?.enabled, remote?.provider, remote?.groqVoiceId, remote?.sonicVoiceId]);
 
   const setEnabled = (v: boolean | ((prev: boolean) => boolean)) => {
     editedFieldsRef.current.add("enabled");
@@ -266,15 +271,33 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
       fetchAbortRef.current = abort;
 
       const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
-      const url = `${supabaseUrl}/functions/v1/groq-tts`;
+      const pollyUrl = `${supabaseUrl}/functions/v1/polly-tts`;
+      const groqUrl = `${supabaseUrl}/functions/v1/groq-tts`;
+
+      // Polly speaks the same-name voice as the picked Nova voice, so readouts
+      // match live sessions. Groq Orpheus stays as the fallback when Polly is
+      // unconfigured or down. Polly audio is 1× — speed applies at playback;
+      // Groq bakes speed into the audio, so it plays at 1×.
+      interface TtsChunk { blob: Blob; speedBaked: boolean; }
 
       // Fetch one sentence chunk — returns null if aborted.
       // authedFetch refreshes a stale post-resume token up front and retries
       // once on 401 — a resumed PWA otherwise fires this with an expired JWT
       // and TTS dies silently (observed as groq-tts 401s in edge logs).
-      const fetchChunk = async (chunk: string): Promise<Blob | null> => {
+      const fetchChunk = async (chunk: string): Promise<TtsChunk | null> => {
         if (abort.signal.aborted) return null;
-        const res = await authedFetch(url, {
+        const pollyRes = await authedFetch(pollyUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: chunk, voiceId: sonicVoiceIdRef.current }),
+          signal: abort.signal,
+        }).catch((e) => { if (e?.name === "AbortError") throw e; return null; });
+        if (abort.signal.aborted) return null;
+        if (pollyRes?.status === 429) throw new Error("RATE_LIMITED");
+        if (pollyRes?.ok) return { blob: await pollyRes.blob(), speedBaked: false };
+
+        console.warn(`[TTS] polly-tts unavailable (${pollyRes?.status ?? "network"}), trying groq-tts`);
+        const res = await authedFetch(groqUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: chunk, voice: groqVoiceId, speed: rate }),
@@ -282,8 +305,8 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
         });
         if (abort.signal.aborted) return null;
         if (res.status === 429) throw new Error("RATE_LIMITED");
-        if (!res.ok) throw new Error(`Groq TTS failed (${res.status}): ${await res.text()}`);
-        return res.blob();
+        if (!res.ok) throw new Error(`Premium TTS failed (${res.status}): ${await res.text()}`);
+        return { blob: await res.blob(), speedBaked: true };
       };
 
       // Ensure audio element exists
@@ -302,7 +325,7 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
       // Play a blob and wait for it to finish.
       // Resolves on natural end, error, OR abort signal — prevents promise from
       // hanging forever when stop() clears el.onended or a mediaSession action fires.
-      const playBlob = (blob: Blob): Promise<void> => new Promise((resolve) => {
+      const playBlob = ({ blob, speedBaked }: TtsChunk): Promise<void> => new Promise((resolve) => {
         if (abort.signal.aborted) { resolve(); return; }
         const blobUrl = URL.createObjectURL(blob);
         if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
@@ -311,6 +334,8 @@ export function useTextToSpeech(opts: TtsRemoteOpts = {}) {
         el.setAttribute("playsinline", "true");
         (el as any).playsInline = true;
         el.src = blobUrl;
+        // After src: loading a new source resets playbackRate in some browsers.
+        el.playbackRate = speedBaked ? 1 : rate;
         el.onended = () => { resolve(); };
         el.onerror = () => { console.error("[Groq TTS] playback error"); resolve(); };
         abort.signal.addEventListener("abort", () => resolve(), { once: true });

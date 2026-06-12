@@ -202,10 +202,6 @@ export function VoiceSettingsPanel({
               ))}
             </SelectContent>
           </Select>
-          <p className="text-[11px] text-muted-foreground leading-snug">
-            Used in live voice sessions; spoken replies use the closest matching voice.
-            Session changes apply when the next session starts.
-          </p>
         </div>
       )}
 
