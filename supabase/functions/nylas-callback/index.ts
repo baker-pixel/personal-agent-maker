@@ -125,6 +125,41 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    // One mailbox = one app account. Nylas returns the same grant_id when the
+    // same mailbox is re-authed, so claim it from any other account
+    // (last-connect-wins) before upserting — the unique(grant_id) constraint
+    // would otherwise reject the insert. Displaced accounts get a push so the
+    // disconnect isn't silent.
+    const { data: displaced } = await admin
+      .from("nylas_grants")
+      .select("user_id")
+      .eq("grant_id", grantId)
+      .neq("user_id", user.id);
+    if (displaced?.length) {
+      await admin
+        .from("nylas_grants")
+        .delete()
+        .eq("grant_id", grantId)
+        .neq("user_id", user.id);
+      for (const d of displaced) {
+        fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/web-push`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            user_id: d.user_id,
+            title: "Google account moved",
+            body: "This Google account was connected to a different Normy account, so it was disconnected here. Reconnect to keep using email and calendar.",
+            url: "/settings",
+            tag: "grant-moved",
+          }),
+        }).catch((e) => console.warn("web-push fire-and-forget failed:", e));
+        console.log(`nylas-callback: grant ${grantId} moved from user ${d.user_id} to ${user.id}`);
+      }
+    }
+
     // Delete any stale rows for this user+provider first to avoid duplicate
     // NULL-email rows (PG unique constraint treats NULL != NULL so upsert would
     // insert instead of update when email is null).

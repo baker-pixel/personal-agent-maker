@@ -67,10 +67,28 @@ async function enqueueMessage({ admin, userId, grantId, object }: HandlerCtx) {
     .from("email_processing_queue")
     .upsert(
       { user_id: userId, nylas_message_id: messageId, grant_id: grantId, status: "pending" },
-      { onConflict: "nylas_message_id", ignoreDuplicates: true }
+      { onConflict: "user_id,nylas_message_id", ignoreDuplicates: true }
     );
   if (error) throw error;
   console.log(`nylas-webhook: queued ${messageId} for user ${userId}`);
+}
+
+// Kick the processor immediately so triage lands in seconds instead of
+// waiting for the 2-minute pg_cron tick (which stays on as the safety net).
+// claim_email_processing_jobs uses SKIP LOCKED, so trigger + cron overlapping
+// is safe. waitUntil keeps the request alive past our response; without it
+// the runtime may freeze the instance before the fetch completes.
+function triggerEmailProcessor() {
+  const trigger = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/email-processor`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+    },
+    body: "{}",
+  }).catch((e) => console.warn("email-processor trigger failed:", e));
+  // @ts-ignore EdgeRuntime is provided by the Supabase edge runtime
+  if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(trigger);
 }
 
 async function patchEmailMetadata({ admin, userId, object }: HandlerCtx) {
@@ -96,6 +114,18 @@ async function invalidateCalendarCache({ admin, userId }: HandlerCtx) {
     .delete()
     .eq("user_id", userId);
   if (error) throw error;
+
+  // Signal open clients to refetch. calendar_events itself can't carry this
+  // (no RLS select policy, and the cache may already be empty so the delete
+  // above emits nothing) — sync_signals is in the realtime publication and
+  // the calendar UI subscribes to it.
+  const { error: sigErr } = await admin
+    .from("sync_signals")
+    .upsert(
+      { user_id: userId, resource: "calendar", updated_at: new Date().toISOString() },
+      { onConflict: "user_id,resource" }
+    );
+  if (sigErr) console.warn("nylas-webhook: sync_signals upsert failed:", sigErr.message);
   console.log(`nylas-webhook: invalidated calendar cache for user ${userId}`);
 }
 
@@ -258,26 +288,36 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // Resolve user_id from grant_id
-  const { data: grant, error: grantErr } = await admin
+  // Resolve user_ids from grant_id. One grant can be connected by several
+  // users (same Google account on multiple app accounts) — fan the event out
+  // to all of them so every connected account stays in sync. maybeSingle()
+  // here used to error on duplicates and silently drop the event.
+  const { data: grantRows, error: grantErr } = await admin
     .from("nylas_grants")
     .select("user_id")
-    .eq("grant_id", grantId)
-    .maybeSingle();
+    .eq("grant_id", grantId);
 
-  if (grantErr || !grant) {
+  const userIds = [...new Set((grantRows ?? []).map((r) => r.user_id))];
+
+  if (grantErr || userIds.length === 0) {
     // Grant not found — not our user, acknowledge to stop retries
     console.log(`nylas-webhook: unknown grant ${grantId} (${eventType})`);
     return new Response("unknown grant", { status: 200 });
   }
 
   try {
-    await handler({ admin, userId: grant.user_id, grantId, object: payload.data?.object ?? {} });
+    await Promise.all(
+      userIds.map((userId) =>
+        handler({ admin, userId, grantId, object: payload.data?.object ?? {} })
+      )
+    );
   } catch (e: any) {
     console.error(`nylas-webhook: ${eventType} handler error:`, e?.message ?? e);
     // Handlers are idempotent — 503 asks Nylas to retry (3 attempts total)
     return new Response("handler error", { status: 503 });
   }
+  // One processor kick per webhook delivery, after all users are enqueued
+  if (eventType.startsWith("message.created")) triggerEmailProcessor();
 
   return new Response("ok", { status: 200 });
 });

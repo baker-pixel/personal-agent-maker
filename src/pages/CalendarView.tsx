@@ -263,6 +263,38 @@ export default function CalendarView() {
     };
   }, [calendarConnected, fetchEvents]);
 
+  // Realtime: nylas-webhook upserts sync_signals(resource='calendar') on any
+  // provider-side event change; refetch so edits made in Google Calendar show
+  // up without a manual refresh. Short coalesce window absorbs event bursts
+  // (e.g. recurring-series edits fire one webhook per occurrence).
+  useEffect(() => {
+    if (!calendarConnected) return;
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      channel = supabase
+        .channel(`calendar_sync_${user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "sync_signals", filter: `user_id=eq.${user.id}` },
+          (payload: any) => {
+            if (payload.new?.resource !== "calendar") return;
+            if (coalesceTimer) clearTimeout(coalesceTimer);
+            coalesceTimer = setTimeout(() => fetchEvents(), 2_000);
+          }
+        )
+        .subscribe();
+    })();
+    return () => {
+      cancelled = true;
+      if (coalesceTimer) clearTimeout(coalesceTimer);
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [calendarConnected, fetchEvents]);
+
   const now = new Date();
   // Use LOCAL date string everywhere — fixes off-by-one for non-UTC timezones
   const today = toLocalDateStr(now);
