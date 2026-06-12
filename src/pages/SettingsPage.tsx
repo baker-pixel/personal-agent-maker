@@ -150,7 +150,7 @@ export default function Settings() {
         // One query fetches all columns needed by this page AND VoicePersonalizationSection
         const { data } = await supabase
           .from("user_preferences")
-          .select("agent_name, user_display_name, tone, email_length, priority_visibility, decision_style, email_signature, tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language, tts_provider, tts_elevenlabs_voice_id")
+          .select("agent_name, user_display_name, tone, email_length, priority_visibility, decision_style, email_signature, tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language, tts_provider, tts_elevenlabs_voice_id, sonic_voice_id")
           .eq("user_id", user.id)
           .maybeSingle();
         if (data) {

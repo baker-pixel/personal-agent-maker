@@ -13,7 +13,8 @@ import {
   CheckCircle2, Sparkles, Shield, MessageSquare,
   Check, Loader2, Zap, Volume2, Brain,
 } from "lucide-react";
-import { GROQ_VOICES, DEFAULT_GROQ_VOICE } from "@/lib/groqVoices";
+import { SONIC_VOICES, DEFAULT_SONIC_VOICE, sonicToGroqVoiceId } from "@/lib/sonicVoices";
+import { fetchSonicTts } from "@/lib/sonicTts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ interface OnboardingState {
 
 const defaults: OnboardingState = {
   agentName: "",
-  voiceId: DEFAULT_GROQ_VOICE,
+  voiceId: DEFAULT_SONIC_VOICE,
   tone: "friendly",
   emailLength: "balanced",
   priorityVisibility: "important",
@@ -148,7 +149,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
 
       supabase
         .from("user_preferences")
-        .select("onboarding_completed, assessment_status, user_display_name, onboarding_step, agent_name, tone, email_length, priority_visibility, decision_style, tts_elevenlabs_voice_id")
+        .select("onboarding_completed, assessment_status, user_display_name, onboarding_step, agent_name, tone, email_length, priority_visibility, decision_style, sonic_voice_id")
         .eq("user_id", user.id)
         .maybeSingle()
         .then(({ data }) => {
@@ -169,7 +170,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
               ...s,
               assessEmail:        s.assessEmail        || user.email || "",
               agentName:          s.agentName          || data?.agent_name || "",
-              voiceId:            s.voiceId            || data?.tts_elevenlabs_voice_id || DEFAULT_GROQ_VOICE,
+              voiceId:            s.voiceId            || data?.sonic_voice_id || DEFAULT_SONIC_VOICE,
               tone:               s.tone               || data?.tone               || "friendly",
               emailLength:        s.emailLength        || data?.email_length       || "balanced",
               priorityVisibility: s.priorityVisibility || data?.priority_visibility || "important",
@@ -268,7 +269,9 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
       };
       if (completedStep >= 0) updates.agent_name = agentName;
       if (completedStep >= 1) {
-        updates.tts_elevenlabs_voice_id = currentState.voiceId;
+        updates.sonic_voice_id = currentState.voiceId;
+        // Groq readouts can't speak Nova ids — store the gender-matched Orpheus voice
+        updates.tts_elevenlabs_voice_id = sonicToGroqVoiceId(currentState.voiceId);
         updates.tts_provider = "groq";
         updates.tts_enabled = true;
       }
@@ -320,7 +323,8 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
           email_length: state.emailLength,
           priority_visibility: state.priorityVisibility,
           decision_style: state.decisionStyle,
-          tts_elevenlabs_voice_id: state.voiceId, // column reused for groq voice id
+          sonic_voice_id: state.voiceId,
+          tts_elevenlabs_voice_id: sonicToGroqVoiceId(state.voiceId), // column reused for groq voice id
           tts_provider: "groq",
           tts_enabled: true,
           updated_at: new Date().toISOString(),
@@ -406,32 +410,39 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
     previewAbortRef.current = abort;
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
-      const anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      const res = await fetch(`${supabaseUrl}/functions/v1/groq-tts`, {
-        method: "POST",
-        signal: abort.signal,
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": anonKey,
-          "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
-        },
-        body: JSON.stringify({ text, voice: voiceId, speed: 1.0 }),
-      });
-
+      // Real Nova voice via the voice server; Groq stand-in only as fallback.
+      let blob = await fetchSonicTts(text, voiceId, abort.signal);
       if (abort.signal.aborted) return;
 
-      if (res.status === 429) {
-        toast({ title: "Too many previews", description: "Please wait a moment before previewing again.", variant: "destructive" });
-        setPreviewingVoiceId(null);
-        return;
+      if (!blob) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
+        const anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+        const res = await fetch(`${supabaseUrl}/functions/v1/groq-tts`, {
+          method: "POST",
+          signal: abort.signal,
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": anonKey,
+            "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
+          },
+          // groq-tts only speaks Orpheus voices — preview the gender-matched one
+          body: JSON.stringify({ text, voice: sonicToGroqVoiceId(voiceId), speed: 1.0 }),
+        });
+
+        if (abort.signal.aborted) return;
+
+        if (res.status === 429) {
+          toast({ title: "Too many previews", description: "Please wait a moment before previewing again.", variant: "destructive" });
+          setPreviewingVoiceId(null);
+          return;
+        }
+        if (!res.ok) throw new Error(`${res.status}`);
+
+        blob = await res.blob();
+        if (abort.signal.aborted) return;
       }
-      if (!res.ok) throw new Error(`${res.status}`);
-
-      const blob = await res.blob();
-      if (abort.signal.aborted) return;
 
       const url = URL.createObjectURL(blob);
       previewUrlRef.current = url;
@@ -529,7 +540,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
-                    {GROQ_VOICES.map(v => {
+                    {SONIC_VOICES.map(v => {
                       const selected = state.voiceId === v.id;
                       const previewing = previewingVoiceId === v.id;
                       return (
@@ -546,7 +557,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                           }`}
                         >
                           <p className={`text-sm font-semibold leading-tight ${selected ? "text-accent" : "text-foreground"}`}>
-                            {v.name}
+                            {v.gender}
                           </p>
                           <p className="text-[11px] text-muted-foreground mt-0.5">{v.description}</p>
                           <button
@@ -564,7 +575,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                   </div>
 
                   <p className="text-[11px] text-muted-foreground text-center">
-                    Browser preview only — full premium voice activates in the app. Change anytime in Settings.
+                    Change anytime in Settings.
                   </p>
                 </div>
               )}

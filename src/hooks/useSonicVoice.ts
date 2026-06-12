@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getFreshAccessToken } from "@/lib/authedFetch";
 import { useVoicePreferences } from "./useVoicePreferences";
+import { sonicToGroqVoiceId } from "@/lib/sonicVoices";
 
 const VOICE_SERVER_URL: string | undefined = import.meta.env.VITE_VOICE_SERVER_URL;
 
@@ -281,6 +282,8 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
     toggleConversation,
     /** Sonic voice (per-user pref). Takes effect on the next session start. */
     sonicVoiceId: voicePrefs.sonic_voice_id,
-    setSonicVoiceId: (id: string) => updateVoicePrefs({ sonic_voice_id: id }),
+    // Keep the Groq readout voice gender-matched to the picked Nova voice.
+    setSonicVoiceId: (id: string) =>
+      updateVoicePrefs({ sonic_voice_id: id, tts_groq_voice_id: sonicToGroqVoiceId(id) }),
   };
 }

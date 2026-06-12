@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Mic } from "lucide-react";
 import { VoiceSettingsPanel } from "@/components/VoiceSettingsPanel";
 import { useVoicePreferences } from "@/hooks/useVoicePreferences";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
+import { sonicToGroqVoiceId } from "@/lib/sonicVoices";
+import { fetchSonicTts } from "@/lib/sonicTts";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -37,11 +39,41 @@ export function VoicePersonalizationSection({ initialData }: VoicePersonalizatio
     };
   }, []);
 
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+
   const handlePreview = () => {
     // Unlock audio in the same user-gesture tick (required by iOS / strict
     // autoplay policies) BEFORE any async work happens inside previewVoice.
     tts.unlockAudio();
-    tts.previewVoice();
+
+    // Browser-voice mode previews the picked Web Speech voice as before.
+    if (tts.provider !== "groq") {
+      tts.previewVoice();
+      return;
+    }
+
+    // Premium mode: preview the real Nova voice via the voice server,
+    // falling back to the Groq stand-in when the server isn't reachable.
+    const SILENT_WAV =
+      "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+    if (!previewAudioRef.current) {
+      previewAudioRef.current = new Audio();
+      previewAudioRef.current.setAttribute("playsinline", "true");
+      (previewAudioRef.current as any).playsInline = true;
+    }
+    const audio = previewAudioRef.current;
+    audio.src = SILENT_WAV;
+    audio.play().catch(() => {});
+
+    fetchSonicTts("Hi, I'm Normy. This is how I'll sound when we talk.", prefs.sonic_voice_id)
+      .then((blob) => {
+        if (!blob) { tts.previewVoice(); return; }
+        const url = URL.createObjectURL(blob);
+        audio.onended = () => URL.revokeObjectURL(url);
+        audio.src = url;
+        audio.play().catch(() => { URL.revokeObjectURL(url); tts.previewVoice(); });
+      })
+      .catch(() => tts.previewVoice());
   };
 
   return (
@@ -86,8 +118,12 @@ export function VoicePersonalizationSection({ initialData }: VoicePersonalizatio
           onSttLanguageChange={(lang) => update({ stt_language: lang })}
           provider={tts.provider}
           onProviderChange={tts.setProvider}
-          groqVoiceId={tts.groqVoiceId}
-          onGroqVoiceChange={tts.setGroqVoiceId}
+          sonicVoiceId={prefs.sonic_voice_id}
+          onSonicVoiceChange={(id) =>
+            // One Nova voice drives everything: live sessions use it directly,
+            // Groq readouts get the gender-matched Orpheus equivalent.
+            update({ sonic_voice_id: id, tts_groq_voice_id: sonicToGroqVoiceId(id) })
+          }
         />
       </div>
     </section>
