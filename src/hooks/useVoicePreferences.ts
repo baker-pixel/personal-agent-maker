@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DEFAULT_GROQ_VOICE, isLegacyVoiceId } from "@/lib/groqVoices";
+import { DEFAULT_SONIC_VOICE, SONIC_VOICE_IDS } from "@/lib/sonicVoices";
 
 export type TtsProvider = "browser" | "groq";
 
@@ -13,6 +14,7 @@ export interface VoicePrefs {
   stt_language: string;
   tts_provider: TtsProvider;
   tts_groq_voice_id: string | null;
+  sonic_voice_id: string;
 }
 
 const DEFAULTS: VoicePrefs = {
@@ -25,6 +27,7 @@ const DEFAULTS: VoicePrefs = {
   // Groq is the product default voice; browser is only a runtime fallback.
   tts_provider: "groq",
   tts_groq_voice_id: DEFAULT_GROQ_VOICE,
+  sonic_voice_id: DEFAULT_SONIC_VOICE,
 };
 
 function rowToPrefs(d: Record<string, any>): VoicePrefs {
@@ -41,6 +44,7 @@ function rowToPrefs(d: Record<string, any>): VoicePrefs {
     stt_language: d.stt_language ?? DEFAULTS.stt_language,
     tts_provider: provider,
     tts_groq_voice_id: groqVoiceId,
+    sonic_voice_id: SONIC_VOICE_IDS.has(d.sonic_voice_id) ? d.sonic_voice_id : DEFAULT_SONIC_VOICE,
   };
 }
 
@@ -72,7 +76,7 @@ export function useVoicePreferences(opts?: VoicePrefsOptions) {
       setUserId(user.id);
       const { data } = await supabase
         .from("user_preferences")
-        .select("tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language, tts_provider, tts_elevenlabs_voice_id")
+        .select("tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language, tts_provider, tts_elevenlabs_voice_id, sonic_voice_id")
         .eq("user_id", user.id)
         .maybeSingle();
       if (cancelled) return;
@@ -101,6 +105,7 @@ export function useVoicePreferences(opts?: VoicePrefsOptions) {
             stt_language: next.stt_language,
             tts_provider: next.tts_provider,
             tts_elevenlabs_voice_id: next.tts_groq_voice_id, // reuse existing column
+            sonic_voice_id: next.sonic_voice_id,
           } as any,
           { onConflict: "user_id" }
         );

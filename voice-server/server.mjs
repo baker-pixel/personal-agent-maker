@@ -32,6 +32,10 @@ const MAX_SESSION_MS = 10 * 60 * 1000; // hard cap per voice session
 const CONTEXT_TTL_MS = 60 * 1000;
 const contextCache = new Map(); // token -> { systemPrompt, ts }
 const READ_TOOLS = new Set(["read_email"]);
+// Nova 2 Sonic voice catalog — English voices only (must match src/lib/sonicVoices.ts).
+const SONIC_VOICES = new Set([
+  "matthew", "tiffany", "amy", "olivia", "kiara", "arjun",
+]);
 const FALLBACK_PROMPT = "You are a helpful executive assistant on a voice call. Keep replies to 1-3 short spoken sentences, no formatting.";
 
 async function supabaseFn(name, token, body) {
@@ -54,8 +58,142 @@ async function supabaseFn(name, token, body) {
   return data;
 }
 
+// ---- one-shot TTS (voice previews) ------------------------------------------
+// Sonic has no TTS API and only generates after a spoken user turn (text turns
+// are context-only). Workaround: a canned trigger utterance + a system prompt
+// that says "ignore the user, say exactly <text>". Costs a full Sonic session
+// per call — previews only, not readouts.
+const TTS_MAX_CHARS = 300;
+const TTS_TIMEOUT_MS = 20_000;
+const TTS_TRIGGER_PCM = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "confirm-utterance.wav")
+).subarray(44); // skip WAV header — 16kHz LE16 mono PCM
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function verifySupabaseToken(token) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(10_000),
+  });
+  return res.ok;
+}
+
+function pcmToWav(pcm, sampleRate = 24000) {
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);  // PCM
+  header.writeUInt16LE(1, 22);  // mono
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28); // byte rate (16-bit mono)
+  header.writeUInt16LE(2, 32);  // block align
+  header.writeUInt16LE(16, 34); // bits per sample
+  header.write("data", 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
+function synthesizeOnce({ text, voiceId }) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let settled = false;
+    let session = null;
+    const finish = (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      session?.end();
+      if (err) reject(err);
+      else if (chunks.length === 0) reject(new Error("Sonic produced no audio"));
+      else resolve(pcmToWav(Buffer.concat(chunks)));
+    };
+    const timer = setTimeout(() => finish(new Error("Sonic TTS timed out")), TTS_TIMEOUT_MS);
+
+    session = new SonicSession({
+      region: AWS_REGION,
+      voiceId,
+      systemPrompt:
+        "You are a voice preview engine. No matter what the user says, reply by saying exactly " +
+        `this and nothing else: "${text.replace(/"/g, "'")}"`,
+      tools: [],
+      onEvent: (event) => {
+        const kind = Object.keys(event)[0];
+        if (kind === "audioOutput") {
+          chunks.push(Buffer.from(event.audioOutput.content, "base64"));
+        } else if (kind === "contentEnd" && event.contentEnd.type === "AUDIO") {
+          finish();
+        }
+      },
+      onError: (e) => finish(e),
+      onClose: () => finish(),
+    });
+    session.start()
+      .then(async () => {
+        // Stream the trigger utterance (faster than realtime is fine), then
+        // enough silence for server-side VAD to close the turn.
+        const CHUNK = 1024;
+        session.startAudio();
+        for (let i = 0; i < TTS_TRIGGER_PCM.length && !settled; i += CHUNK) {
+          session.sendAudioChunk(TTS_TRIGGER_PCM.subarray(i, i + CHUNK).toString("base64"));
+          await sleep(10);
+        }
+        const silence = Buffer.alloc(CHUNK).toString("base64");
+        for (let i = 0; i < 150 && !settled; i++) {
+          session.sendAudioChunk(silence);
+          await sleep(10);
+        }
+      })
+      .catch((e) => finish(e));
+  });
+}
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+async function handleTts(req, res) {
+  const sendJson = (status, body) => {
+    res.writeHead(status, { "Content-Type": "application/json", ...CORS_HEADERS });
+    res.end(JSON.stringify(body));
+  };
+  try {
+    let raw = "";
+    for await (const chunk of req) {
+      raw += chunk;
+      if (raw.length > 10_000) { sendJson(413, { error: "Body too large" }); return; }
+    }
+    const body = JSON.parse(raw || "{}");
+    const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+    if (!token || !(await verifySupabaseToken(token))) {
+      sendJson(401, { error: "Authentication failed" });
+      return;
+    }
+    const text = String(body.text || "").slice(0, TTS_MAX_CHARS).trim();
+    if (!text) { sendJson(400, { error: "Missing text" }); return; }
+    const voiceId = SONIC_VOICES.has(body.voiceId) ? body.voiceId : "matthew";
+
+    const wav = await synthesizeOnce({ text, voiceId });
+    res.writeHead(200, { "Content-Type": "audio/wav", "Content-Length": wav.length, ...CORS_HEADERS });
+    res.end(wav);
+    console.log(`[tts] ok voice=${voiceId} chars=${text.length} bytes=${wav.length}`);
+  } catch (e) {
+    console.error("[tts] failed:", e.message);
+    sendJson(502, { error: "TTS failed" });
+  }
+}
+
 const httpServer = createServer((req, res) => {
-  if (req.url === "/" || req.url === "/test") {
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, CORS_HEADERS);
+    res.end();
+  } else if (req.url === "/tts" && req.method === "POST") {
+    handleTts(req, res);
+  } else if (req.url === "/" || req.url === "/test") {
     res.writeHead(200, { "Content-Type": "text/html" });
     res.end(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "test-client.html")));
   } else if (req.url === "/health") {
@@ -151,7 +289,7 @@ wss.on("connection", (ws, req) => {
 
       session = new SonicSession({
         region: AWS_REGION,
-        voiceId: msg.voiceId || "matthew",
+        voiceId: SONIC_VOICES.has(msg.voiceId) ? msg.voiceId : "matthew",
         systemPrompt,
         tools,
         onEvent: async (event) => {

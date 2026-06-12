@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GROQ_VOICES } from "@/lib/groqVoices";
+import { SONIC_VOICES } from "@/lib/sonicVoices";
 
 type TtsProvider = "browser" | "groq";
 
@@ -31,8 +31,8 @@ interface VoiceSettingsPanelProps {
   onSttLanguageChange?: (lang: string) => void;
   provider?: TtsProvider;
   onProviderChange?: (p: TtsProvider) => void;
-  groqVoiceId?: string | null;
-  onGroqVoiceChange?: (id: string) => void;
+  sonicVoiceId?: string | null;
+  onSonicVoiceChange?: (id: string) => void;
   inline?: boolean;
 }
 
@@ -102,11 +102,12 @@ export function VoiceSettingsPanel({
   onSttLanguageChange,
   provider = "browser",
   onProviderChange,
-  groqVoiceId,
-  onGroqVoiceChange,
+  sonicVoiceId,
+  onSonicVoiceChange,
   inline = false,
 }: VoiceSettingsPanelProps) {
   const isPremium = provider === "groq";
+  const isSonic = !!onSonicVoiceChange;
 
   const voiceGroups = useMemo(() => {
     const groups = new Map<string, SpeechSynthesisVoice[]>();
@@ -182,27 +183,33 @@ export function VoiceSettingsPanel({
         </div>
       </div>
 
-      {isPremium ? (
+      {isSonic && (
         <div className="space-y-1.5">
-          <Label className="text-xs">Premium voice</Label>
+          <Label className="text-xs">Agent voice</Label>
           <Select
-            value={groqVoiceId ?? undefined}
-            onValueChange={(v) => onGroqVoiceChange?.(v)}
+            value={sonicVoiceId ?? undefined}
+            onValueChange={(v) => onSonicVoiceChange?.(v)}
           >
             <SelectTrigger className="h-9 text-sm">
               <SelectValue placeholder="Pick a voice" />
             </SelectTrigger>
             <SelectContent className="max-h-72">
-              {GROQ_VOICES.map((v) => (
+              {SONIC_VOICES.map((v) => (
                 <SelectItem key={v.id} value={v.id} className="text-sm">
-                  <span className="font-medium">{v.name}</span>
+                  <span className="font-medium">{v.gender}</span>
                   <span className="text-muted-foreground ml-1.5">— {v.description}</span>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            Used in live voice sessions; spoken replies use the closest matching voice.
+            Session changes apply when the next session starts.
+          </p>
         </div>
-      ) : (
+      )}
+
+      {!isPremium && (
         isSupported && (
           <div className="space-y-1.5">
             <Label className="text-xs">Voice & accent</Label>
