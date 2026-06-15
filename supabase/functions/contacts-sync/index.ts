@@ -178,15 +178,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch last sync time to avoid double-counting interactions
+    // Fetch last sync time from user_preferences — a dedicated timestamp that
+    // only advances when we finish a sync, not every time a contact row is touched.
     const { data: syncMeta } = await admin
-      .from("contacts")
-      .select("updated_at")
+      .from("user_preferences")
+      .select("contacts_last_synced_at")
       .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(1)
       .maybeSingle();
-    const lastSyncedAt: string | null = syncMeta?.updated_at || null;
+    const lastSyncedAt: string | null = syncMeta?.contacts_last_synced_at || null;
+    // Record the start time now; written back after a successful sync so the
+    // next run fetches only interactions that happened after this moment.
+    const syncStartedAt = new Date().toISOString();
 
     let totalSynced = 0;
 
@@ -274,6 +276,12 @@ Deno.serve(async (req) => {
         totalSynced++;
       }
     }
+
+    // Stamp the sync time so next run only fetches interactions after this point.
+    await admin
+      .from("user_preferences")
+      .update({ contacts_last_synced_at: syncStartedAt })
+      .eq("user_id", user.id);
 
     return new Response(
       JSON.stringify({ ok: true, synced: totalSynced }),

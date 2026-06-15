@@ -104,7 +104,7 @@ serve(async (req) => {
         .order("due_date", { ascending: true, nullsFirst: false })
         .limit(10),
       admin.from("user_preferences")
-        .select("user_display_name")
+        .select("user_display_name, agent_name")
         .eq("user_id", user.id)
         .maybeSingle(),
     ]);
@@ -113,8 +113,10 @@ serve(async (req) => {
     const today = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(now);
     const timeNow = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(now);
     const displayName = prefsRes.data?.user_display_name || "";
+    // DB is the source of truth for the agent's name — client-sent value is a fallback.
+    const resolvedAgentName = (prefsRes.data?.agent_name || "").trim() || agentName;
 
-    let prompt = `You are ${agentName}, an executive assistant speaking with ${displayName || "the user"} over voice. Today is ${today}, ${timeNow} (${tz}).
+    let prompt = `You are ${resolvedAgentName}, an executive assistant speaking with ${displayName || "the user"} over voice. Your name is ${resolvedAgentName} — the user chose it for you; when asked your name, say "${resolvedAgentName}", never that you have no name. Today is ${today}, ${timeNow} (${tz}).
 
 VOICE STYLE: You are in a spoken conversation. Default to ONE short sentence; use two only when truly needed. No filler, no preamble, no repeating the user's request back. Never use markdown, lists, or formatting. Confirm actions in a few plain words ("Sent." / "Done, it's on your calendar."). If you need missing details (recipient email, time), ask one short question.
 

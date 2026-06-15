@@ -109,6 +109,7 @@ export default function Contacts() {
       .from("contacts")
       .update({
         name: editing.name,
+        email: editing.email || null,
         company: editing.company,
         role: editing.role,
         notes: editing.notes,
@@ -304,7 +305,7 @@ export default function Contacts() {
               </Card>
 
               <div><Label>Name</Label><Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
-              <div><Label>Email</Label><Input value={editing.email || ""} disabled /></div>
+              <div><Label>Email</Label><Input value={editing.email || ""} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><Label>Company</Label><Input value={editing.company || ""} onChange={(e) => setEditing({ ...editing, company: e.target.value })} /></div>
                 <div><Label>Role</Label><Input value={editing.role || ""} onChange={(e) => setEditing({ ...editing, role: e.target.value })} /></div>
