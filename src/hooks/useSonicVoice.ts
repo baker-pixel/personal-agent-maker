@@ -20,8 +20,8 @@ interface UseSonicVoiceOpts {
 }
 
 // End the session after this much silence (no user speech, no agent audio).
-// Streaming silence to Bedrock costs audio-seconds and battery for nothing.
-const SILENCE_END_MS = 15_000;
+// 45s — user needs time to process a long email readout before replying.
+const SILENCE_END_MS = 45_000;
 // Same RMS speech threshold the Groq pipeline used.
 const SPEECH_RMS = 0.02;
 
@@ -107,7 +107,12 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
     if (wasSilent) setIsSpeaking(true); // one render per burst, not per chunk
     src.onended = () => {
       liveSourcesRef.current.delete(src);
-      if (liveSourcesRef.current.size === 0) setIsSpeaking(false);
+      if (liveSourcesRef.current.size === 0) {
+        setIsSpeaking(false);
+        // Start 45s silence window from when agent finishes speaking,
+        // not from when chunks arrived (they can precede playback).
+        lastActivityRef.current = Date.now();
+      }
     };
   }, []);
 
@@ -244,9 +249,16 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
       await ready;
       sessionReady.current = true;
 
-      // Auto-end after sustained silence — nobody said anything in 45s.
+      // Auto-end after sustained silence — nobody said anything for SILENCE_END_MS.
       lastActivityRef.current = Date.now();
       idleTimerRef.current = setInterval(() => {
+        // Don't timeout while agent audio is still playing — chunks can arrive
+        // faster than playback, so checking liveSourcesRef is more accurate
+        // than relying on lastActivityRef being set in playChunk.
+        if (liveSourcesRef.current.size > 0) {
+          lastActivityRef.current = Date.now();
+          return;
+        }
         if (Date.now() - lastActivityRef.current > SILENCE_END_MS) {
           optsRef.current.onAutoEnd?.();
           stopConversation();
