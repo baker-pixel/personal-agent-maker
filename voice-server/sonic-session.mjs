@@ -57,9 +57,9 @@ export class SonicSession {
     this.enqueue({
       event: {
         sessionStart: {
-          // 256 is plenty for 1-2 spoken sentences (~190 words) and hard-caps
-          // cost per turn; raise only if briefing-style replies get truncated.
-          inferenceConfiguration: { maxTokens: 256, topP: 0.9, temperature: 0.7 },
+          // 512 gives headroom for email readouts (~380 words spoken); still
+          // caps cost on short turns where the model stops naturally earlier.
+          inferenceConfiguration: { maxTokens: 512, topP: 0.9, temperature: 0.7 },
           // LOW = waits ~2s of silence before treating the user's turn as done.
           // HIGH/MEDIUM cut off slower or pausing speakers mid-sentence.
           turnDetectionConfiguration: { endpointingSensitivity: "LOW" },
