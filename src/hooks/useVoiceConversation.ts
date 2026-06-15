@@ -467,9 +467,11 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     // On iOS PWA this API is missing entirely; TTS-only mode is the fallback.
     if (speech.isSupported) {
       // Pre-warm mic permission from the gesture handler (required for iOS Safari).
+      // Pass the stream to prewarmMic so startListening reuses it — avoids the
+      // stop-then-reacquire cycle that triggers repeated iOS permission prompts.
       try {
         navigator.mediaDevices?.getUserMedia({ audio: true })
-          .then((stream) => { stream.getTracks().forEach((t) => t.stop()); })
+          .then((stream) => { speech.prewarmMic(stream); })
           .catch(() => { /* user denied; startRecordingTurn will surface the error */ });
       } catch { /* ignore — mediaDevices missing on old browsers */ }
 

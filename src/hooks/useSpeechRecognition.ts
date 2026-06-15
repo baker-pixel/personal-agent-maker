@@ -28,6 +28,8 @@ interface SpeechRecognitionReturn {
   stopAndSubmit: () => void;
   toggleListening: () => void;
   isSupported: boolean;
+  /** Store a pre-acquired MediaStream so startListening reuses it instead of calling getUserMedia again. */
+  prewarmMic: (stream: MediaStream) => void;
 }
 
 // RMS of a byte time-domain buffer (values 0–255, center 128).
@@ -109,6 +111,9 @@ export function useSpeechRecognition({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  // Holds a stream acquired before the user taps Start — lets startListening
+  // skip the getUserMedia call and avoids the iOS re-prompt cycle.
+  const prewarmedStreamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const vadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -353,7 +358,12 @@ export function useSpeechRecognition({
     hasSpeechRef.current = false;
     armSilenceTimer();
 
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+    const micPromise = prewarmedStreamRef.current
+      ? Promise.resolve(prewarmedStreamRef.current)
+      : navigator.mediaDevices.getUserMedia({ audio: true });
+    prewarmedStreamRef.current = null;
+
+    micPromise.then((stream) => {
       if (stoppingRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
 
       streamRef.current = stream;
@@ -399,6 +409,12 @@ export function useSpeechRecognition({
     });
   }, [isSupported, armSilenceTimer, startRecorder, submitChunk]);
 
+  const prewarmMic = useCallback((stream: MediaStream) => {
+    // Discard any previous pre-warmed stream before storing the new one.
+    prewarmedStreamRef.current?.getTracks().forEach(t => t.stop());
+    prewarmedStreamRef.current = stream;
+  }, []);
+
   const toggleListening = useCallback(() => {
     if (isListeningRef.current) stopListening();
     else startListening();
@@ -415,8 +431,9 @@ export function useSpeechRecognition({
       }
       if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch { /* ignore */ } }
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      if (prewarmedStreamRef.current) { prewarmedStreamRef.current.getTracks().forEach(t => t.stop()); prewarmedStreamRef.current = null; }
     };
   }, [clearTimers]);
 
-  return { isListening, isSpeechActive, transcript, isTranscribing, startListening, stopListening, stopAndSubmit, toggleListening, isSupported };
+  return { isListening, isSpeechActive, transcript, isTranscribing, startListening, stopListening, stopAndSubmit, toggleListening, isSupported, prewarmMic };
 }
