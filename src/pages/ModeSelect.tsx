@@ -6,6 +6,7 @@ import { useAgent } from "@/contexts/AgentContext";
 import { useVoiceSession } from "@/hooks/useVoiceSession";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
 import { stripAgentBlocks } from "@/lib/stripAgentBlocks";
+import { MicPermissionModal } from "@/components/MicPermissionModal";
 import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
 
@@ -23,7 +24,9 @@ export default function ModeSelect() {
 
   // Shared voice session — same greeting, TTS, and mic behavior as DecisionVoice.
   // Separate conversation title so quick sessions don't pollute Delegate history.
-  const { chat, voice, startSession, resetSession, handleMicTap, voiceEngine } = useVoiceSession(displayName, {
+  const { chat, voice, startSession, resetSession, handleMicTap, voiceEngine,
+    showPermissionModal, permissionDenied, handlePermissionRequest, handlePermissionDismiss,
+  } = useVoiceSession(displayName, {
     conversationTitle: "Quick Chat",
     enabled: hookEnabled,
     skipInitialLoad: true,
@@ -325,6 +328,13 @@ export default function ModeSelect() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <MicPermissionModal
+        open={showPermissionModal}
+        denied={permissionDenied}
+        onRequest={handlePermissionRequest}
+        onDismiss={handlePermissionDismiss}
+      />
     </div>
   );
 }

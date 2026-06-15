@@ -12,6 +12,7 @@ import { stripAgentBlocks } from "@/lib/stripAgentBlocks";
 import { VoiceSettingsPanel } from "@/components/VoiceSettingsPanel";
 import { useIntegrations } from "@/contexts/IntegrationsContext";
 import { NotConnectedState } from "@/components/NotConnectedState";
+import { MicPermissionModal } from "@/components/MicPermissionModal";
 
 export default function DecisionVoice() {
   const navigate = useNavigate();
@@ -25,7 +26,9 @@ export default function DecisionVoice() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Shared voice session — same greeting, TTS, and mic behavior as ModeSelect
-  const { chat, voice, startSession, resetSession, handleMicTap, voiceEngine } = useVoiceSession(agentName, {
+  const { chat, voice, startSession, resetSession, handleMicTap, voiceEngine,
+    showPermissionModal, permissionDenied, handlePermissionRequest, handlePermissionDismiss,
+  } = useVoiceSession(agentName, {
     onUserUtterance: (text) => {
       setInput(text);
       setVoiceJustFilled(true);
@@ -351,6 +354,12 @@ export default function DecisionVoice() {
           </div>
         </div>
       </div>
+      <MicPermissionModal
+        open={showPermissionModal}
+        denied={permissionDenied}
+        onRequest={handlePermissionRequest}
+        onDismiss={handlePermissionDismiss}
+      />
     </div>
   );
 }
