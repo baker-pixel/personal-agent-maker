@@ -4,7 +4,6 @@ import { useVoiceConversation } from "./useVoiceConversation";
 import { useSonicVoice, sonicEnabled } from "./useSonicVoice";
 import { useUserDisplayName } from "./useUserDisplayName";
 import { stripMarkdown } from "@/lib/stripMarkdown";
-import { useMicPermission } from "./useMicPermission";
 
 interface UseVoiceSessionOpts {
   /** Conversation title in Delegate history (e.g. "Quick Chat"). */
@@ -26,10 +25,7 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
   const userName = useUserDisplayName();
   const [pendingGreeting, setPendingGreeting] = useState<string | null>(null);
   const greetedRef = useRef(false);
-  const micPerm = useMicPermission();
-  const [showPermissionModal, setShowPermissionModal] = useState(false);
-  const [permissionDenied, setPermissionDenied] = useState(false);
-  const pendingStartRef = useRef(false);
+  const [showSafariTip, setShowSafariTip] = useState(false);
   // True once the user has sent a message in THIS voice session. Until then
   // the only thing TTS may speak is the greeting — replies that were already
   // in the transcript when the session started (restored history, stale async
@@ -149,49 +145,19 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
     setPendingGreeting(null);
   }, []);
 
-  /** Internal: actually start — called only after permission is confirmed. */
-  const startSessionImpl = useCallback(() => {
+  /** Start a fresh voice session: clear chat, re-arm the greeting, start the loop. */
+  const startSession = useCallback(() => {
     chat.reset();
     resetGreeting();
     if (useSonic) sonic.startConversation();
     else voice.startConversation();
+    // Show the Safari mic tip once — reminds user to set Allow so iOS stops re-prompting
+    if (!localStorage.getItem("safariMicTipDismissed")) setShowSafariTip(true);
   }, [chat.reset, resetGreeting, voice.startConversation, sonic.startConversation, useSonic]);
 
-  /** Start a fresh voice session, gated by mic permission. */
-  const startSession = useCallback(() => {
-    if (micPerm.state === "granted") {
-      startSessionImpl();
-      return;
-    }
-    if (micPerm.state === "denied") {
-      setPermissionDenied(true);
-      setShowPermissionModal(true);
-      return;
-    }
-    // "unknown" or "prompt" — show the modal; start after user taps Allow
-    pendingStartRef.current = true;
-    setPermissionDenied(false);
-    setShowPermissionModal(true);
-  }, [micPerm.state, startSessionImpl]);
-
-  /** Called when user taps "Enable Microphone" in the modal. */
-  const handlePermissionRequest = useCallback(async () => {
-    const granted = await micPerm.request();
-    if (granted) {
-      setShowPermissionModal(false);
-      if (pendingStartRef.current) {
-        pendingStartRef.current = false;
-        startSessionImpl();
-      }
-    } else {
-      setPermissionDenied(true);
-    }
-  }, [micPerm.request, startSessionImpl]);
-
-  /** Called when user dismisses the modal without granting. */
-  const handlePermissionDismiss = useCallback(() => {
-    pendingStartRef.current = false;
-    setShowPermissionModal(false);
+  const dismissSafariTip = useCallback(() => {
+    localStorage.setItem("safariMicTipDismissed", "1");
+    setShowSafariTip(false);
   }, []);
 
   /** Stop the voice loop AND clear the transcript (New chat / close overlay). */
@@ -278,10 +244,7 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
     resetSession,
     resetGreeting,
     handleMicTap,
-    // Mic permission gate — surfaces render <MicPermissionModal> with these
-    showPermissionModal,
-    permissionDenied,
-    handlePermissionRequest,
-    handlePermissionDismiss,
+    showSafariTip,
+    dismissSafariTip,
   };
 }

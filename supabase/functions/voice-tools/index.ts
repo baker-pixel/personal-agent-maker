@@ -186,8 +186,8 @@ async function executeToolCall(
         if (valid.length > 0) updateBody.participants = valid.map((a: any) => ({ email: a.email, ...(a.name ? { name: a.name } : {}), status: "noreply" }));
       }
 
-      const qs = args.notifyAttendees !== false ? "?notify_participants=true" : "";
-      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}${qs}`, {
+      const notify = args.notifyAttendees !== false ? "true" : "false";
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}?calendar_id=primary&notify_participants=${notify}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${nylasApiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(updateBody),
@@ -202,8 +202,8 @@ async function executeToolCall(
     }
 
     if (name === "delete_calendar_event") {
-      const qs = args.notifyAttendees !== false ? "?notify_participants=true" : "";
-      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}${qs}`, {
+      const notify = args.notifyAttendees !== false ? "true" : "false";
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}?calendar_id=primary&notify_participants=${notify}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${nylasApiKey}` },
       });

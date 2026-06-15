@@ -6,7 +6,6 @@ import { useAgent } from "@/contexts/AgentContext";
 import { useVoiceSession } from "@/hooks/useVoiceSession";
 import { VoiceWaveform } from "@/components/VoiceWaveform";
 import { stripAgentBlocks } from "@/lib/stripAgentBlocks";
-import { MicPermissionModal } from "@/components/MicPermissionModal";
 import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
 
@@ -25,7 +24,7 @@ export default function ModeSelect() {
   // Shared voice session — same greeting, TTS, and mic behavior as DecisionVoice.
   // Separate conversation title so quick sessions don't pollute Delegate history.
   const { chat, voice, startSession, resetSession, handleMicTap, voiceEngine,
-    showPermissionModal, permissionDenied, handlePermissionRequest, handlePermissionDismiss,
+    showSafariTip, dismissSafariTip,
   } = useVoiceSession(displayName, {
     conversationTitle: "Quick Chat",
     enabled: hookEnabled,
@@ -259,6 +258,12 @@ export default function ModeSelect() {
 
             {/* Input bar */}
             <div className="border-t bg-background px-4 py-3 shrink-0">
+              {showSafariTip && (
+                <div className="flex items-start justify-between gap-2 mb-2 px-3 py-2 rounded-xl bg-muted text-xs text-muted-foreground">
+                  <span>To avoid being asked every time, set Microphone to <strong>Always Allow</strong> in Safari → AA → Website Settings.</span>
+                  <button onClick={dismissSafariTip} className="shrink-0 text-muted-foreground/60 hover:text-foreground mt-0.5">✕</button>
+                </div>
+              )}
               {voice.speechRecognitionBlockedByPwa && (
                 <p className="text-xs text-muted-foreground mb-2 leading-snug">
                   Mic unavailable in installed app on iOS — type below. {displayName} will speak replies aloud.
@@ -329,12 +334,6 @@ export default function ModeSelect() {
         )}
       </AnimatePresence>
 
-      <MicPermissionModal
-        open={showPermissionModal}
-        denied={permissionDenied}
-        onRequest={handlePermissionRequest}
-        onDismiss={handlePermissionDismiss}
-      />
     </div>
   );
 }

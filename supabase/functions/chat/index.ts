@@ -602,8 +602,8 @@ async function executeToolCall(
         if (valid.length > 0) updateBody.participants = valid.map((a: any) => ({ email: a.email, ...(a.name ? { name: a.name } : {}), status: "noreply" }));
       }
 
-      const qs = args.notifyAttendees !== false ? "?notify_participants=true" : "";
-      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}${qs}`, {
+      const notify = args.notifyAttendees !== false ? "true" : "false";
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}?calendar_id=primary&notify_participants=${notify}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${nylasApiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(updateBody),
@@ -618,8 +618,8 @@ async function executeToolCall(
     }
 
     if (name === "delete_calendar_event") {
-      const qs = args.notifyAttendees !== false ? "?notify_participants=true" : "";
-      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}${qs}`, {
+      const notify = args.notifyAttendees !== false ? "true" : "false";
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}?calendar_id=primary&notify_participants=${notify}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${nylasApiKey}` },
       });
@@ -747,6 +747,7 @@ serve(async (req) => {
 
     let realDataContext = "";
     let userDisplayName = "";
+    let dbAgentName = "";
     const authHeader = req.headers.get("Authorization");
 
     // Variables hoisted for tool-calling access after auth block
@@ -875,7 +876,7 @@ serve(async (req) => {
             .limit(8),
           adminForContacts
             .from("user_preferences")
-            .select("user_display_name")
+            .select("user_display_name, agent_name")
             .eq("user_id", user.id)
             .maybeSingle(),
         ]);
@@ -925,6 +926,7 @@ serve(async (req) => {
         const pendingDrafts: any[] = (pendingDraftsRes as any)?.data || [];
         const followUps: any[] = (followUpRes as any)?.data || [];
         userDisplayName = ((userPrefsRes as any)?.data?.user_display_name || "").trim();
+        dbAgentName = ((userPrefsRes as any)?.data?.agent_name || "").trim();
 
         // "Right now" context from calendar events already fetched
         const nowTs = now.getTime();
@@ -971,12 +973,22 @@ Preview: ${e.snippet}\n`;
         }
 
         if (events.length > 0) {
+          const fmtLocalTime = (iso: string | undefined): string => {
+            if (!iso) return "unknown";
+            try {
+              return new Intl.DateTimeFormat("en-US", {
+                weekday: "short", month: "short", day: "numeric",
+                hour: "numeric", minute: "2-digit", hour12: true,
+                timeZone: tz, timeZoneName: "short",
+              }).format(new Date(iso));
+            } catch { return iso; }
+          };
           realDataContext += "\n\n--- REAL CALENDAR DATA (next 7 days) ---\n";
           events.forEach((e: any, i: number) => {
             realDataContext += `\n[Event ${i + 1}]
 ID: ${e.id}
 Title: ${e.summary}
-Time: ${e.start} – ${e.end}
+Time: ${fmtLocalTime(e.start)} – ${fmtLocalTime(e.end)}
 Attendees: ${e.attendees?.map((a: any) => `${a.name} (${a.status})`).join(", ") || "None"}
 Location: ${e.location || "None"}\n`;
           });
@@ -1442,7 +1454,11 @@ Location: ${e.location || "None"}\n`;
       }
     }
 
-    const systemPrompt = `You are ${agentName || "Normy"}, an elite AI executive assistant. Today is ${today}. The user's local time right now is ${currentTimeStr} (${tz}) — it is ${timeOfDay}. ALWAYS reason about dates and times relative to this local time, never UTC.
+    // DB is the source of truth for the agent's name — the client-sent value is
+    // only a fallback (can be stale or missing right after onboarding).
+    const resolvedAgentName = dbAgentName || agentName || "Normy";
+
+    const systemPrompt = `You are ${resolvedAgentName}, an elite AI executive assistant. Your name is ${resolvedAgentName} — the user chose it for you. When asked your name or who you are, answer "${resolvedAgentName}" — never say you don't have a name. Today is ${today}. The user's local time right now is ${currentTimeStr} (${tz}) — it is ${timeOfDay}. ALWAYS reason about dates and times relative to this local time, never UTC.
 ${userDisplayName ? `\nThe user's preferred name is "${userDisplayName}". Always refer to them by this name (e.g., "Good ${timeOfDay}, ${userDisplayName}!", "Here's what's on your plate today, ${userDisplayName}"). Never use their email address as a name.\n` : ""}
 
 ## YOUR LIVE AWARENESS
