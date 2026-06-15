@@ -10,6 +10,7 @@ import {
   getPasswordRecoveryParams,
   hasStoredPasswordRecovery,
 } from "@/lib/passwordRecovery";
+import { reportAuthActivity } from "@/integrations/supabase/clientHealth";
 
 const PROFILE_TIMEOUT_MS = 5000;
 
@@ -162,6 +163,7 @@ export function useAppStateMachine() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      reportAuthActivity();
       switch (event) {
         case "SIGNED_OUT":
           profileFetchedForRef.current = null;

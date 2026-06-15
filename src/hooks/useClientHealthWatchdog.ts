@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { registerPoisonHandler } from "@/integrations/supabase/clientHealth";
+import { registerPoisonHandler, recentAuthActivity } from "@/integrations/supabase/clientHealth";
 
 // After a background suspend (iOS PWA eviction, desktop tab freezing) the
 // supabase-js client can deadlock: auth uses a Web Lock (navigatorLock), and a
@@ -71,17 +71,20 @@ async function probeClient(): Promise<boolean> {
   }
 }
 
-function reloadOnce() {
+const RELOAD_REASON_KEY = "normy_watchdog_last_reload_reason";
+
+function reloadOnce(reason: string) {
   // Never reload while offline — the fresh page couldn't load either.
   if (!navigator.onLine) return;
   try {
     const last = Number(sessionStorage.getItem(RELOAD_STAMP_KEY) || 0);
     if (Date.now() - last < RELOAD_COOLDOWN_MS) return;
     sessionStorage.setItem(RELOAD_STAMP_KEY, String(Date.now()));
+    localStorage.setItem(RELOAD_REASON_KEY, JSON.stringify({ reason, at: new Date().toISOString() }));
   } catch {
-    /* ignore sessionStorage access failures */
+    /* ignore storage access failures */
   }
-  console.warn("Supabase client unresponsive after resume — reloading");
+  console.warn(`[watchdog] Supabase client unresponsive — reloading now (reason: ${reason})`);
   window.location.reload();
 }
 
@@ -91,16 +94,28 @@ const MIN_HIDDEN_MS = 30_000;
 
 export function useClientHealthWatchdog() {
   useEffect(() => {
+    // Report if the previous page was reloaded by the watchdog.
+    try {
+      const saved = localStorage.getItem(RELOAD_REASON_KEY);
+      if (saved) {
+        const { reason, at } = JSON.parse(saved);
+        console.warn(`[watchdog] previous page was reloaded at ${at} — trigger: ${reason}`);
+        localStorage.removeItem(RELOAD_REASON_KEY);
+      }
+    } catch { /* ignore */ }
+
     let probing = false;
     let hiddenAt = 0;
     let periodicTimer: ReturnType<typeof setInterval> | null = null;
 
-    const checkHealth = async () => {
+    const checkHealth = async (reason: string) => {
       if (probing || document.visibilityState !== "visible") return;
+      // Auth event in the last 30s proves the client lock is not orphaned — skip probe.
+      if (recentAuthActivity()) return;
       probing = true;
       try {
         const healthy = await probeClient();
-        if (!healthy) reloadOnce();
+        if (!healthy) reloadOnce(reason);
       } finally {
         probing = false;
       }
@@ -111,23 +126,27 @@ export function useClientHealthWatchdog() {
         hiddenAt = Date.now();
         return;
       }
-      if (hiddenAt && Date.now() - hiddenAt >= MIN_HIDDEN_MS) checkHealth();
+      if (hiddenAt && Date.now() - hiddenAt >= MIN_HIDDEN_MS) {
+        checkHealth(`visibilitychange resume after ${Math.round((Date.now() - hiddenAt) / 1000)}s`);
+      }
     };
     // pageshow with persisted=true means a bfcache restore — same stale-client
     // risk as a visibility resume, but visibilitychange may not fire.
     const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) checkHealth();
+      if (e.persisted) checkHealth("bfcache restore (pageshow persisted)");
     };
 
     const onFocus = () => {
-      if (document.visibilityState === "visible") checkHealth();
+      if (document.visibilityState === "visible" && hiddenAt && Date.now() - hiddenAt >= MIN_HIDDEN_MS) {
+        checkHealth(`window focus after ${Math.round((Date.now() - hiddenAt) / 1000)}s hidden`);
+      }
     };
 
     const startPeriodicProbe = () => {
       if (periodicTimer) return;
       periodicTimer = window.setInterval(() => {
         if (document.visibilityState === "visible") {
-          void checkHealth();
+          void checkHealth("periodic 2-min probe");
         }
       }, 2 * 60_000);
     };
@@ -136,7 +155,7 @@ export function useClientHealthWatchdog() {
     // Hang escalation: real queries reporting consecutive timeouts (via
     // clientHealth) mean the client poisoned itself *after* the resume probe
     // passed — re-probe immediately instead of waiting for the next interval.
-    registerPoisonHandler(() => void checkHealth());
+    registerPoisonHandler(() => void checkHealth("hang escalation (3 consecutive timeouts)"));
 
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pageshow", onPageShow);

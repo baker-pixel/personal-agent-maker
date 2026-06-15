@@ -13,6 +13,18 @@ const HANG_THRESHOLD = 3;
 
 let consecutiveHangs = 0;
 let onPoisoned: (() => void) | null = null;
+let lastAuthActivityAt = 0;
+
+// Call whenever an auth event fires — proves the client lock is not orphaned.
+export function reportAuthActivity() {
+  lastAuthActivityAt = Date.now();
+}
+
+// True if an auth event fired within the last windowMs — skip probing when so,
+// since a firing auth subscription proves the client is alive.
+export function recentAuthActivity(windowMs = 30_000): boolean {
+  return lastAuthActivityAt > 0 && Date.now() - lastAuthActivityAt < windowMs;
+}
 
 // Registered once by useClientHealthWatchdog on mount.
 export function registerPoisonHandler(fn: () => void) {
