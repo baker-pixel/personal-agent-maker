@@ -15,6 +15,7 @@ export default function ModeSelect() {
   const displayName = agentName || "Normy Agent";
 
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const voiceOpenRef = useRef(false);
   // Only enable chat hook (and its DB queries) on first mic tap
   const [hookEnabled, setHookEnabled] = useState(false);
   const [textInput, setTextInput] = useState("");
@@ -45,14 +46,16 @@ export default function ModeSelect() {
   // slide-up stalls the spring on mobile and leaves the overlay stuck halfway.
   const handleOpenVoice = () => {
     if (!hookEnabled) setHookEnabled(true);
+    voiceOpenRef.current = true;
     setVoiceOpen(true);
   };
 
   const handleOverlayShown = () => {
-    if (voiceOpen && !voice.conversationActive) startSession();
+    if (voiceOpenRef.current && !voice.conversationActive) startSession();
   };
 
   const handleClose = () => {
+    voiceOpenRef.current = false;
     resetSession();
     setVoiceOpen(false);
   };

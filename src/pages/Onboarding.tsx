@@ -11,7 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import {
   ArrowRight, ArrowLeft, Mail, Calendar,
   CheckCircle2, Sparkles, Shield, MessageSquare,
-  Check, Loader2, Zap, Volume2, Brain,
+  Check, Loader2, Zap, Volume2, Brain, User,
 } from "lucide-react";
 import { SONIC_VOICES, DEFAULT_SONIC_VOICE, sonicToGroqVoiceId } from "@/lib/sonicVoices";
 import { fetchSonicTts } from "@/lib/sonicTts";
@@ -20,6 +20,7 @@ import { fetchSonicTts } from "@/lib/sonicTts";
 
 interface OnboardingState {
   agentName: string;
+  userCallName: string;
   voiceId: string;
   tone: string;
   emailLength: string;
@@ -32,6 +33,7 @@ interface OnboardingState {
 
 const defaults: OnboardingState = {
   agentName: "",
+  userCallName: "",
   voiceId: DEFAULT_SONIC_VOICE,
   tone: "friendly",
   emailLength: "balanced",
@@ -50,8 +52,8 @@ const slideVariants = {
 
 interface Props { onComplete?: () => void; initialEmail?: string; }
 
-const TOTAL_STEPS = 6;
-const ASSESSMENT_RETURN_STEP = 4;
+const TOTAL_STEPS = 7;
+const ASSESSMENT_RETURN_STEP = 5;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -128,6 +130,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
         ...defaults,
         ...savedState,
         assessEmail:     s.assessEmail     || savedState.assessEmail || u.email || initialEmail || "",
+        userCallName:    savedState.userCallName || authFirst,
         assessFirstName: savedState.assessFirstName || authFirst,
         assessLastName:  savedState.assessLastName  || authLast,
       }));
@@ -170,6 +173,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
               ...s,
               assessEmail:        s.assessEmail        || user.email || "",
               agentName:          s.agentName          || data?.agent_name || "",
+              userCallName:       s.userCallName       || (di > 0 ? dbName.slice(0, di) : dbName),
               voiceId:            s.voiceId            || data?.sonic_voice_id || DEFAULT_SONIC_VOICE,
               tone:               s.tone               || data?.tone               || "friendly",
               emailLength:        s.emailLength        || data?.email_length       || "balanced",
@@ -194,40 +198,40 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
 
   // Auto-advance when IntegrationsContext confirms connected (live connection case)
   useEffect(() => {
-    if (step === 4 && gmailConnected) {
-      // Persist the advance to DB so a refresh doesn't show step 4 again
+    if (step === 5 && gmailConnected) {
+      // Persist the advance to DB so a refresh doesn't show step 5 again
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (!session?.user) return;
         supabase.from("user_preferences").upsert({
           user_id: session.user.id,
-          onboarding_step: 5,
+          onboarding_step: 6,
           onboarding_completed: true,
           updated_at: new Date().toISOString(),
         }, { onConflict: "user_id" }).then(() => {}, () => {});
       });
       setDir(1);
-      setStep(5);
+      setStep(6);
     }
   }, [gmailConnected, step]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ensure assessEmail is populated when the user reaches step 3.
+  // Ensure assessEmail is populated when the user reaches step 4 (assessment).
   // getSession() can return a session where user.email is temporarily empty
   // (race between signUp() and JWT persistence). Don't guard on state.assessEmail
   // here — it's a stale closure value and may read "" even when the field is
   // already set in state. The functional setState below guards safely instead.
   useEffect(() => {
-    if (step !== 3) return;
+    if (step !== 4) return;
     if (initialEmail) setState(s => ({ ...s, assessEmail: s.assessEmail || initialEmail }));
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) setState(s => ({ ...s, assessEmail: s.assessEmail || user.email! }));
     });
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // DB check on step 4 — fires on mount (catch already-connected users) and
+  // DB check on step 5 (connect) — fires on mount (catch already-connected users) and
   // again whenever gmailConnected flips (catch the case where refreshConnections
   // updated IntegrationsContext but the initial mount check already ran empty).
   useEffect(() => {
-    if (step !== 4 || !storageKey) return;
+    if (step !== 5 || !storageKey) return;
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user) return;
       supabase
@@ -241,12 +245,12 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
           if (data?.length) {
             supabase.from("user_preferences").upsert({
               user_id: session.user.id,
-              onboarding_step: 5,
+              onboarding_step: 6,
               onboarding_completed: true,
               updated_at: new Date().toISOString(),
             }, { onConflict: "user_id" }).then(() => {}, () => {});
             setDir(1);
-            setStep(5);
+            setStep(6);
           }
         });
     });
@@ -268,14 +272,17 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
         updated_at: new Date().toISOString(),
       };
       if (completedStep >= 0) updates.agent_name = agentName;
-      if (completedStep >= 1) {
+      if (completedStep >= 1 && currentState.userCallName.trim()) {
+        updates.user_display_name = currentState.userCallName.trim();
+      }
+      if (completedStep >= 2) {
         updates.sonic_voice_id = currentState.voiceId;
         // Groq readouts can't speak Nova ids — store the gender-matched Orpheus voice
         updates.tts_elevenlabs_voice_id = sonicToGroqVoiceId(currentState.voiceId);
         updates.tts_provider = "groq";
         updates.tts_enabled = true;
       }
-      if (completedStep >= 2) {
+      if (completedStep >= 3) {
         updates.tone = currentState.tone;
         updates.email_length = currentState.emailLength;
         updates.priority_visibility = currentState.priorityVisibility;
@@ -318,6 +325,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
         .upsert({
           user_id: user.id,
           agent_name: agentName,
+          ...(state.userCallName.trim() ? { user_display_name: state.userCallName.trim() } : {}),
           onboarding_completed: true,
           tone: state.tone,
           email_length: state.emailLength,
@@ -374,7 +382,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
 
   const agentDisplay = state.agentName.trim() || "your agent";
 
-  const getContinueLabel = () => step === 3 ? "Skip" : "Continue";
+  const getContinueLabel = () => step === 4 ? "Skip" : "Continue";
 
   const previewVoice = async (voiceId: string) => {
     // Abort any in-flight request so we don't fire multiple concurrent fetches
@@ -503,8 +511,35 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                 </div>
               )}
 
-              {/* ── Step 1: Voice selection ───────────────────────────────── */}
+              {/* ── Step 1: What should the agent call you ────────────────── */}
               {step === 1 && (
+                <div className="space-y-8">
+                  <div className="text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-6">
+                      <User className="w-8 h-8 text-accent" />
+                    </div>
+                    <h1 className="font-display text-3xl font-bold mb-2">
+                      What should {agentDisplay.charAt(0).toUpperCase() + agentDisplay.slice(1)} call you?
+                    </h1>
+                    <p className="text-muted-foreground leading-relaxed">
+                      {agentDisplay.charAt(0).toUpperCase() + agentDisplay.slice(1)} will use this name when talking to you and writing on your behalf.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <Input
+                      value={state.userCallName}
+                      onChange={e => update("userCallName", e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && next()}
+                      placeholder="e.g. Jane, Sam, Dr. Doe…"
+                      className="text-center text-2xl font-display font-semibold h-16 rounded-2xl"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ── Step 2: Voice selection ───────────────────────────────── */}
+              {step === 2 && (
                 <div className="space-y-6">
                   <div className="text-center">
                     <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-6">
@@ -557,8 +592,8 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                 </div>
               )}
 
-              {/* ── Step 3: Personality assessment ───────────────────────── */}
-              {step === 3 && (
+              {/* ── Step 4: Personality assessment ───────────────────────── */}
+              {step === 4 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 ${assessmentDone ? "bg-green-500/10" : "bg-accent/10"}`}>
@@ -663,8 +698,8 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                 </div>
               )}
 
-              {/* ── Step 4: Connect accounts ──────────────────────────────── */}
-              {step === 4 && (
+              {/* ── Step 5: Connect accounts ──────────────────────────────── */}
+              {step === 5 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <h1 className="font-display text-3xl font-bold mb-2">Connect your accounts</h1>
@@ -740,8 +775,8 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                 </div>
               )}
 
-              {/* ── Step 2: Preferences ──────────────────────────────────── */}
-              {step === 2 && (
+              {/* ── Step 3: Preferences ──────────────────────────────────── */}
+              {step === 3 && (
                 <div className="space-y-6">
                   <div className="text-center">
                     <h1 className="font-display text-3xl font-bold mb-2">How should {agentDisplay} work?</h1>
@@ -830,8 +865,8 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                 </div>
               )}
 
-              {/* ── Step 5: Done ──────────────────────────────────────────── */}
-              {step === 5 && (
+              {/* ── Step 6: Done ──────────────────────────────────────────── */}
+              {step === 6 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <motion.div

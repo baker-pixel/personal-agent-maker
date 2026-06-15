@@ -488,9 +488,10 @@ export function useVoiceConversation({ onUserUtterance, agentReply, thinking, st
     conversationActiveRef.current = false;
     ensuredTtsAfterPrefsRef.current = false;
     voicePrefs.update({ voice_conversation_enabled: false });
+    flushTtsPipeline();
     speech.stopListening();
     tts.stop();
-  }, [speech, tts, voicePrefs]);
+  }, [speech, tts, voicePrefs, flushTtsPipeline]);
 
   const toggleConversation = useCallback(() => {
     if (conversationActive) stopConversation();

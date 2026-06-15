@@ -35,11 +35,11 @@ export default function AssessmentDone() {
         setState(status === "success" ? "success" : status === "partial" ? "partial" : "error");
 
         setTimeout(() => {
-          navigate("/onboarding?resumeStep=4", { replace: true });
+          navigate("/onboarding?resumeStep=5", { replace: true });
         }, 2200);
       } catch {
         setState("error");
-        setTimeout(() => navigate("/onboarding?resumeStep=4", { replace: true }), 2500);
+        setTimeout(() => navigate("/onboarding?resumeStep=5", { replace: true }), 2500);
       }
     };
 
