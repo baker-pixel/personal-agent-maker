@@ -37,11 +37,13 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Per-user Sonic voice preference (16 Nova voices). Ref so the async
-  // startConversation reads the current value, not a stale closure.
-  const { prefs: voicePrefs, update: updateVoicePrefs } = useVoicePreferences();
+  // Per-user Sonic voice preference (16 Nova voices). Refs so the async
+  // startConversation reads current values, not stale closures.
+  const { prefs: voicePrefs, loaded: prefsLoaded, update: updateVoicePrefs } = useVoicePreferences();
   const voiceIdRef = useRef(voicePrefs.sonic_voice_id);
+  const prefsLoadedRef = useRef(prefsLoaded);
   useEffect(() => { voiceIdRef.current = voicePrefs.sonic_voice_id; }, [voicePrefs.sonic_voice_id]);
+  useEffect(() => { prefsLoadedRef.current = prefsLoaded; }, [prefsLoaded]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const micCtxRef = useRef<AudioContext | null>(null);
@@ -147,9 +149,19 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
       });
 
       ws.addEventListener("open", async () => {
+        // Fetch token and wait for voice prefs in parallel. WS open fires in
+        // ~150ms but the DB prefs fetch takes ~300-500ms — without this wait,
+        // voiceIdRef.current is still the default and the wrong voice plays.
+        const token = await tokenP;
+        if (!prefsLoadedRef.current) {
+          await new Promise<void>((resolve) => {
+            const iv = setInterval(() => { if (prefsLoadedRef.current) { clearInterval(iv); resolve(); } }, 50);
+            setTimeout(() => { clearInterval(iv); resolve(); }, 3000);
+          });
+        }
         ws.send(JSON.stringify({
           type: "start",
-          token: await tokenP,
+          token,
           agentName: optsRef.current.agentName,
           voiceId: voiceIdRef.current,
           tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
