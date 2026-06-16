@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import {
   ArrowRight, ArrowLeft, Mail, Calendar,
   CheckCircle2, Sparkles, Shield, MessageSquare,
-  Check, Loader2, Zap, Volume2, Brain, User,
+  Check, Loader2, Zap, Volume2, User,
 } from "lucide-react";
 import { SONIC_VOICES, DEFAULT_SONIC_VOICE, sonicToGroqVoiceId } from "@/lib/sonicVoices";
 import { fetchSonicTts } from "@/lib/sonicTts";
@@ -52,26 +52,18 @@ const slideVariants = {
 
 interface Props { onComplete?: () => void; initialEmail?: string; }
 
-const TOTAL_STEPS = 7;
-const ASSESSMENT_RETURN_STEP = 5;
+const TOTAL_STEPS = 6;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { setAgentName } = useAgent();
   const { integrations, integrationsLoading } = useIntegrations();
   const { connecting, connect } = useGoogleOAuthPopup();
 
-  const [assessmentDone, setAssessmentDone] = useState(false);
-  const [assessmentLoading, setAssessmentLoading] = useState(false);
-
-  // Resume at step 4 when returning from assessment redirect
-  const resumeStep = parseInt(searchParams.get("resumeStep") ?? "0", 10);
-
   // Step and form state start at defaults — restored from user-scoped localStorage after auth loads
-  const [step, setStep] = useState<number>(resumeStep > 0 ? resumeStep : 0);
+  const [step, setStep] = useState<number>(0);
   const [dir, setDir] = useState(1);
   const [state, setState] = useState<OnboardingState>(defaults);
   const [saving, setSaving] = useState(false);
@@ -101,18 +93,16 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
       setStorageKey(key);
 
       // 1. Restore localStorage progress for this user
-      let savedStep = resumeStep > 0 ? resumeStep : 0;
+      let savedStep = 0;
       let savedState: Partial<OnboardingState> = {};
-      if (resumeStep === 0) {
-        try {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const parsed = JSON.parse(raw) as { step?: number; state?: Partial<OnboardingState> };
-            if (typeof parsed.step === "number") savedStep = parsed.step;
-            if (parsed.state) savedState = parsed.state;
-          }
-        } catch { /* ignore */ }
-      }
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { step?: number; state?: Partial<OnboardingState> };
+          if (typeof parsed.step === "number") savedStep = parsed.step;
+          if (parsed.state) savedState = parsed.state;
+        }
+      } catch { /* ignore */ }
 
       // 2. Pre-fill name and email from session metadata.
       //    session.user.email can be transiently empty right after signUp() in
@@ -161,10 +151,8 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
             onComplete?.();
             return;
           }
-          if (data?.assessment_status === "success") setAssessmentDone(true);
-
           const dbStep = data?.onboarding_step ?? 0;
-          if (resumeStep === 0 && dbStep > 0) setStep(s => Math.max(s, dbStep));
+          if (dbStep > 0) setStep(s => Math.max(s, dbStep));
 
           setState(s => {
             const dbName = (data?.user_display_name || "").trim();
@@ -198,40 +186,27 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
 
   // Auto-advance when IntegrationsContext confirms connected (live connection case)
   useEffect(() => {
-    if (step === 5 && gmailConnected) {
-      // Persist the advance to DB so a refresh doesn't show step 5 again
+    if (step === 4 && gmailConnected) {
+      // Persist the advance to DB so a refresh doesn't show step 4 again
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (!session?.user) return;
         supabase.from("user_preferences").upsert({
           user_id: session.user.id,
-          onboarding_step: 6,
+          onboarding_step: 5,
           onboarding_completed: true,
           updated_at: new Date().toISOString(),
         }, { onConflict: "user_id" }).then(() => {}, () => {});
       });
       setDir(1);
-      setStep(6);
+      setStep(5);
     }
   }, [gmailConnected, step]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ensure assessEmail is populated when the user reaches step 4 (assessment).
-  // getSession() can return a session where user.email is temporarily empty
-  // (race between signUp() and JWT persistence). Don't guard on state.assessEmail
-  // here — it's a stale closure value and may read "" even when the field is
-  // already set in state. The functional setState below guards safely instead.
-  useEffect(() => {
-    if (step !== 4) return;
-    if (initialEmail) setState(s => ({ ...s, assessEmail: s.assessEmail || initialEmail }));
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email) setState(s => ({ ...s, assessEmail: s.assessEmail || user.email! }));
-    });
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // DB check on step 5 (connect) — fires on mount (catch already-connected users) and
+  // DB check on step 4 (connect) — fires on mount (catch already-connected users) and
   // again whenever gmailConnected flips (catch the case where refreshConnections
   // updated IntegrationsContext but the initial mount check already ran empty).
   useEffect(() => {
-    if (step !== 5 || !storageKey) return;
+    if (step !== 4 || !storageKey) return;
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user) return;
       supabase
@@ -245,12 +220,12 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
           if (data?.length) {
             supabase.from("user_preferences").upsert({
               user_id: session.user.id,
-              onboarding_step: 6,
+              onboarding_step: 5,
               onboarding_completed: true,
               updated_at: new Date().toISOString(),
             }, { onConflict: "user_id" }).then(() => {}, () => {});
             setDir(1);
-            setStep(6);
+            setStep(5);
           }
         });
     });
@@ -382,7 +357,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
 
   const agentDisplay = state.agentName.trim() || "your agent";
 
-  const getContinueLabel = () => step === 4 ? "Skip" : "Continue";
+  const getContinueLabel = () => "Continue";
 
   const previewVoice = async (voiceId: string) => {
     // Abort any in-flight request so we don't fire multiple concurrent fetches
@@ -592,114 +567,8 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
                 </div>
               )}
 
-              {/* ── Step 4: Personality assessment ───────────────────────── */}
+              {/* ── Step 4: Connect accounts ──────────────────────────────── */}
               {step === 4 && (
-                <div className="space-y-8">
-                  <div className="text-center">
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 ${assessmentDone ? "bg-green-500/10" : "bg-accent/10"}`}>
-                      {assessmentDone
-                        ? <CheckCircle2 className="w-8 h-8 text-green-600" />
-                        : <Brain className="w-8 h-8 text-accent" />}
-                    </div>
-                    <h1 className="font-display text-3xl font-bold mb-2">
-                      {assessmentDone ? "Assessment complete!" : `Teach ${agentDisplay} your personality!`}
-                    </h1>
-                    {assessmentDone && (
-                      <p className="text-muted-foreground text-sm">Assessment already completed. Continue to finish setup.</p>
-                    )}
-                  </div>
-
-                  {!assessmentDone && (
-                    <>
-                      <div className="space-y-4 text-muted-foreground leading-relaxed text-sm">
-                        <p>
-                          One of the most innovative aspects of {agentDisplay} is that we've built in the ability to understand your personality, your communication style, work preferences, your tone, pace. Just like any good personal assistant, getting to "know" you is vital for a strong relationship.
-                        </p>
-                        <p>
-                          Take our proprietary personality assessment now (3–5 minutes) and help {agentDisplay} work your way.
-                        </p>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-medium text-foreground">First name</label>
-                            <Input
-                              value={state.assessFirstName}
-                              onChange={e => update("assessFirstName", e.target.value)}
-                              placeholder="Jane"
-                              className="rounded-xl"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-medium text-foreground">Last name <span className="text-destructive">*</span></label>
-                            <Input
-                              value={state.assessLastName}
-                              onChange={e => update("assessLastName", e.target.value)}
-                              placeholder="Doe"
-                              className="rounded-xl"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium text-foreground">Email</label>
-                          <Input
-                            value={state.assessEmail}
-                            onChange={e => update("assessEmail", e.target.value)}
-                            type="email"
-                            placeholder="your@email.com"
-                            className="rounded-xl bg-muted/40"
-                          />
-                        </div>
-                      </div>
-
-                      <Button
-                        disabled={assessmentLoading || !state.assessLastName.trim()}
-                        onClick={async () => {
-                          if (!state.assessLastName.trim()) {
-                            toast({ title: "Last name required", description: "Please enter your last name.", variant: "destructive" });
-                            return;
-                          }
-                          setAssessmentLoading(true);
-                          try {
-                            const { data, error } = await supabase.functions.invoke("assessment-proxy", {
-                              body: {
-                                first_name: state.assessFirstName.trim(),
-                                last_name: state.assessLastName.trim(),
-                                email: state.assessEmail.trim(),
-                              },
-                            });
-                            if (error) throw new Error(error.message);
-                            if (data?.already_completed) {
-                              setAssessmentDone(true);
-                              setAssessmentLoading(false);
-                              return;
-                            }
-                            if (data?.error) throw new Error(data.error);
-                            if (!data?.assessment_url) throw new Error("No assessment URL returned");
-                            window.location.href = data.assessment_url;
-                          } catch (err: any) {
-                            toast({ title: "Couldn't start assessment", description: err?.message || "Please try again.", variant: "destructive" });
-                            setAssessmentLoading(false);
-                          }
-                        }}
-                        className="w-full bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl h-12 text-sm font-semibold shadow-lg shadow-accent/25"
-                      >
-                        {assessmentLoading
-                          ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Starting assessment…</>
-                          : <>Take the Personality Assessment <ArrowRight className="w-4 h-4 ml-1.5" /></>}
-                      </Button>
-
-                      <p className="text-xs text-muted-foreground text-center">
-                        3–5 minutes — you'll be brought back here automatically when done.
-                      </p>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* ── Step 5: Connect accounts ──────────────────────────────── */}
-              {step === 5 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <h1 className="font-display text-3xl font-bold mb-2">Connect your accounts</h1>
@@ -866,7 +735,7 @@ export default function Onboarding({ onComplete, initialEmail = "" }: Props) {
               )}
 
               {/* ── Step 6: Done ──────────────────────────────────────────── */}
-              {step === 6 && (
+              {step === 5 && (
                 <div className="space-y-8">
                   <div className="text-center">
                     <motion.div

@@ -134,6 +134,9 @@ function getFollowUpChips(messages: Message[]): StarterPrompt[] {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+const ASSESSMENT_NUDGE_KEY = "normy_assessment_nudged";
+const ASSESSMENT_NUDGE_AT = 4; // trigger after this many user messages
+
 export const AgentChat = () => {
   const navigate = useNavigate();
   const { agentName } = useAgent();
@@ -143,6 +146,8 @@ export const AgentChat = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const convIdRef = useRef<string | null>(null);
+  const assessmentDoneRef = useRef(true); // assume done until loaded
+  const nudgeSentRef = useRef(!!localStorage.getItem(ASSESSMENT_NUDGE_KEY));
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -154,6 +159,16 @@ export const AgentChat = () => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user || cancelled) return;
+
+      // Load assessment status to decide whether to nudge later
+      supabase
+        .from("user_preferences")
+        .select("assessment_status")
+        .eq("user_id", session.user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          assessmentDoneRef.current = data?.assessment_status === "success";
+        });
       const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: existing } = await supabase
         .from("chat_conversations")
@@ -309,6 +324,19 @@ export const AgentChat = () => {
     }
 
     setIsLoading(false);
+
+    // Assessment nudge: after ASSESSMENT_NUDGE_AT user messages, suggest personality assessment
+    if (!nudgeSentRef.current && !assessmentDoneRef.current && assistantSoFar) {
+      const userCount = messages.filter(m => m.role === "user").length + 1; // +1 for current
+      if (userCount >= ASSESSMENT_NUDGE_AT) {
+        nudgeSentRef.current = true;
+        localStorage.setItem(ASSESSMENT_NUDGE_KEY, "1");
+        const nudgeText = `Quick thought — now that we've been chatting a bit, I wanted to mention: I have a feature that lets me **learn your communication style and personality** so I can tailor how I respond to you specifically.\n\nIt's a short 3–5 minute assessment. If you'd like to try it, head to **Settings → Personality Syncing**. It makes a real difference in how well I can work with you.`;
+        setTimeout(() => {
+          setMessages(prev => [...prev, { role: "assistant", content: nudgeText }]);
+        }, 1200);
+      }
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

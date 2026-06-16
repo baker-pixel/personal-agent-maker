@@ -4,6 +4,10 @@ import { useVoiceConversation } from "./useVoiceConversation";
 import { useSonicVoice, sonicEnabled } from "./useSonicVoice";
 import { useUserDisplayName } from "./useUserDisplayName";
 import { stripMarkdown } from "@/lib/stripMarkdown";
+import { supabase } from "@/integrations/supabase/client";
+
+const VOICE_NUDGE_KEY = "normy_voice_assessment_nudged";
+const VOICE_NUDGE_AT = 4;
 
 interface UseVoiceSessionOpts {
   /** Conversation title in Delegate history (e.g. "Quick Chat"). */
@@ -31,6 +35,23 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
   // in the transcript when the session started (restored history, stale async
   // loads) must never be read aloud.
   const sentThisSessionRef = useRef(false);
+  const assessmentDoneRef = useRef(true); // assume done until loaded
+  const voiceNudgeSentRef = useRef(!!localStorage.getItem(VOICE_NUDGE_KEY));
+  const userTurnCountRef = useRef(0);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.user) return;
+      supabase
+        .from("user_preferences")
+        .select("assessment_status")
+        .eq("user_id", session.user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          assessmentDoneRef.current = data?.assessment_status === "success";
+        });
+    });
+  }, []);
 
   const chat = useAnnieChat(agentName, "voice", {
     conversationTitle: opts.conversationTitle,
@@ -73,7 +94,17 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
   const speakableReply = sentThisSessionRef.current && !chat.thinking ? latestAgentReply : null;
 
   const voice = useVoiceConversation({
-    onUserUtterance: (text) => onUserUtteranceRef.current?.(text),
+    onUserUtterance: (text) => {
+      onUserUtteranceRef.current?.(text);
+      userTurnCountRef.current += 1;
+      if (!voiceNudgeSentRef.current && !assessmentDoneRef.current && userTurnCountRef.current >= VOICE_NUDGE_AT) {
+        voiceNudgeSentRef.current = true;
+        localStorage.setItem(VOICE_NUDGE_KEY, "1");
+        setTimeout(() => {
+          chat.injectAgentMessage(`Quick thought — I can tailor how I work with you much better if I understand your communication style. There's a short personality assessment in **Settings → Personality Syncing** (3–5 mins). It makes a real difference!`);
+        }, 500);
+      }
+    },
     agentReply: pendingGreeting ?? speakableReply,
     streamingText: pendingGreeting || !sentThisSessionRef.current ? null : streamingAgentText,
     thinking: chat.thinking,
@@ -91,8 +122,19 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
       // Note: onUserUtterance deliberately NOT called here — in the Groq PTT
       // flow it prefills the input box for confirmation, but Sonic turns are
       // already processed; mirroring them into the textbox just confuses.
-      if (role === "USER") chat.injectUserMessage(text);
-      else chat.injectAgentMessage(text);
+      if (role === "USER") {
+        chat.injectUserMessage(text);
+        userTurnCountRef.current += 1;
+        if (!voiceNudgeSentRef.current && !assessmentDoneRef.current && userTurnCountRef.current >= VOICE_NUDGE_AT) {
+          voiceNudgeSentRef.current = true;
+          localStorage.setItem(VOICE_NUDGE_KEY, "1");
+          setTimeout(() => {
+            chat.injectAgentMessage(`Quick thought — I can tailor how I work with you much better if I understand your communication style. There's a short personality assessment in **Settings → Personality Syncing** (3–5 mins). It makes a real difference!`);
+          }, 500);
+        }
+      } else {
+        chat.injectAgentMessage(text);
+      }
     },
     // Skip the note when nothing was said — injecting would persist a junk
     // one-message conversation into history.
@@ -142,6 +184,7 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
   const resetGreeting = useCallback(() => {
     greetedRef.current = false;
     sentThisSessionRef.current = false;
+    userTurnCountRef.current = 0;
     setPendingGreeting(null);
   }, []);
 
