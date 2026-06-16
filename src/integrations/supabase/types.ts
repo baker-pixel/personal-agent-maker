@@ -841,6 +841,42 @@ export type Database = {
         }
         Relationships: []
       }
+      mvp_checklist_items: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          label: string
+          notes: string | null
+          sort_order: number
+          status: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          label: string
+          notes?: string | null
+          sort_order?: number
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          label?: string
+          notes?: string | null
+          sort_order?: number
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       nylas_grants: {
         Row: {
           created_at: string
