@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, Mail, Eye, EyeOff, Check, Building2, BellRing, Flame, ListTodo } from "lucide-react";
+import { ArrowLeft, User, Plug, Bell, Sparkles, ArrowRight, Loader2, X, Plus, Mail, Eye, EyeOff, Check, Building2, BellRing, Flame, ListTodo, CheckCircle2, Brain } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import EmailTriageSettings from "@/components/EmailTriageSettings";
@@ -80,6 +80,7 @@ export default function Settings() {
   const [settings, setSettings] = useState<AgentSettings>({ ...defaults, agentName });
   const [activeTab, setActiveTab] = useState<SettingsTab>("home");
   const [retakingAssessment, setRetakingAssessment] = useState(false);
+  const [assessmentStatus, setAssessmentStatus] = useState<string | null>(null);
   const { permission: pushPermission, requestPermission: requestPushPermission } = usePushNotifications();
   const tabBarRef = useRef<HTMLDivElement>(null);
 
@@ -150,7 +151,7 @@ export default function Settings() {
         // One query fetches all columns needed by this page AND VoicePersonalizationSection
         const { data } = await supabase
           .from("user_preferences")
-          .select("agent_name, user_display_name, tone, email_length, priority_visibility, decision_style, email_signature, tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language, tts_provider, tts_elevenlabs_voice_id, sonic_voice_id")
+          .select("agent_name, user_display_name, tone, email_length, priority_visibility, decision_style, email_signature, tts_voice_uri, tts_rate, tts_pitch, tts_enabled, voice_conversation_enabled, stt_language, tts_provider, tts_elevenlabs_voice_id, sonic_voice_id, assessment_status")
           .eq("user_id", user.id)
           .maybeSingle();
         if (data) {
@@ -164,6 +165,7 @@ export default function Settings() {
             decisionStyle: (data as any).decision_style ?? prev.decisionStyle,
             emailSignature: (data as any).email_signature ?? prev.emailSignature,
           }));
+          setAssessmentStatus((data as any).assessment_status ?? null);
           // Pass voice columns to VoicePersonalizationSection so it skips its own fetch
           setVoiceInitialData({ userId: user.id, row: data as Record<string, any> });
           return;
@@ -466,15 +468,33 @@ export default function Settings() {
             />
             <p className="text-xs text-muted-foreground mt-1">Appended automatically to every email you send through Normy.</p>
           </div>
-          <div className="bg-card border rounded-xl p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-accent" />
-              <label className="text-sm font-semibold">Personality Syncing</label>
+          <div className="bg-card border rounded-xl p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${assessmentStatus === "success" ? "bg-green-500/10" : "bg-accent/10"}`}>
+                  {assessmentStatus === "success"
+                    ? <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    : <Brain className="w-5 h-5 text-accent" />}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Personality Syncing</p>
+                  {assessmentStatus === "success"
+                    ? <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium mt-0.5"><CheckCircle2 className="w-3 h-3" />Completed</span>
+                    : <span className="inline-flex items-center gap-1 text-xs text-amber-500 font-medium mt-0.5">Not done yet</span>}
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">Retake the personality assessment to update {settings.agentName}'s behavioral profile.</p>
+
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {assessmentStatus === "success"
+                ? `${settings.agentName} already has your personality profile. Retake the assessment anytime to refresh it — your communication style evolves.`
+                : `Help ${settings.agentName} understand your communication style, pace, and preferences. Takes 3–5 minutes and makes a real difference in how the agent responds to you.`}
+            </p>
+
             <Button
               disabled={retakingAssessment}
-              className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
+              className={`w-full ${assessmentStatus === "success" ? "bg-muted text-foreground hover:bg-muted/80 border" : "bg-accent text-accent-foreground hover:bg-accent/90"}`}
+              variant={assessmentStatus === "success" ? "outline" : "default"}
               onClick={async () => {
                 setRetakingAssessment(true);
                 try {
@@ -499,7 +519,11 @@ export default function Settings() {
                 }
               }}
             >
-              {retakingAssessment ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />Starting…</> : <>Retake Assessment <ArrowRight className="w-4 h-4 ml-1" /></>}
+              {retakingAssessment
+                ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />Starting…</>
+                : assessmentStatus === "success"
+                ? <>Retake Assessment <ArrowRight className="w-4 h-4 ml-1" /></>
+                : <>Take Personality Assessment <ArrowRight className="w-4 h-4 ml-1" /></>}
             </Button>
           </div>
         </section>}
