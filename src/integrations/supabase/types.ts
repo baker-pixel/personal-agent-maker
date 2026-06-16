@@ -841,6 +841,42 @@ export type Database = {
         }
         Relationships: []
       }
+      mvp_checklist_items: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          label: string
+          notes: string | null
+          sort_order: number
+          status: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          label: string
+          notes?: string | null
+          sort_order?: number
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          label?: string
+          notes?: string | null
+          sort_order?: number
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       nylas_grants: {
         Row: {
           created_at: string
@@ -849,6 +885,7 @@ export type Database = {
           id: string
           provider: string
           scopes: string[] | null
+          status: string | null
           updated_at: string
           user_id: string
         }
@@ -859,6 +896,7 @@ export type Database = {
           id?: string
           provider: string
           scopes?: string[] | null
+          status?: string | null
           updated_at?: string
           user_id: string
         }
@@ -869,6 +907,7 @@ export type Database = {
           id?: string
           provider?: string
           scopes?: string[] | null
+          status?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1239,6 +1278,7 @@ export type Database = {
           referred_by_code: string | null
           slack_notification_channel_id: string | null
           slack_notification_channel_name: string | null
+          sonic_voice_id: string | null
           stt_language: string | null
           tone: string | null
           travel_mode_active: boolean
@@ -1286,6 +1326,7 @@ export type Database = {
           referred_by_code?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
+          sonic_voice_id?: string | null
           stt_language?: string | null
           tone?: string | null
           travel_mode_active?: boolean
@@ -1333,6 +1374,7 @@ export type Database = {
           referred_by_code?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
+          sonic_voice_id?: string | null
           stt_language?: string | null
           tone?: string | null
           travel_mode_active?: boolean

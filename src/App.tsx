@@ -47,6 +47,7 @@ import InvestorContact from "./pages/InvestorContact";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import AssessmentDone from "./pages/AssessmentDone";
+import MvpChecklist from "./pages/MvpChecklist";
 
 const queryClient = new QueryClient();
 
@@ -147,6 +148,7 @@ const App = () => {
                       <Route path="/terms" element={<TermsOfService />} />
                       <Route path="/assessment-done" element={<AssessmentDone />} />
                       <Route path="/done" element={<AssessmentDone />} />
+                      <Route path="/mvp-checklist" element={<MvpChecklist />} />
 
                       {/* ── Onboarding ────────────────────────────────────── */}
                       <Route
