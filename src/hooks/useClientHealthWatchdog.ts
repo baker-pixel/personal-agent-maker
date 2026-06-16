@@ -106,7 +106,7 @@ export function useClientHealthWatchdog() {
 
     let probing = false;
     let hiddenAt = 0;
-    let periodicTimer: ReturnType<typeof setInterval> | null = null;
+    let periodicTimer: number | null = null;
 
     const checkHealth = async (reason: string) => {
       if (probing || document.visibilityState !== "visible") return;
