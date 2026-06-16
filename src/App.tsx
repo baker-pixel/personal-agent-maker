@@ -148,6 +148,7 @@ const App = () => {
                       <Route path="/terms" element={<TermsOfService />} />
                       <Route path="/assessment-done" element={<AssessmentDone />} />
                       <Route path="/done" element={<AssessmentDone />} />
+                      <Route path="/mvp-checklist" element={<MvpChecklist />} />
 
                       {/* ── Onboarding ────────────────────────────────────── */}
                       <Route
