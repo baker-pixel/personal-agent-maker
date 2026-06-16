@@ -47,6 +47,7 @@ import InvestorContact from "./pages/InvestorContact";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import AssessmentDone from "./pages/AssessmentDone";
+import MvpChecklist from "./pages/MvpChecklist";
 
 const queryClient = new QueryClient();
 
