@@ -54,6 +54,7 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
   const activeRef = useRef(false);
   const lastActivityRef = useRef(0);
   const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastFailRef = useRef(0); // timestamp of last connection failure
 
   const optsRef = useRef(opts);
   useEffect(() => { optsRef.current = opts; });
@@ -70,7 +71,9 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
     setConversationActive(false);
     setIsConnecting(false);
     if (idleTimerRef.current) { clearInterval(idleTimerRef.current); idleTimerRef.current = null; }
-    try { wsRef.current?.send(JSON.stringify({ type: "stop" })); } catch { /* socket gone */ }
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      try { wsRef.current.send(JSON.stringify({ type: "stop" })); } catch { /* best-effort */ }
+    }
     wsRef.current?.close();
     wsRef.current = null;
     micStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -120,6 +123,8 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
 
   const startConversation = useCallback(async () => {
     if (activeRef.current || !sonicEnabled()) return;
+    // 3-second cooldown after a connection failure to prevent rapid-retry spam
+    if (Date.now() - lastFailRef.current < 3000) return;
     setError(null);
     activeRef.current = true;
     setIsConnecting(true);
@@ -280,6 +285,7 @@ export function useSonicVoice(opts: UseSonicVoiceOpts = {}) {
       setConversationActive(true);
       setIsConnecting(false);
     } catch (e) {
+      lastFailRef.current = Date.now();
       setError(e instanceof Error ? e.message : "Voice failed to start");
       stopConversation();
     }
