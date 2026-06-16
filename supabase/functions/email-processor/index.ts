@@ -287,9 +287,16 @@ Deno.serve(async (req) => {
         )
       );
 
-      // Separate successful fetches from failures
-      const fetchable = fetched.filter((f) => f.msg !== null);
+      // Separate successful fetches from failures; skip sent messages
+      const fetchable = fetched.filter((f) => f.msg !== null && !f.msg!.folders.includes("SENT"));
       const fetchFailed = fetched.filter((f) => f.msg === null);
+      const fetchSent = fetched.filter((f) => f.msg !== null && f.msg!.folders.includes("SENT"));
+
+      // Mark sent messages as done so they don't retry
+      for (const { job } of fetchSent) {
+        await admin.from("email_processing_queue").update({ status: "done" }).eq("id", job.id);
+        doneCount++;
+      }
 
       // Mark Nylas-fetch failures
       for (const { job } of fetchFailed) {

@@ -1,3 +1,4 @@
 server.log
 *.wav
+!confirm-utterance.wav
 node_modules/

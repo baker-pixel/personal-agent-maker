@@ -47,6 +47,7 @@ export function useTriagedEmails() {
   const [emails, setEmails] = useState<TriagedEmail[]>([]);
   const [snoozedEmails, setSnoozedEmails] = useState<TriagedEmail[]>([]);
   const [loading, setLoading] = useState(true);
+  const userEmailsRef = useRef<Set<string>>(new Set());
   // True when the last fetch attempt failed. Consumers MUST treat an empty
   // list with loadFailed=true as "unknown", not "inbox empty" — on PWA resume
   // the first fetch often fires before the radio is awake and fails, and
@@ -67,6 +68,15 @@ export function useTriagedEmails() {
     const now = new Date().toISOString();
 
     try {
+      // Fetch user's connected email addresses to filter out sent mail.
+      // Only refresh when the set is empty (first load); grant emails rarely change.
+      if (userEmailsRef.current.size === 0) {
+        const { data: grants } = await supabase.from("nylas_grants").select("email").eq("status", "valid");
+        for (const g of grants ?? []) {
+          if (g.email) userEmailsRef.current.add(g.email.toLowerCase());
+        }
+      }
+
       // Race against a timeout: on PWA resume, a stale auth/socket can leave
       // supabase-js queries hanging forever, which kept the spinner up forever.
       const [activeRes, snoozedRes] = await Promise.race([
@@ -96,12 +106,14 @@ export function useTriagedEmails() {
       if (activeRes.error) throw activeRes.error;
 
       const archivedIds = getArchivedIds();
+      const isOwnEmail = (e: TriagedEmail) =>
+        userEmailsRef.current.size > 0 && userEmailsRef.current.has(e.from_address?.toLowerCase());
       if (activeRes.data) {
-        setEmails((activeRes.data as TriagedEmail[]).filter(e => !archivedIds.has(e.nylas_message_id)));
+        setEmails((activeRes.data as TriagedEmail[]).filter(e => !archivedIds.has(e.nylas_message_id) && !isOwnEmail(e)));
         hasLoadedRef.current = true;
       }
       if (!snoozedRes.error && snoozedRes.data) {
-        setSnoozedEmails(snoozedRes.data as TriagedEmail[]);
+        setSnoozedEmails((snoozedRes.data as TriagedEmail[]).filter(e => !isOwnEmail(e)));
       }
       setLoadFailed(false);
       retryCountRef.current = 0;
@@ -169,6 +181,7 @@ export function useTriagedEmails() {
         if (payload.eventType === "INSERT") {
           const row = payload.new as TriagedEmail;
           if (getArchivedIds().has(row.nylas_message_id)) return;
+          if (userEmailsRef.current.size > 0 && userEmailsRef.current.has(row.from_address?.toLowerCase())) return;
           if (row.snoozed_until && new Date(row.snoozed_until) > new Date()) {
             setSnoozedEmails(prev => prev.some(e => e.id === row.id) ? prev : [row, ...prev]);
           } else {
