@@ -134,7 +134,6 @@ function getFollowUpChips(messages: Message[]): StarterPrompt[] {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-const ASSESSMENT_NUDGE_KEY = "normy_assessment_nudged";
 const ASSESSMENT_NUDGE_AT = 4; // trigger after this many user messages
 
 export const AgentChat = () => {
@@ -147,7 +146,7 @@ export const AgentChat = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const convIdRef = useRef<string | null>(null);
   const assessmentDoneRef = useRef(true); // assume done until loaded
-  const nudgeSentRef = useRef(!!localStorage.getItem(ASSESSMENT_NUDGE_KEY));
+  const nudgeSentRef = useRef(false); // session-only; repeats each reload until assessment done
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -330,7 +329,6 @@ export const AgentChat = () => {
       const userCount = messages.filter(m => m.role === "user").length + 1; // +1 for current
       if (userCount >= ASSESSMENT_NUDGE_AT) {
         nudgeSentRef.current = true;
-        localStorage.setItem(ASSESSMENT_NUDGE_KEY, "1");
         const nudgeText = `Quick thought — now that we've been chatting a bit, I wanted to mention: I have a feature that lets me **learn your communication style and personality** so I can tailor how I respond to you specifically.\n\nIt's a short 3–5 minute assessment. If you'd like to try it, head to **Settings → Personality Syncing**. It makes a real difference in how well I can work with you.`;
         setTimeout(() => {
           setMessages(prev => [...prev, { role: "assistant", content: nudgeText }]);

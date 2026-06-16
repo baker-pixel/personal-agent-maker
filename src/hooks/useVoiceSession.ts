@@ -6,7 +6,6 @@ import { useUserDisplayName } from "./useUserDisplayName";
 import { stripMarkdown } from "@/lib/stripMarkdown";
 import { supabase } from "@/integrations/supabase/client";
 
-const VOICE_NUDGE_KEY = "normy_voice_assessment_nudged";
 const VOICE_NUDGE_AT = 4;
 
 interface UseVoiceSessionOpts {
@@ -36,7 +35,7 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
   // loads) must never be read aloud.
   const sentThisSessionRef = useRef(false);
   const assessmentDoneRef = useRef(true); // assume done until loaded
-  const voiceNudgeSentRef = useRef(!!localStorage.getItem(VOICE_NUDGE_KEY));
+  const voiceNudgeSentRef = useRef(false); // session-only; repeats each reload until assessment done
   const userTurnCountRef = useRef(0);
 
   useEffect(() => {
@@ -99,7 +98,6 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
       userTurnCountRef.current += 1;
       if (!voiceNudgeSentRef.current && !assessmentDoneRef.current && userTurnCountRef.current >= VOICE_NUDGE_AT) {
         voiceNudgeSentRef.current = true;
-        localStorage.setItem(VOICE_NUDGE_KEY, "1");
         setTimeout(() => {
           chat.injectAgentMessage(`Quick thought — I can tailor how I work with you much better if I understand your communication style. There's a short personality assessment in **Settings → Personality Syncing** (3–5 mins). It makes a real difference!`);
         }, 500);
@@ -127,7 +125,6 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
         userTurnCountRef.current += 1;
         if (!voiceNudgeSentRef.current && !assessmentDoneRef.current && userTurnCountRef.current >= VOICE_NUDGE_AT) {
           voiceNudgeSentRef.current = true;
-          localStorage.setItem(VOICE_NUDGE_KEY, "1");
           const nudgePlain = "Quick thought — I can tailor how I work with you much better if I understand your communication style. There's a short personality assessment in Settings under Personality Syncing, it only takes 3 to 5 minutes. It makes a real difference!";
           setTimeout(() => {
             chat.injectAgentMessage(`Quick thought — I can tailor how I work with you much better if I understand your communication style. There's a short personality assessment in **Settings → Personality Syncing** (3–5 mins). It makes a real difference!`);
