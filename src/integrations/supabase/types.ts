@@ -885,6 +885,7 @@ export type Database = {
           id: string
           provider: string
           scopes: string[] | null
+          status: string | null
           updated_at: string
           user_id: string
         }
@@ -895,6 +896,7 @@ export type Database = {
           id?: string
           provider: string
           scopes?: string[] | null
+          status?: string | null
           updated_at?: string
           user_id: string
         }
@@ -905,6 +907,7 @@ export type Database = {
           id?: string
           provider?: string
           scopes?: string[] | null
+          status?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1275,6 +1278,7 @@ export type Database = {
           referred_by_code: string | null
           slack_notification_channel_id: string | null
           slack_notification_channel_name: string | null
+          sonic_voice_id: string | null
           stt_language: string | null
           tone: string | null
           travel_mode_active: boolean
@@ -1322,6 +1326,7 @@ export type Database = {
           referred_by_code?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
+          sonic_voice_id?: string | null
           stt_language?: string | null
           tone?: string | null
           travel_mode_active?: boolean
@@ -1369,6 +1374,7 @@ export type Database = {
           referred_by_code?: string | null
           slack_notification_channel_id?: string | null
           slack_notification_channel_name?: string | null
+          sonic_voice_id?: string | null
           stt_language?: string | null
           tone?: string | null
           travel_mode_active?: boolean
