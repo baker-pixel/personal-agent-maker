@@ -128,8 +128,12 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
         if (!voiceNudgeSentRef.current && !assessmentDoneRef.current && userTurnCountRef.current >= VOICE_NUDGE_AT) {
           voiceNudgeSentRef.current = true;
           localStorage.setItem(VOICE_NUDGE_KEY, "1");
+          const nudgePlain = "Quick thought — I can tailor how I work with you much better if I understand your communication style. There's a short personality assessment in Settings under Personality Syncing, it only takes 3 to 5 minutes. It makes a real difference!";
           setTimeout(() => {
             chat.injectAgentMessage(`Quick thought — I can tailor how I work with you much better if I understand your communication style. There's a short personality assessment in **Settings → Personality Syncing** (3–5 mins). It makes a real difference!`);
+            // pendingGreeting drives the TTS path in Sonic mode (speakableReply stays
+            // null because sentThisSessionRef is never set via sendInSession in Sonic)
+            setPendingGreeting(nudgePlain);
           }, 500);
         }
       } else {
