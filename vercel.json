@@ -45,7 +45,8 @@
         {
           "key": "Server",
           "value": ""
-        }
+        },
+        { "key": "Access-Control-Allow-Origin", "value": "https://normyagent.com" }
       ]
     },
     {
