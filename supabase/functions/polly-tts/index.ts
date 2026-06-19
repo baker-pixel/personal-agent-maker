@@ -3,11 +3,8 @@
 // voice sessions. Keeps AWS keys server-side, returns MP3 bytes.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PollyClient, SynthesizeSpeechCommand } from "npm:@aws-sdk/client-polly@3";
+import { corsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 // Nova Sonic voice id -> Polly generative voice. matthew/tiffany/amy/olivia
 // are the same voice lineage in Polly; Polly has no Indian-English generative
