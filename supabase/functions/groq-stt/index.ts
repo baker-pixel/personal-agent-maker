@@ -1,10 +1,7 @@
 // Groq STT proxy — receives audio blob, returns transcript via whisper-large-v3-turbo
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 

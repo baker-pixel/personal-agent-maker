@@ -5,7 +5,7 @@
       "headers": [
         {
           "key": "X-Frame-Options",
-          "value": "SAMEORIGIN"
+          "value": "DENY"
         },
         {
           "key": "X-Content-Type-Options",
@@ -21,20 +21,47 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' blob: ; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.normyagent.com wss://api.normyagent.com https://normy-voice-server-production.up.railway.app wss://normy-voice-server-production.up.railway.app; media-src 'self' blob: data:; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+          "value": "default-src 'self'; script-src 'self' blob: ; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.normyagent.com wss://api.normyagent.com https://ybjrqyyarfxskiavbozs.supabase.co wss://ybjrqyyarfxskiavbozs.supabase.co https://normy-voice-server-production.up.railway.app wss://normy-voice-server-production.up.railway.app; media-src 'self' blob: data:; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         },
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "https://normyagent.com"
-        },
-        {
-          "key": "Cross-Origin-Opener-Policy",
-          "value": "same-origin-allow-popups"
+        { "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin" 
         },
         {
           "key": "Cache-Control",
           "value": "no-cache, no-store, must-revalidate, private"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        },
+        {
+          "key": "X-Powered-By",
+          "value": ""
+        },
+        {
+          "key": "Server",
+          "value": ""
         }
+      ]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, private" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Expires", "value": "0" }
+      ]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, private" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Expires", "value": "0" }
       ]
     },
     {

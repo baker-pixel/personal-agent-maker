@@ -1,12 +1,8 @@
 // Steno mode: extract structured tasks/reminders from a free-form transcript.
 // Uses Lovable AI gateway with tool-calling for reliable JSON output.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
 
 const SYSTEM_PROMPT = `You are Normy's stenographer. The user dictates a stream of thoughts — meetings, brainstorms, tasks, reminders, follow-ups, birthdays, decisions, names, numbers, anything they want to remember.
 

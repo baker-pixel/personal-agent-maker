@@ -151,9 +151,12 @@ function synthesizeOnce({ text, voiceId }) {
 }
 
 const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://normyagent.com",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "X-Content-Type-Options": "nosniff",
+  "X-Powered-By": "",
 };
 
 async function handleTts(req, res) {
@@ -194,13 +197,13 @@ const httpServer = createServer((req, res) => {
   } else if (req.url === "/tts" && req.method === "POST") {
     handleTts(req, res);
   } else if (req.url === "/" || req.url === "/test") {
-    res.writeHead(200, { "Content-Type": "text/html" });
+    res.writeHead(200, { "Content-Type": "text/html", ...CORS_HEADERS });
     res.end(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "test-client.html")));
   } else if (req.url === "/health") {
-    res.writeHead(200, { "Content-Type": "application/json" });
+    res.writeHead(200, { "Content-Type": "application/json", ...CORS_HEADERS });
     res.end(JSON.stringify({ ok: true, region: AWS_REGION }));
   } else {
-    res.writeHead(404); res.end();
+    res.writeHead(404, CORS_HEADERS); res.end();
   }
 });
 const wss = new WebSocketServer({ server: httpServer });

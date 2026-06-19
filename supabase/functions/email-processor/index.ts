@@ -6,6 +6,7 @@
 // verify_jwt is disabled — auth validated manually below.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 const NYLAS_BASE = "https://api.us.nylas.com";
 const BATCH_SIZE = 10;
@@ -27,10 +28,6 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
