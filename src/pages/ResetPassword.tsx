@@ -179,8 +179,8 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 6) {
-      toast({ title: "Password too short", description: "Use at least 6 characters.", variant: "destructive" });
+    if (password.length < 12) {
+      toast({ title: "Password too short", description: "Use at least 12 characters.", variant: "destructive" });
       return;
     }
     const { data } = await supabase.auth.getSession();
@@ -260,7 +260,7 @@ const ResetPassword = forwardRef<HTMLDivElement>(function ResetPassword(_props, 
                 Verifying reset link…
               </div>
             )}
-            <Input type="password" placeholder="New password (min 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} disabled={recoveryStatus !== "ready"} />
+            <Input type="password" placeholder="New password (min 12 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={12} disabled={recoveryStatus !== "ready"} />
             <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={loading || recoveryStatus !== "ready"}>
               {loading ? "Updating…" : "Update Password"}
             </Button>
