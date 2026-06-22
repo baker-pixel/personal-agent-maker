@@ -34,8 +34,8 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) return;
-    if (password.length < 6) {
-      toast({ title: "Password too short", description: "Use at least 6 characters.", variant: "destructive" });
+    if (password.length < 12) {
+      toast({ title: "Password too short", description: "Use at least 12 characters.", variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -112,7 +112,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_props, ref) {
             <h2 className="font-display text-xl font-semibold text-center mb-2">Create your account</h2>
             <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <div className="relative">
-              <Input type={showPassword ? "text" : "password"} placeholder="Password (min 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+              <Input type={showPassword ? "text" : "password"} placeholder="Password (min 12 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={12} />
               <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>

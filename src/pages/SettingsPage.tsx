@@ -185,8 +185,8 @@ export default function Settings() {
   }, []); // no deps — runs once on mount
 
   const handleChangePassword = async () => {
-    if (newPassword.length < 6) {
-      toast({ title: "Password too short", description: "Use at least 6 characters.", variant: "destructive" });
+    if (newPassword.length < 12) {
+      toast({ title: "Password too short", description: "Use at least 12 characters.", variant: "destructive" });
       return;
     }
     setChangingPassword(true);
@@ -388,7 +388,7 @@ export default function Settings() {
                   type={showNewPassword ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="New password (min 6 chars)"
+                  placeholder="New password (min 12 chars)"
                   className="rounded-xl pr-10"
                 />
                 <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
