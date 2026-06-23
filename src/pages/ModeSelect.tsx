@@ -56,7 +56,7 @@ export default function ModeSelect() {
 
   const handleClose = () => {
     voiceOpenRef.current = false;
-    resetSession();
+    voice.stopConversation();
     setVoiceOpen(false);
   };
 

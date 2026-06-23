@@ -39,8 +39,11 @@ function tzOffsetMs(ts: number, timeZone: string): number {
 }
 
 function parseLocalIsoMs(iso: string, timeZone: string): number {
-  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso)) return Date.parse(iso);
-  const utcGuess = Date.parse(iso.includes("T") ? `${iso}Z` : `${iso}T00:00:00Z`);
+  // Strip trailing Z — Nova (and Llama) sometimes appends Z even when instructed
+  // to emit local time, which would misinterpret the wall-clock hour as UTC.
+  const stripped = iso.replace(/Z$/i, "");
+  if (/[+-]\d{2}:?\d{2}$/.test(stripped)) return Date.parse(stripped);
+  const utcGuess = Date.parse(stripped.includes("T") ? `${stripped}Z` : `${stripped}T00:00:00Z`);
   let ts = utcGuess - tzOffsetMs(utcGuess, timeZone);
   ts = utcGuess - tzOffsetMs(ts, timeZone);
   return ts;

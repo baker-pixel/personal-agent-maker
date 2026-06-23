@@ -1,33 +1,30 @@
-// Amazon Nova 2 Sonic voice catalog.
-// https://docs.aws.amazon.com/nova/latest/nova2-userguide/sonic-language-support.html
-// tiffany and matthew are polyglots — they speak all supported languages.
-
+// OpenAI Realtime voice catalog (used for direct WebRTC voice sessions).
 import { DEFAULT_GROQ_VOICE } from "@/lib/groqVoices";
 
-export const DEFAULT_SONIC_VOICE = "matthew";
+export const DEFAULT_SONIC_VOICE = "alloy";
 
-// English voices only, shown without names — gender + character trait is the
-// label (no accent/country shown in the UI).
 export interface SonicVoice {
   id: string;
   gender: "Male" | "Female";
   description: string;
 }
 
+// OpenAI Realtime voices: alloy ash ballad coral echo sage shimmer verse
 export const SONIC_VOICES: SonicVoice[] = [
-  { id: "matthew", gender: "Male",   description: "Professional" },
-  { id: "tiffany", gender: "Female", description: "Warm" },
-  { id: "amy",     gender: "Female", description: "Calm" },
-  { id: "olivia",  gender: "Female", description: "Upbeat" },
-  { id: "kiara",   gender: "Female", description: "Gentle" },
-  { id: "arjun",   gender: "Male",   description: "Energetic" },
+  { id: "alloy",   gender: "Female", description: "Neutral, versatile" },
+  { id: "coral",   gender: "Female", description: "Warm, friendly" },
+  { id: "sage",    gender: "Female", description: "Calm, composed" },
+  { id: "shimmer", gender: "Female", description: "Gentle, soft" },
+  { id: "ash",     gender: "Male",   description: "Warm, engaging" },
+  { id: "ballad",  gender: "Male",   description: "Expressive, smooth" },
+  { id: "echo",    gender: "Male",   description: "Deep, steady" },
+  { id: "verse",   gender: "Male",   description: "Energetic, confident" },
 ];
 
 export const SONIC_VOICE_IDS = new Set(SONIC_VOICES.map((v) => v.id));
 
-// Groq TTS (Orpheus, English-only) still renders chat/briefing readouts — it
-// can't speak Nova voice ids, so map the picked Nova voice to the
-// gender-matched Orpheus voice for those surfaces.
+// Groq TTS (Orpheus) still renders chat/briefing readouts — map the picked
+// OpenAI voice to the gender-matched Orpheus voice for those surfaces.
 const GROQ_MALE_VOICE = "daniel";
 
 export function sonicToGroqVoiceId(sonicId: string | null | undefined): string {

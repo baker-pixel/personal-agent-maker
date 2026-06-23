@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { useAnnieChat } from "./useAnnieChat";
 import { useVoiceConversation } from "./useVoiceConversation";
-import { useSonicVoice, sonicEnabled } from "./useSonicVoice";
+import { useRealtimeVoice, realtimeEnabled } from "./useRealtimeVoice";
 import { useUserDisplayName } from "./useUserDisplayName";
 import { stripMarkdown } from "@/lib/stripMarkdown";
 import { supabase } from "@/integrations/supabase/client";
@@ -109,10 +109,10 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
     pushToTalk: true,
   });
 
-  // Nova Sonic speech-to-speech engine — replaces the whole STT→LLM→TTS loop
-  // when VITE_VOICE_SERVER_URL is configured. The Groq pipeline above stays
-  // mounted as the fallback (rules of hooks: both are always called).
-  const sonic = useSonicVoice({
+  // OpenAI Realtime WebRTC engine — replaces the whole STT→LLM→TTS loop
+  // when VITE_OPENAI_REALTIME=true. The Groq pipeline above stays mounted
+  // as a hooks-rules safety (both hooks always called, only one is active).
+  const sonic = useRealtimeVoice({
     agentName,
     onTranscript: (role, text) => {
       // Sonic occasionally emits JSON control markers as text — never show them.
@@ -145,7 +145,7 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
       }
     },
   });
-  const useSonic = sonicEnabled();
+  const useSonic = realtimeEnabled();
 
   const greeting = userName
     ? `Hey ${userName}, how can I help?`
@@ -204,13 +204,19 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
     setShowSafariTip(false);
   }, []);
 
-  /** Stop the voice loop AND clear the transcript (New chat / close overlay). */
+  /** Stop the voice loop, clear the transcript, and immediately start a fresh session. */
   const resetSession = useCallback(() => {
     if (useSonic) sonic.stopConversation();
     else voice.stopConversation();
     chat.reset();
     resetGreeting();
-  }, [voice.stopConversation, sonic.stopConversation, useSonic, chat.reset, resetGreeting]);
+    // Brief pause lets the old WebRTC teardown complete before re-connecting.
+    setTimeout(() => {
+      if (useSonic) sonic.startConversation();
+      else voice.startConversation();
+    }, 150);
+    if (!localStorage.getItem("safariMicTipDismissed")) setShowSafariTip(true);
+  }, [voice.stopConversation, sonic.stopConversation, voice.startConversation, sonic.startConversation, useSonic, chat.reset, resetGreeting]);
 
   /** Unified mic-button behavior — every surface routes its mic tap here. */
   const handleMicTap = useCallback(() => {
@@ -270,6 +276,8 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
           ...voice,
           conversationActive: sonic.conversationActive,
           isConnecting: sonic.isConnecting,
+          startupStage: sonic.startupStage,
+          startupElapsedMs: sonic.startupElapsedMs,
           isListening: sonic.isListening,
           isSpeaking: sonic.isSpeaking,
           isTranscribing: false,
@@ -281,7 +289,7 @@ export function useVoiceSession(agentName: string, opts: UseVoiceSessionOpts = {
           sonicVoiceId: sonic.sonicVoiceId,
           setSonicVoiceId: sonic.setSonicVoiceId,
         }
-      : { ...voice, isConnecting: false, sonicVoiceId: null, setSonicVoiceId: undefined },
+      : { ...voice, isConnecting: false, startupStage: null as string | null, startupElapsedMs: 0, sonicVoiceId: null, setSonicVoiceId: undefined },
     voiceEngine: useSonic ? ("sonic" as const) : ("groq" as const),
     voiceError: useSonic ? sonic.error : null,
     startSession,
