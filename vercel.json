@@ -21,7 +21,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' blob: ; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.normyagent.com wss://api.normyagent.com https://ybjrqyyarfxskiavbozs.supabase.co wss://ybjrqyyarfxskiavbozs.supabase.co https://normy-voice-server-production.up.railway.app wss://normy-voice-server-production.up.railway.app; media-src 'self' blob: data:; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self' blob: ; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.normyagent.com wss://api.normyagent.com https://ybjrqyyarfxskiavbozs.supabase.co wss://ybjrqyyarfxskiavbozs.supabase.co https://normy-voice-server-production.up.railway.app wss://normy-voice-server-production.up.railway.app https://api.openai.com; media-src 'self' blob: data:; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         },
         { "key": "Cross-Origin-Opener-Policy",
           "value": "same-origin" 

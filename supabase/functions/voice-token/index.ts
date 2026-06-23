@@ -8,8 +8,8 @@ import { VOICE_TOOLS } from "../_shared/voiceTools.ts";
 
 const ALLOWED_ORIGINS = new Set([
   "https://normyagent.com",
+  "https://www.normyagent.com",
   "http://localhost:8083",
-
 ]);
 
 function corsHeaders(req: Request) {
