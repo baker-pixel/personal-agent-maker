@@ -16,7 +16,7 @@
 // the endpoint as failing.
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 
 async function verifySignature(rawBody: string, signature: string, secret: string): Promise<boolean> {
@@ -214,6 +214,7 @@ const handlers: Record<string, (ctx: HandlerCtx) => Promise<void>> = {
 };
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   // Nylas sends a GET with ?challenge= to verify the endpoint on registration
   if (req.method === "GET") {
     const url = new URL(req.url);

@@ -2,7 +2,7 @@
 // Creates one draft_actions row per resolved attendee email for manual approval.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 
 const SYSTEM_PROMPT = `You draft a concise, professional follow-up email after a meeting. Tone: warm but businesslike, first-person from the user.
@@ -16,6 +16,7 @@ Output a SINGLE email body addressed to ONE recipient (the user will personalize
 Keep it under 220 words. No subject line — that is generated separately. No signature — the user will add their own.`;
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {

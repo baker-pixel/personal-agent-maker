@@ -56,6 +56,7 @@ serve(async (req) => {
     const agentName = (typeof body.agentName === "string" && body.agentName) || "Normy";
     const rawVoice = typeof body.voiceId === "string" ? body.voiceId : "";
     const voiceId = VALID_VOICES.has(rawVoice) ? rawVoice : "alloy";
+    const devMode = body.devMode === true;
 
     // Fetch system prompt from voice-session (keeps context logic in one place).
     let systemPrompt = FALLBACK_PROMPT;
@@ -67,7 +68,7 @@ serve(async (req) => {
           apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ tz, agentName }),
+        body: JSON.stringify({ tz, agentName, devMode }),
         signal: AbortSignal.timeout(8_000),
       });
       if (sessionRes.ok) {

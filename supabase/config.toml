@@ -6,14 +6,8 @@ verify_jwt = false
 [functions.nylas-webhook]
 verify_jwt = false
 
-# Bumped to 400s (Pro plan max) — voice sessions legitimately run long.
-# Temporary fix: real solution is moving to Nova 2 Sonic via Bedrock where
-# the streaming session lives on AWS infrastructure with no Supabase ceiling.
 [functions.voice-session]
-execution_timeout_s = 400
 
 [functions.voice-tools]
-execution_timeout_s = 400
 
 [functions.chat]
-execution_timeout_s = 400

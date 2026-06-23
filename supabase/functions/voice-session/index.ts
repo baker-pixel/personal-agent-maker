@@ -2,7 +2,7 @@
 // Every token here is charged on every conversation turn — keep it tight.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const NYLAS_BASE = "https://api.us.nylas.com";
 
@@ -33,6 +33,7 @@ async function fetchEvents(grantId: string, nylasApiKey: string, tz: string) {
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -58,6 +59,13 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const tz = (typeof body.tz === "string" && body.tz) || "UTC";
     const agentName = (typeof body.agentName === "string" && body.agentName) || "Normy";
+    const devMode = body.devMode === true;
+
+    if (devMode) {
+      return new Response(JSON.stringify({
+        systemPrompt: `You are ${agentName}, a voice assistant. Dev mode — no real data loaded. Reply in 1 sentence.`,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,

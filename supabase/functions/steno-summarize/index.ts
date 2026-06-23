@@ -1,6 +1,6 @@
 // Generates a short title, 1-paragraph summary, and topic tags for a Steno session transcript.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 
 const SYSTEM_PROMPT = `You summarize a user's stream-of-consciousness dictation captured in "Steno Pad". The user is reviewing their own thoughts later, possibly weeks from now. Be faithful to what they said — never invent details.
@@ -22,6 +22,7 @@ Produce:
 - topics: 3-6 short topic tags (lowercase, single or two-word). Examples: "acme deal", "hiring", "travel".`;
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {

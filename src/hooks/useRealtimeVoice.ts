@@ -43,6 +43,7 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
   const handledCallsRef = useRef<Set<string>>(new Set());
   const lastFailRef = useRef(0);
   const sessionTzRef = useRef("UTC");
+  const echoUnmuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [startupStage, setStartupStage] = useState<string | null>(null);
   const [startupElapsedMs, setStartupElapsedMs] = useState(0);
   const startupStartRef = useRef(0);
@@ -143,6 +144,7 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
     setStartupStage(null);
     setStartupElapsedMs(0);
     if (startupTimerRef.current) { clearInterval(startupTimerRef.current); startupTimerRef.current = null; }
+    if (echoUnmuteTimerRef.current) { clearTimeout(echoUnmuteTimerRef.current); echoUnmuteTimerRef.current = null; }
     pendingActionRef.current = null;
     handledCallsRef.current.clear();
     if (idleTimerRef.current) { clearInterval(idleTimerRef.current); idleTimerRef.current = null; }
@@ -190,6 +192,12 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
             agentName: optsRef.current.agentName,
             tz: sessionTzRef.current,
             voiceId: voiceIdRef.current || "alloy",
+            devMode: (() => {
+              const param = new URLSearchParams(window.location.search).get("voiceDevMode");
+              if (param === "1") { localStorage.setItem("voiceDevMode", "1"); return true; }
+              if (param === "0") { localStorage.removeItem("voiceDevMode"); return false; }
+              return localStorage.getItem("voiceDevMode") === "1";
+            })(),
           },
         }),
         navigator.mediaDevices.getUserMedia({
@@ -312,6 +320,20 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
             lastActivityRef.current = Date.now();
             optsRef.current.onTranscript?.("USER", text);
           }
+
+        } else if (t === "output_audio_buffer.started") {
+          // Mute mic while agent audio plays — prevents speaker bleed from
+          // triggering VAD on mobile and causing echo double-responses.
+          if (echoUnmuteTimerRef.current) { clearTimeout(echoUnmuteTimerRef.current); echoUnmuteTimerRef.current = null; }
+          micStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = false; });
+
+        } else if (t === "output_audio_buffer.stopped") {
+          // Unmute after short delay to let acoustic reverb die down.
+          if (echoUnmuteTimerRef.current) clearTimeout(echoUnmuteTimerRef.current);
+          echoUnmuteTimerRef.current = setTimeout(() => {
+            micStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = true; });
+            echoUnmuteTimerRef.current = null;
+          }, 400);
 
         } else if (t === "input_audio_buffer.speech_started") {
           lastActivityRef.current = Date.now();

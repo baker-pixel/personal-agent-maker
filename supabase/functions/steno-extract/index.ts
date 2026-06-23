@@ -1,7 +1,7 @@
 // Steno mode: extract structured tasks/reminders from a free-form transcript.
 // Uses Lovable AI gateway with tool-calling for reliable JSON output.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 
 const SYSTEM_PROMPT = `You are Normy's stenographer. The user dictates a stream of thoughts — meetings, brainstorms, tasks, reminders, follow-ups, birthdays, decisions, names, numbers, anything they want to remember.
@@ -57,6 +57,7 @@ interface ExtractedItem {
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {

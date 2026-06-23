@@ -7,7 +7,7 @@
 // this function operates server-side over multiple users at once.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 
 const NYLAS_BASE = "https://api.us.nylas.com";
@@ -120,6 +120,7 @@ Rules:
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   console.log("[daily-briefing-cron] handler invoked, method=", req.method);

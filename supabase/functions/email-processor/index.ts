@@ -6,7 +6,7 @@
 // verify_jwt is disabled — auth validated manually below.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const NYLAS_BASE = "https://api.us.nylas.com";
 const BATCH_SIZE = 10;
@@ -222,6 +222,7 @@ Return JSON only — an array matching the suggest_triage tool schema.`;
 // ─── Main handler ────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

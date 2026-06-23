@@ -3,7 +3,7 @@
 // voice sessions. Keeps AWS keys server-side, returns MP3 bytes.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PollyClient, SynthesizeSpeechCommand } from "npm:@aws-sdk/client-polly@3";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 
 // Nova Sonic voice id -> Polly generative voice. matthew/tiffany/amy/olivia
@@ -50,6 +50,7 @@ const json = (body: unknown, status: number) =>
   });
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   // Warm-up ping: lets the frontend boot this isolate ahead of real use so

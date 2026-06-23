@@ -1,6 +1,6 @@
 // Groq TTS proxy — keeps API key server-side, returns MP3 bytes.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 
 const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
@@ -28,6 +28,7 @@ const json = (body: unknown, status: number) =>
   });
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   // Warm-up ping: lets the frontend boot this isolate ahead of real use so
