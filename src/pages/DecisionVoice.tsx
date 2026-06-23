@@ -39,14 +39,27 @@ export default function DecisionVoice() {
 
   const handsFree = voiceEngine === "sonic";
 
-  // Hands-free engine: start listening as soon as the page opens — no mic tap
-  // required. Once only; after a silence auto-end the user taps to restart.
+  // Auto-start session when the page opens for all engines.
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (!handsFree || autoStartedRef.current) return;
+    if (autoStartedRef.current) return;
     autoStartedRef.current = true;
     startSession();
-  }, [handsFree, startSession]);
+  }, [startSession]);
+
+  // Groq PTT: auto-start recording once the greeting finishes speaking.
+  // Waits for isSpeaking to flip true→false so recording doesn't trample the greeting.
+  // Falls through immediately if TTS is off or unsupported.
+  const autoRecordRef = useRef(false);
+  const greetingPlayedRef = useRef(false);
+  useEffect(() => {
+    if (handsFree || autoRecordRef.current || !voice.conversationActive || !voice.prefsLoaded) return;
+    if (voice.isSpeaking) { greetingPlayedRef.current = true; return; }
+    if (!greetingPlayedRef.current && voice.ttsEnabled && voice.ttsSupported) return;
+    autoRecordRef.current = true;
+    const t = setTimeout(() => voice.startRecordingTurn(), 300);
+    return () => clearTimeout(t);
+  }, [handsFree, voice.conversationActive, voice.isSpeaking, voice.ttsEnabled, voice.ttsSupported, voice.prefsLoaded]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -149,8 +162,15 @@ export default function DecisionVoice() {
                 {agentName.charAt(0)}
               </div>
               <p className="font-display text-lg font-semibold text-foreground mb-1">
-                {handsFree && voice.isConnecting ? "Starting voice session…" : "Ready to chat"}
+                {handsFree && voice.isConnecting
+                  ? (voice.startupStage ?? "Starting voice session…")
+                  : "Ready to chat"}
               </p>
+              {handsFree && voice.isConnecting && voice.startupElapsedMs > 0 && (
+                <p className="text-2xl font-mono font-semibold text-muted-foreground/60 mb-2 tabular-nums">
+                  {(voice.startupElapsedMs / 1000).toFixed(1)}s
+                </p>
+              )}
               <p className="text-sm text-muted-foreground max-w-xs mb-6">
                 {handsFree
                   ? voice.isConnecting
