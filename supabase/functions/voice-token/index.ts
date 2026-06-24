@@ -25,7 +25,9 @@ function corsHeaders(req: Request) {
 const OPENAI_REALTIME_MODEL = "gpt-realtime";
 const VALID_VOICES = new Set(["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"]);
 const FALLBACK_PROMPT =
-  "You are a helpful executive assistant on a voice call. Keep replies to 1-3 short spoken sentences, no markdown.";
+  "You are a helpful executive assistant on a voice call. Keep replies to 1-3 short spoken sentences, no markdown. " +
+  "Your context failed to load — you have no access to the user's email, calendar, contacts, or tasks. " +
+  "Do not attempt any actions. Politely tell the user to end the session and try again.";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
@@ -60,6 +62,7 @@ serve(async (req) => {
 
     // Fetch system prompt from voice-session (keeps context logic in one place).
     let systemPrompt = FALLBACK_PROMPT;
+    let sessionTools: typeof VOICE_TOOLS | [] = [];
     try {
       const sessionRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/voice-session`, {
         method: "POST",
@@ -73,7 +76,10 @@ serve(async (req) => {
       });
       if (sessionRes.ok) {
         const d = await sessionRes.json();
-        if (d.systemPrompt) systemPrompt = d.systemPrompt;
+        if (d.systemPrompt) {
+          systemPrompt = d.systemPrompt;
+          sessionTools = VOICE_TOOLS;
+        }
       }
     } catch (e) {
       console.warn("[voice-token] voice-session fetch failed, using fallback:", e);
@@ -84,7 +90,7 @@ serve(async (req) => {
       model: OPENAI_REALTIME_MODEL,
       audio: { output: { voice: voiceId } },
       instructions: systemPrompt,
-      tools: VOICE_TOOLS,
+      tools: sessionTools,
       ...(withVad ? {
         input_audio_transcription: { model: "whisper-1" },
         turn_detection: {

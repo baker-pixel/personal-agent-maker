@@ -11,8 +11,8 @@ async function fetchEvents(grantId: string, nylasApiKey: string, tz: string) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
     const start = Math.floor(Date.now() / 1000);
-    const end = start + 2 * 86400; // next 48 h only
-    const params = new URLSearchParams({ calendar_id: "primary", start: String(start), end: String(end), limit: "5" });
+    const end = start + 7 * 86400; // next 7 days
+    const params = new URLSearchParams({ calendar_id: "primary", start: String(start), end: String(end), limit: "10" });
     const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events?${params}`, {
       headers: { Authorization: `Bearer ${nylasApiKey}` }, signal: ctrl.signal,
     });
@@ -90,21 +90,21 @@ serve(async (req) => {
         .eq("user_id", user.id)
         .order("is_vip", { ascending: false })
         .order("last_interaction_at", { ascending: false, nullsFirst: false })
-        .limit(10),
+        .limit(20),
       admin.from("email_metadata")
         .select("nylas_message_id, from_name, from_address, subject, category")
         .eq("user_id", user.id)
-        .gte("received_at", new Date(Date.now() - 3 * 86400_000).toISOString())
+        .gte("received_at", new Date(Date.now() - 86400_000).toISOString())
         .is("replied_at", null)
         .in("category", ["urgent", "needs_reply"])
         .order("priority_score", { ascending: false })
-        .limit(5),
+        .limit(15),
       admin.from("action_items")
         .select("title, priority, due_date")
         .eq("user_id", user.id)
         .in("status", ["open", "in_progress"])
         .order("due_date", { ascending: true, nullsFirst: false })
-        .limit(5),
+        .limit(10),
       admin.from("user_preferences")
         .select("user_display_name, agent_name, work_context")
         .eq("user_id", user.id)
@@ -129,6 +129,7 @@ ACTIONS (email/calendar/task/contact): Two-step — nothing executes until confi
   NEVER call confirm_action until user responds to YOUR prompt. Statements like "got it/noted/sounds good" = conversational, not confirmation.
   IDs: use only IDs from lists below. Emails: only from CONTACTS or user-given — never guess.
 READ EMAIL: call read_email(messageId) immediately, no confirm. Summarize in 2-3 spoken sentences.
+REFRESH: If the user asks about emails, contacts, calendar, or tasks not covered by the lists below — call get_inbox, get_calendar, search_contacts, or get_tasks immediately. No confirm needed.
 PRIORITY: Revenue/deals first → VIP relationships → deadlines → ops.
 JUDGMENT: One specific recommendation, not options. Draft immediately rather than describing. Evaluate meeting requests concretely (who, what you gain, cost).
 MEETING PREP: Use CONTEXT + calendar/contacts below. Be specific — never generic talking points.`;
@@ -139,10 +140,10 @@ MEETING PREP: Use CONTEXT + calendar/contacts below. Be specific — never gener
 
     const events = (calRes as any).events || [];
     if (events.length > 0) {
-      prompt += `\nCAL (48h):\n` + events.map((e: any) =>
+      prompt += `\nCAL (7d):\n` + events.map((e: any) =>
         `${e.when}: ${e.title}${e.attendees ? ` (${e.attendees})` : ""} [evt:${e.id}]`).join("\n");
     } else if (grantRow) {
-      prompt += `\nCAL: clear for 48h.`;
+      prompt += `\nCAL: clear for 7d.`;
     }
 
     const urgent = urgentRes.data || [];

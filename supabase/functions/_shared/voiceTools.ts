@@ -153,4 +153,54 @@ export const VOICE_TOOLS = [
       required: ["contactId", "name"],
     },
   },
+  {
+    type: "function",
+    name: "get_inbox",
+    description: "Fetch fresh emails from the inbox. Use when the user asks about recent or new emails, emails from a specific person, or emails about a topic. Executes immediately — no confirmation needed.",
+    parameters: {
+      type: "object",
+      properties: {
+        category: { type: "string", enum: ["urgent", "needs_reply", "all"], description: "Filter by category. Default: urgent and needs_reply." },
+        query: { type: "string", description: "Search by sender name, email address, or subject keyword." },
+        limit: { type: "number", description: "Max emails to return (default 10, max 20)." },
+      },
+      required: [],
+    },
+  },
+  {
+    type: "function",
+    name: "get_calendar",
+    description: "Fetch fresh calendar events. Use when the user asks about their week, upcoming meetings, or schedule beyond what was preloaded. Executes immediately — no confirmation needed.",
+    parameters: {
+      type: "object",
+      properties: {
+        days: { type: "number", description: "Days ahead to fetch (default 7, max 14)." },
+      },
+      required: [],
+    },
+  },
+  {
+    type: "function",
+    name: "search_contacts",
+    description: "Search contacts by name, email, or company. Use when the user asks for someone not in the preloaded CONTACTS list. Executes immediately — no confirmation needed.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Name, email address, or company to search for." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    type: "function",
+    name: "get_tasks",
+    description: "Fetch fresh tasks and action items. Use when the user asks about their to-do list or open tasks. Executes immediately — no confirmation needed.",
+    parameters: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["open", "in_progress", "completed"], description: "Filter by status. Default: open and in_progress." },
+      },
+      required: [],
+    },
+  },
 ];

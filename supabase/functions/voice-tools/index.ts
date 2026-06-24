@@ -58,7 +58,7 @@ interface ToolExecutionContext {
 }
 
 function requiresGoogleGrant(name: string): boolean {
-  return !["save_contact", "create_task", "delete_contact"].includes(name);
+  return !["save_contact", "create_task", "delete_contact", "get_inbox", "search_contacts", "get_tasks"].includes(name);
 }
 
 async function executeToolCall(
@@ -300,6 +300,107 @@ async function executeToolCall(
         .eq("user_id", userId);
       if (error) return { success: false, message: error.message || "Failed to delete contact" };
       return { success: true, message: `Contact "${args.name}" deleted` };
+    }
+
+    if (name === "get_inbox") {
+      const category = typeof args.category === "string" ? args.category : null;
+      const query = typeof args.query === "string" ? args.query.trim() : null;
+      const limit = Math.min(Number(args.limit) || 10, 20);
+
+      let q = adminClient
+        .from("email_metadata")
+        .select("nylas_message_id, from_name, from_address, subject, category, received_at")
+        .eq("user_id", userId)
+        .gte("received_at", new Date(Date.now() - 24 * 3600_000).toISOString())
+        .is("replied_at", null)
+        .order("priority_score", { ascending: false })
+        .limit(limit);
+
+      if (category === "all") {
+        // no category filter
+      } else if (category) {
+        q = q.in("category", [category]);
+      } else {
+        q = q.in("category", ["urgent", "needs_reply"]);
+      }
+
+      if (query) {
+        q = q.or(`subject.ilike.%${query}%,from_name.ilike.%${query}%,from_address.ilike.%${query}%`);
+      }
+
+      const { data, error } = await q;
+      if (error) return { success: false, message: error.message };
+      if (!data || data.length === 0) {
+        return { success: true, message: "No emails matching that criteria in the last 24 hours." };
+      }
+      const fmt = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" });
+      const list = data.map((m: any) =>
+        `${m.from_name || m.from_address}: "${m.subject}" [${m.category}] at ${fmt.format(new Date(m.received_at))} [msg:${m.nylas_message_id}]`
+      ).join("\n");
+      return { success: true, message: `${data.length} email(s):\n${list}` };
+    }
+
+    if (name === "get_calendar") {
+      if (!grantId) return { success: false, message: "Google account not connected. Please reconnect via Integrations." };
+      const days = Math.min(Number(args.days) || 7, 14);
+      const start = Math.floor(Date.now() / 1000);
+      const end = start + days * 86400;
+      const params = new URLSearchParams({ calendar_id: "primary", start: String(start), end: String(end), limit: "15" });
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events?${params}`, {
+        headers: { Authorization: `Bearer ${nylasApiKey}` }, signal: ctrl.signal,
+      });
+      clearTimeout(t);
+      if (!res.ok) {
+        if (res.status === 401) return { success: false, message: "Calendar connection expired. Please reconnect via Integrations." };
+        return { success: false, message: "Could not fetch calendar right now." };
+      }
+      const data = await res.json();
+      const events = data.data || [];
+      if (events.length === 0) return { success: true, message: `Calendar is clear for the next ${days} days.` };
+      const fmt = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+      const list = events.map((ev: any) => {
+        const when = ev.when?.start_time ? fmt.format(new Date(ev.when.start_time * 1000)) : (ev.when?.start_date || "");
+        const attendees = (ev.participants || []).map((p: any) => p.name || p.email).slice(0, 3).join(", ");
+        return `${when}: ${ev.title || "(untitled)"}${attendees ? ` (${attendees})` : ""} [evt:${ev.id}]`;
+      }).join("\n");
+      return { success: true, message: `${events.length} event(s) in the next ${days} days:\n${list}` };
+    }
+
+    if (name === "search_contacts") {
+      if (!args.query) return { success: false, message: "Provide a search query." };
+      const { data, error } = await adminClient
+        .from("contacts")
+        .select("id, name, email, company, role, phone, is_vip")
+        .eq("user_id", userId)
+        .or(`name.ilike.%${args.query}%,email.ilike.%${args.query}%,company.ilike.%${args.query}%`)
+        .order("is_vip", { ascending: false })
+        .limit(5);
+      if (error) return { success: false, message: error.message };
+      if (!data || data.length === 0) return { success: true, message: `No contacts found matching "${args.query}".` };
+      const list = data.map((c: any) =>
+        `${c.name}${c.email ? ` <${c.email}>` : ""}${c.company ? `, ${c.company}` : ""}${c.role ? ` (${c.role})` : ""}${c.phone ? `, ${c.phone}` : ""}${c.is_vip ? " [VIP]" : ""} [cid:${c.id}]`
+      ).join("\n");
+      return { success: true, message: `${data.length} contact(s) matching "${args.query}":\n${list}` };
+    }
+
+    if (name === "get_tasks") {
+      const status = typeof args.status === "string" ? args.status : null;
+      const statuses = status ? [status] : ["open", "in_progress"];
+      const { data, error } = await adminClient
+        .from("action_items")
+        .select("title, priority, due_date, status")
+        .eq("user_id", userId)
+        .in("status", statuses)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .limit(15);
+      if (error) return { success: false, message: error.message };
+      if (!data || data.length === 0) return { success: true, message: "No open tasks found." };
+      const list = data.map((t: any) =>
+        `${t.title}${t.due_date ? ` (due ${t.due_date})` : ""} [${t.priority}] [${t.status}]`
+      ).join("\n");
+      return { success: true, message: `${data.length} task(s):\n${list}` };
     }
 
     return { success: false, message: `Unknown tool: ${name}` };

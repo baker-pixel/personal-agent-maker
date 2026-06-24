@@ -3,8 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useVoicePreferences } from "./useVoicePreferences";
 import { sonicToGroqVoiceId } from "@/lib/sonicVoices";
 
-const READ_TOOLS = new Set(["read_email"]);
-const SILENCE_END_MS = 30_000;
+const READ_TOOLS = new Set(["read_email", "get_inbox", "get_calendar", "search_contacts", "get_tasks"]);
 
 export const realtimeEnabled = (): boolean =>
   typeof import.meta.env.VITE_OPENAI_REALTIME === "string" &&
@@ -35,8 +34,6 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const activeRef = useRef(false);
-  const lastActivityRef = useRef(0);
-  const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingActionRef = useRef<{ name: string; args: Record<string, unknown> } | null>(null);
   // Track which call_ids we've already handled to prevent double-execution
   // (function calls can arrive in both response.output_item.done and response.done).
@@ -147,7 +144,6 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
     if (echoUnmuteTimerRef.current) { clearTimeout(echoUnmuteTimerRef.current); echoUnmuteTimerRef.current = null; }
     pendingActionRef.current = null;
     handledCallsRef.current.clear();
-    if (idleTimerRef.current) { clearInterval(idleTimerRef.current); idleTimerRef.current = null; }
     dcRef.current?.close();
     dcRef.current = null;
     pcRef.current?.close();
@@ -228,13 +224,6 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
 
       dc.onopen = () => {
         handledCallsRef.current.clear();
-        lastActivityRef.current = Date.now();
-        idleTimerRef.current = setInterval(() => {
-          if (Date.now() - lastActivityRef.current > SILENCE_END_MS) {
-            optsRef.current.onAutoEnd?.();
-            stopConversation();
-          }
-        }, 5000);
       };
 
       dc.onmessage = async (e) => {
@@ -282,7 +271,6 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
 
         } else if (t === "response.created") {
           setIsSpeaking(true);
-          lastActivityRef.current = Date.now();
 
         } else if (t === "response.output_item.done") {
           // Primary place to catch function calls for gpt-realtime-2.
@@ -293,7 +281,6 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
 
         } else if (t === "response.done") {
           setIsSpeaking(false);
-          lastActivityRef.current = Date.now();
           // Secondary function call extraction — deduplication prevents double execution.
           const output = event.response?.output || [];
           for (const item of output) {
@@ -317,7 +304,6 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
         ) {
           const text: string = event.transcript || "";
           if (text && !text.trim().startsWith("{")) {
-            lastActivityRef.current = Date.now();
             optsRef.current.onTranscript?.("USER", text);
           }
 
@@ -336,11 +322,7 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
           }, 400);
 
         } else if (t === "input_audio_buffer.speech_started") {
-          lastActivityRef.current = Date.now();
           setIsSpeaking(false);
-
-        } else if (t === "input_audio_buffer.speech_stopped") {
-          lastActivityRef.current = Date.now();
 
         } else if (t === "error") {
           const msg: string = event.error?.message || JSON.stringify(event.error);
