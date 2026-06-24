@@ -60,6 +60,7 @@ serve(async (req) => {
     const tz = (typeof body.tz === "string" && body.tz) || "UTC";
     const agentName = (typeof body.agentName === "string" && body.agentName) || "Normy";
     const devMode = body.devMode === true;
+    const requestedFirstSession = body.firstSession === true;
 
     if (devMode) {
       return new Response(JSON.stringify({
@@ -106,7 +107,7 @@ serve(async (req) => {
         .order("due_date", { ascending: true, nullsFirst: false })
         .limit(10),
       admin.from("user_preferences")
-        .select("user_display_name, agent_name, work_context")
+        .select("user_display_name, agent_name, work_context, voice_onboarded")
         .eq("user_id", user.id)
         .maybeSingle(),
     ]);
@@ -117,6 +118,15 @@ serve(async (req) => {
     const displayName = prefsRes.data?.user_display_name || "the user";
     const resolvedAgentName = (prefsRes.data?.agent_name || "").trim() || agentName;
     const workContext = (prefsRes.data?.work_context || "").trim();
+    const isFirstSession = requestedFirstSession && !prefsRes.data?.voice_onboarded;
+
+    // Mark onboarded now so repeat fast-reconnects don't re-trigger the greeting.
+    if (isFirstSession) {
+      admin.from("user_preferences")
+        .update({ voice_onboarded: true })
+        .eq("user_id", user.id)
+        .then(() => {}); // fire-and-forget; don't block the response
+    }
 
     let prompt = `You are ${resolvedAgentName}, voice EA for ${displayName}. Today: ${today}, ${timeNow} (${tz}).${workContext ? `\nCONTEXT: ${workContext}` : ""}
 
@@ -164,7 +174,21 @@ MEETING PREP: Use CONTEXT + calendar/contacts below. Be specific — never gener
         `${c.name}${c.email ? ` <${c.email}>` : ""}${c.company ? `, ${c.company}` : ""}${c.is_vip ? " [VIP]" : ""} [cid:${c.id}]`).join("\n");
     }
 
-    return new Response(JSON.stringify({ systemPrompt: prompt, userId: user.id, tz }), {
+    if (isFirstSession) {
+      prompt +=
+        `\nFIRST_SESSION: At the very start of this conversation, BEFORE the user says anything, speak this EXACT greeting word for word:\n` +
+        `"Hi ${displayName}, my name is ${resolvedAgentName}. ` +
+        `I'm your administrative assistant for all of your coordination needs. ` +
+        `While I'm learning how to do a lot more things to support you — like helping with digital marketing, staffing, and bookkeeping automation, and lots more — ` +
+        `for now I'm your 24/7/365 admin, constantly monitoring your emails and calendar and keeping you organized. ` +
+        `For anything you need, just come back here and talk to me, or text if you're more comfortable with that. ` +
+        `While I'm an advanced AI agent, I'm designed to act just like a human assistant. ` +
+        `You don't need to learn any software or navigate any dashboard. Just ask me and I will handle it. ` +
+        `That's it! I look forward to helping keep you organized and give you hours back in your week. ` +
+        `So, let's get started — how can I help?"`;
+    }
+
+    return new Response(JSON.stringify({ systemPrompt: prompt, userId: user.id, tz, isFirstSession }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {

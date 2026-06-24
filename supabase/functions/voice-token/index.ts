@@ -59,10 +59,12 @@ serve(async (req) => {
     const rawVoice = typeof body.voiceId === "string" ? body.voiceId : "";
     const voiceId = VALID_VOICES.has(rawVoice) ? rawVoice : "alloy";
     const devMode = body.devMode === true;
+    const firstSession = body.firstSession === true;
 
     // Fetch system prompt from voice-session (keeps context logic in one place).
     let systemPrompt = FALLBACK_PROMPT;
     let sessionTools: typeof VOICE_TOOLS | [] = [];
+    let isFirstSession = false;
     try {
       const sessionRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/voice-session`, {
         method: "POST",
@@ -71,7 +73,7 @@ serve(async (req) => {
           apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ tz, agentName, devMode }),
+        body: JSON.stringify({ tz, agentName, devMode, firstSession }),
         signal: AbortSignal.timeout(8_000),
       });
       if (sessionRes.ok) {
@@ -79,6 +81,7 @@ serve(async (req) => {
         if (d.systemPrompt) {
           systemPrompt = d.systemPrompt;
           sessionTools = VOICE_TOOLS;
+          isFirstSession = d.isFirstSession === true;
         }
       }
     } catch (e) {
@@ -139,7 +142,7 @@ serve(async (req) => {
 
     // Response from /v1/realtime/client_secrets has a top-level `value` field.
     const session = await oaiRes.json();
-    return new Response(JSON.stringify({ client_secret: session.value }), {
+    return new Response(JSON.stringify({ client_secret: session.value, isFirstSession }), {
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
 

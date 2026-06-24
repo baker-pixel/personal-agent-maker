@@ -40,6 +40,7 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
   const handledCallsRef = useRef<Set<string>>(new Set());
   const lastFailRef = useRef(0);
   const sessionTzRef = useRef("UTC");
+  const isFirstSessionRef = useRef(false);
   const echoUnmuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [startupStage, setStartupStage] = useState<string | null>(null);
   const [startupElapsedMs, setStartupElapsedMs] = useState(0);
@@ -188,6 +189,7 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
             agentName: optsRef.current.agentName,
             tz: sessionTzRef.current,
             voiceId: voiceIdRef.current || "alloy",
+            firstSession: !localStorage.getItem("normy_voice_onboarded"),
             devMode: (() => {
               const param = new URLSearchParams(window.location.search).get("voiceDevMode");
               if (param === "1") { localStorage.setItem("voiceDevMode", "1"); return true; }
@@ -204,6 +206,8 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
       const { data: tokenData, error: tokenErr } = tokenResult;
       if (tokenErr) throw new Error(tokenErr.message || "Failed to get voice token");
       if (!tokenData?.client_secret) throw new Error("No client_secret in response");
+      isFirstSessionRef.current = tokenData.isFirstSession === true;
+      if (isFirstSessionRef.current) localStorage.setItem("normy_voice_onboarded", "1");
 
       // If stopConversation() fired while we were awaiting (e.g. unmount, navigate
       // away), release the mic stream the browser just granted and bail out.
@@ -257,6 +261,12 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
               },
             },
           });
+          // First-time user: trigger the onboarding greeting immediately so
+          // the agent speaks before the user has to say anything.
+          if (isFirstSessionRef.current) {
+            isFirstSessionRef.current = false;
+            sendDc({ type: "response.create" });
+          }
           // Session is live now. Don't block UI on session.updated — if the
           // session.update above fails (e.g. bad param), the session still works
           // because VAD is baked in server-side by voice-token.
