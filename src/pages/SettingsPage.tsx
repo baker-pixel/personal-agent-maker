@@ -526,6 +526,7 @@ export default function Settings() {
                 : <>Take Personality Assessment <ArrowRight className="w-4 h-4 ml-1" /></>}
             </Button>
           </div>
+          <VoicePersonalizationSection initialData={voiceInitialData} />
         </section>}
 
         {activeTab === "integrations" && <section className="space-y-3">
@@ -647,7 +648,6 @@ export default function Settings() {
         {/* ── Email ────────────────────────────────────────────────────── */}
         {activeTab === "email" && <>
           <EmailTriageSettings />
-          <VoicePersonalizationSection initialData={voiceInitialData} />
         </>}
 
         {/* ── Notifications ────────────────────────────────────────────── */}
