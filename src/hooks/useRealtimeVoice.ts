@@ -205,6 +205,13 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
       if (tokenErr) throw new Error(tokenErr.message || "Failed to get voice token");
       if (!tokenData?.client_secret) throw new Error("No client_secret in response");
 
+      // If stopConversation() fired while we were awaiting (e.g. unmount, navigate
+      // away), release the mic stream the browser just granted and bail out.
+      if (!activeRef.current) {
+        micStream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
       micStreamRef.current = micStream;
       setStartupStage("Connecting…");
 
