@@ -262,28 +262,12 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
         }
 
         if (t === "session.created") {
-          // Reinforce VAD config client-side — in case session creation used the
-          // fallback (no-VAD) path. idle_timeout_ms omitted: set at creation and
-          // triggers an error in some model versions when sent client-side.
-          sendDc({
-            type: "session.update",
-            session: {
-              type: "realtime",
-              turn_detection: {
-                type: "server_vad",
-                threshold: 0.7,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 800,
-                create_response: true,
-              },
-            },
-          });
           if (startupTimerRef.current) { clearInterval(startupTimerRef.current); startupTimerRef.current = null; }
           setStartupStage(null);
           setConversationActive(true);
           setIsConnecting(false);
-          // Greet here (not session.updated) so it fires even if session.update errors.
-          // VAD is already configured at session creation, so no need to wait for updated.
+          // Greet immediately — VAD already configured at session creation via voice-token.
+          // gpt-realtime does not accept session.update for turn_detection client-side.
           if (!greetingTriggeredRef.current) {
             greetingTriggeredRef.current = true;
             sendDc({ type: "response.create" });
@@ -294,9 +278,19 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
           setIsConnecting(false);
 
         } else if (t === "input_audio_buffer.timeout_triggered") {
-          // Server-side idle timeout fired — user went quiet after assistant finished.
-          optsRef.current.onAutoEnd?.();
-          stopConversation();
+          // Server-side idle timeout — 2 min of silence. Let the model say goodbye,
+          // then end the session once the goodbye audio finishes.
+          sendDc({
+            type: "response.create",
+            response: {
+              instructions: "The session is ending due to inactivity. Say a brief friendly goodbye in one sentence, then stop.",
+            },
+          });
+          // Give the goodbye audio time to play before tearing down.
+          setTimeout(() => {
+            optsRef.current.onAutoEnd?.();
+            stopConversation();
+          }, 6000);
 
         } else if (t === "response.created") {
           setIsSpeaking(true);

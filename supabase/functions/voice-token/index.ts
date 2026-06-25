@@ -98,9 +98,9 @@ serve(async (req) => {
         input_audio_transcription: { model: "whisper-1" },
         turn_detection: {
           type: "server_vad",
-          threshold: 0.7,
+          threshold: 0.9,
           prefix_padding_ms: 300,
-          silence_duration_ms: 800,
+          silence_duration_ms: 1000,
           create_response: true,
           idle_timeout_ms: 30000,
         },
