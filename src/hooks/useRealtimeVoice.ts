@@ -41,6 +41,10 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
   const lastFailRef = useRef(0);
   const sessionTzRef = useRef("UTC");
   const isFirstSessionRef = useRef(false);
+  const systemPromptRef = useRef("");
+  const isFirstSessionForGreetingRef = useRef(false);
+  const pendingOnboardingRef = useRef(false);
+  const outputBufferActiveRef = useRef(false);
   const echoUnmuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [startupStage, setStartupStage] = useState<string | null>(null);
   const [startupElapsedMs, setStartupElapsedMs] = useState(0);
@@ -145,6 +149,8 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
     if (echoUnmuteTimerRef.current) { clearTimeout(echoUnmuteTimerRef.current); echoUnmuteTimerRef.current = null; }
     pendingActionRef.current = null;
     handledCallsRef.current.clear();
+    outputBufferActiveRef.current = false;
+    isFirstSessionForGreetingRef.current = false;
     dcRef.current?.close();
     dcRef.current = null;
     pcRef.current?.close();
@@ -207,7 +213,15 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
       if (tokenErr) throw new Error(tokenErr.message || "Failed to get voice token");
       if (!tokenData?.client_secret) throw new Error("No client_secret in response");
       isFirstSessionRef.current = tokenData.isFirstSession === true;
-      if (isFirstSessionRef.current) localStorage.setItem("normy_voice_onboarded", "1");
+      systemPromptRef.current = tokenData.systemPrompt || "";
+      isFirstSessionForGreetingRef.current = tokenData.isFirstSession === true;
+      if (tokenData.isFirstSession === true) {
+        // Don't mark done yet — only after user actually speaks their first utterance
+        pendingOnboardingRef.current = true;
+      } else {
+        // Already onboarded — ensure localStorage is in sync
+        localStorage.setItem("normy_voice_onboarded", "1");
+      }
 
       // If stopConversation() fired while we were awaiting (e.g. unmount, navigate
       // away), release the mic stream the browser just granted and bail out.
@@ -247,39 +261,35 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
         }
 
         if (t === "session.created") {
-          // Push VAD + transcription config. If already baked in server-side this
-          // is a no-op; if server fell back to bare session this ensures VAD is set.
+          // Apply real instructions + VAD + transcription via session.update.
+          // Initial session from voice-token has tools but no instructions/VAD (for parallel startup).
           sendDc({
             type: "session.update",
             session: {
+              instructions: systemPromptRef.current,
+              input_audio_transcription: { model: "whisper-1" },
               turn_detection: {
                 type: "server_vad",
                 threshold: 0.5,
                 prefix_padding_ms: 300,
                 silence_duration_ms: 800,
                 create_response: true,
+                idle_timeout_ms: 30000,
               },
             },
           });
-          // First-time user: trigger the onboarding greeting immediately so
-          // the agent speaks before the user has to say anything.
-          if (isFirstSessionRef.current) {
-            isFirstSessionRef.current = false;
-            sendDc({ type: "response.create" });
-          }
-          // Session is live now. Don't block UI on session.updated — if the
-          // session.update above fails (e.g. bad param), the session still works
-          // because VAD is baked in server-side by voice-token.
           if (startupTimerRef.current) { clearInterval(startupTimerRef.current); startupTimerRef.current = null; }
           setStartupStage(null);
-          setConversationActive(true);
-          setIsConnecting(false);
+          // conversationActive set on session.updated (after instructions are applied)
 
         } else if (t === "session.updated") {
-          // Belt-and-suspenders: also mark active if session.created handler
-          // somehow didn't run.
           setConversationActive(true);
           setIsConnecting(false);
+          // Greeting fires here (after real instructions applied) not on session.created.
+          if (isFirstSessionForGreetingRef.current) {
+            isFirstSessionForGreetingRef.current = false;
+            sendDc({ type: "response.create" });
+          }
 
         } else if (t === "input_audio_buffer.timeout_triggered") {
           // Server-side idle timeout fired — user went quiet after assistant finished.
@@ -297,7 +307,11 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
           }
 
         } else if (t === "response.done") {
-          setIsSpeaking(false);
+          // Only clear isSpeaking for non-audio responses (tools, text-only).
+          // Audio responses: isSpeaking cleared by output_audio_buffer.stopped.
+          if (!outputBufferActiveRef.current) {
+            setIsSpeaking(false);
+          }
           // Secondary function call extraction — deduplication prevents double execution.
           const output = event.response?.output || [];
           for (const item of output) {
@@ -322,15 +336,31 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
           const text: string = event.transcript || "";
           if (text && !text.trim().startsWith("{")) {
             optsRef.current.onTranscript?.("USER", text);
+            // First utterance marks onboarding complete — greeting was heard, user engaged.
+            if (pendingOnboardingRef.current) {
+              pendingOnboardingRef.current = false;
+              localStorage.setItem("normy_voice_onboarded", "1");
+              supabase.auth.getUser().then(({ data: { user } }) => {
+                if (user) {
+                  supabase.from("user_preferences")
+                    .update({ voice_onboarded: true })
+                    .eq("user_id", user.id)
+                    .then(() => {});
+                }
+              });
+            }
           }
 
         } else if (t === "output_audio_buffer.started") {
+          outputBufferActiveRef.current = true;
           // Mute mic while agent audio plays — prevents speaker bleed from
           // triggering VAD on mobile and causing echo double-responses.
           if (echoUnmuteTimerRef.current) { clearTimeout(echoUnmuteTimerRef.current); echoUnmuteTimerRef.current = null; }
           micStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = false; });
 
         } else if (t === "output_audio_buffer.stopped") {
+          outputBufferActiveRef.current = false;
+          setIsSpeaking(false); // Audio done — isSpeaking tracks playback, not generation
           // Unmute after short delay to let acoustic reverb die down.
           if (echoUnmuteTimerRef.current) clearTimeout(echoUnmuteTimerRef.current);
           echoUnmuteTimerRef.current = setTimeout(() => {

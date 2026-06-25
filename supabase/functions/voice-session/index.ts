@@ -120,14 +120,6 @@ serve(async (req) => {
     const workContext = (prefsRes.data?.work_context || "").trim();
     const isFirstSession = requestedFirstSession && !prefsRes.data?.voice_onboarded;
 
-    // Mark onboarded now so repeat fast-reconnects don't re-trigger the greeting.
-    if (isFirstSession) {
-      admin.from("user_preferences")
-        .update({ voice_onboarded: true })
-        .eq("user_id", user.id)
-        .then(() => {}); // fire-and-forget; don't block the response
-    }
-
     let prompt = `You are ${resolvedAgentName}, voice EA for ${displayName}. Today: ${today}, ${timeNow} (${tz}).${workContext ? `\nCONTEXT: ${workContext}` : ""}
 
 VOICE: 1 sentence default (2 max). No markdown/lists/filler/preamble. Short confirms: "Sent." "Done." Ask 1 question if detail missing.
