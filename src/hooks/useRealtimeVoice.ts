@@ -34,17 +34,17 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const activeRef = useRef(false);
+  const sessionIdRef = useRef(0);
   const pendingActionRef = useRef<{ name: string; args: Record<string, unknown> } | null>(null);
   // Track which call_ids we've already handled to prevent double-execution
   // (function calls can arrive in both response.output_item.done and response.done).
   const handledCallsRef = useRef<Set<string>>(new Set());
   const lastFailRef = useRef(0);
   const sessionTzRef = useRef("UTC");
-  const isFirstSessionRef = useRef(false);
-  const systemPromptRef = useRef("");
-  const isFirstSessionForGreetingRef = useRef(false);
+
   const pendingOnboardingRef = useRef(false);
   const outputBufferActiveRef = useRef(false);
+  const greetingTriggeredRef = useRef(false);
   const echoUnmuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [startupStage, setStartupStage] = useState<string | null>(null);
   const [startupElapsedMs, setStartupElapsedMs] = useState(0);
@@ -150,7 +150,7 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
     pendingActionRef.current = null;
     handledCallsRef.current.clear();
     outputBufferActiveRef.current = false;
-    isFirstSessionForGreetingRef.current = false;
+    greetingTriggeredRef.current = false;
     dcRef.current?.close();
     dcRef.current = null;
     pcRef.current?.close();
@@ -160,6 +160,7 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
     micStreamRef.current = null;
     if (audioElRef.current) {
       audioElRef.current.srcObject = null;
+      audioElRef.current.remove();
       audioElRef.current = null;
     }
   }, []);
@@ -169,6 +170,7 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
     if (Date.now() - lastFailRef.current < 3000) return;
     setError(null);
     activeRef.current = true;
+    const mySessionId = ++sessionIdRef.current;
     setIsConnecting(true);
     startupStartRef.current = Date.now();
     setStartupElapsedMs(0);
@@ -212,9 +214,6 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
       const { data: tokenData, error: tokenErr } = tokenResult;
       if (tokenErr) throw new Error(tokenErr.message || "Failed to get voice token");
       if (!tokenData?.client_secret) throw new Error("No client_secret in response");
-      isFirstSessionRef.current = tokenData.isFirstSession === true;
-      systemPromptRef.current = tokenData.systemPrompt || "";
-      isFirstSessionForGreetingRef.current = tokenData.isFirstSession === true;
       if (tokenData.isFirstSession === true) {
         // Don't mark done yet — only after user actually speaks their first utterance
         pendingOnboardingRef.current = true;
@@ -239,6 +238,8 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
 
       const audioEl = document.createElement("audio");
       audioEl.autoplay = true;
+      audioEl.style.display = "none";
+      document.body.appendChild(audioEl);
       audioElRef.current = audioEl;
       pc.ontrack = (e) => { audioEl.srcObject = e.streams[0]; };
 
@@ -261,16 +262,13 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
         }
 
         if (t === "session.created") {
-          // Apply real instructions + VAD + transcription via session.update.
-          // Initial session from voice-token has tools but no instructions/VAD (for parallel startup).
+          // Reinforce VAD config client-side. Higher threshold reduces background noise triggers.
           sendDc({
             type: "session.update",
             session: {
-              instructions: systemPromptRef.current,
-              input_audio_transcription: { model: "whisper-1" },
               turn_detection: {
                 type: "server_vad",
-                threshold: 0.5,
+                threshold: 0.7,
                 prefix_padding_ms: 300,
                 silence_duration_ms: 800,
                 create_response: true,
@@ -280,14 +278,16 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
           });
           if (startupTimerRef.current) { clearInterval(startupTimerRef.current); startupTimerRef.current = null; }
           setStartupStage(null);
-          // conversationActive set on session.updated (after instructions are applied)
+          setConversationActive(true);
+          setIsConnecting(false);
 
         } else if (t === "session.updated") {
           setConversationActive(true);
           setIsConnecting(false);
-          // Greeting fires here (after real instructions applied) not on session.created.
-          if (isFirstSessionForGreetingRef.current) {
-            isFirstSessionForGreetingRef.current = false;
+          // Always greet on connect — prompt controls content (full intro vs short Hi).
+          // Fires on session.updated so VAD config is confirmed before agent speaks.
+          if (!greetingTriggeredRef.current) {
+            greetingTriggeredRef.current = true;
             sendDc({ type: "response.create" });
           }
 
@@ -375,13 +375,14 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
           const msg: string = event.error?.message || JSON.stringify(event.error);
           console.error("[RealtimeVoice] error event:", event.error);
           const isFatal = !msg.includes("session.update");
-          if (isFatal) setError("Voice error — tap the mic to restart.");
+          if (isFatal) { setError("Voice error — tap the mic to restart."); stopConversation(); }
         }
       };
 
-      dc.onclose = () => { if (activeRef.current) stopConversation(); };
+      dc.onclose = () => { if (activeRef.current && sessionIdRef.current === mySessionId) stopConversation(); };
 
       pc.oniceconnectionstatechange = () => {
+        if (sessionIdRef.current !== mySessionId) return;
         const s = pc.iceConnectionState;
         if (s === "failed" || s === "disconnected") {
           setError("Voice connection dropped — tap the mic to restart.");

@@ -61,60 +61,86 @@ serve(async (req) => {
     const devMode = body.devMode === true;
     const firstSession = body.firstSession === true;
 
-    // Run voice-session context fetch and OpenAI token mint in parallel to reduce startup latency.
-    // OpenAI gets tools + bare session; instructions/VAD/transcription applied by client via session.update.
-    const [sessionCtx, oaiResult] = await Promise.all([
-      (async () => {
-        try {
-          const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/voice-session`, {
-            method: "POST",
-            headers: {
-              Authorization: authHeader,
-              apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ tz, agentName, devMode, firstSession }),
-            signal: AbortSignal.timeout(8_000),
-          });
-          if (res.ok) {
-            const d = await res.json();
-            if (d.systemPrompt) return d as { systemPrompt: string; isFirstSession: boolean };
-          }
-        } catch (e) {
-          console.warn("[voice-token] voice-session fetch failed, using fallback:", e);
+    // Fetch system prompt from voice-session (keeps context logic in one place).
+    let systemPrompt = FALLBACK_PROMPT;
+    let sessionTools: typeof VOICE_TOOLS | [] = [];
+    let isFirstSession = false;
+    try {
+      const sessionRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/voice-session`, {
+        method: "POST",
+        headers: {
+          Authorization: authHeader,
+          apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tz, agentName, devMode, firstSession }),
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (sessionRes.ok) {
+        const d = await sessionRes.json();
+        if (d.systemPrompt) {
+          systemPrompt = d.systemPrompt;
+          sessionTools = VOICE_TOOLS;
+          isFirstSession = d.isFirstSession === true;
         }
-        return null;
-      })(),
-      (async () => {
-        const oaiRes = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            session: {
-              type: "realtime",
-              model: OPENAI_REALTIME_MODEL,
-              audio: { output: { voice: voiceId } },
-              tools: VOICE_TOOLS,
-            },
-          }),
-          signal: AbortSignal.timeout(20_000),
-        });
-        if (!oaiRes.ok) {
-          const errText = await oaiRes.text().catch(() => "");
-          console.error("[voice-token] OpenAI session error:", oaiRes.status, errText);
-          throw new Error(`Failed to create voice session (${oaiRes.status})`);
-        }
-        return await oaiRes.json();
-      })(),
-    ]);
+      }
+    } catch (e) {
+      console.warn("[voice-token] voice-session fetch failed, using fallback:", e);
+    }
 
-    const systemPrompt = sessionCtx?.systemPrompt ?? FALLBACK_PROMPT;
-    const isFirstSession = sessionCtx?.isFirstSession === true;
+    const buildSession = (withVad: boolean) => ({
+      type: "realtime",
+      model: OPENAI_REALTIME_MODEL,
+      audio: { output: { voice: voiceId } },
+      instructions: systemPrompt,
+      tools: sessionTools,
+      ...(withVad ? {
+        input_audio_transcription: { model: "whisper-1" },
+        turn_detection: {
+          type: "server_vad",
+          threshold: 0.7,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 800,
+          create_response: true,
+          idle_timeout_ms: 30000,
+        },
+      } : {}),
+    });
 
-    return new Response(JSON.stringify({ client_secret: oaiResult.value, systemPrompt, isFirstSession }), {
+    // Mint ephemeral OpenAI key. Try with VAD config first; fall back to bare session if rejected.
+    let oaiRes = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ session: buildSession(true) }),
+      signal: AbortSignal.timeout(20_000),
+    });
+
+    if (!oaiRes.ok && (oaiRes.status === 400 || oaiRes.status === 422)) {
+      console.warn("[voice-token] VAD config rejected, retrying without it");
+      oaiRes = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ session: buildSession(false) }),
+        signal: AbortSignal.timeout(20_000),
+      });
+    }
+
+    if (!oaiRes.ok) {
+      const errText = await oaiRes.text().catch(() => "");
+      console.error("[voice-token] OpenAI session error:", oaiRes.status, errText);
+      return new Response(JSON.stringify({ error: "Failed to create voice session", oaiStatus: oaiRes.status, oaiError: errText }), {
+        status: 502, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    const session = await oaiRes.json();
+    return new Response(JSON.stringify({ client_secret: session.value, isFirstSession }), {
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
 

@@ -9,6 +9,11 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 const NYLAS_BASE = "https://api.us.nylas.com";
 
+// Strip PostgREST filter-syntax characters to prevent filter injection via LLM-supplied queries.
+function sanitizeQuery(q: string): string {
+  return q.replace(/[(),.:*\\]/g, " ").trim();
+}
+
 async function getNylasGrant(adminClient: any, userId: string): Promise<{ grantId: string; email: string | null } | null> {
   const { data: grant, error } = await adminClient
     .from("nylas_grants")
@@ -101,6 +106,7 @@ async function executeToolCall(
         method: "POST",
         headers: { Authorization: `Bearer ${nylasApiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(8_000),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -155,6 +161,7 @@ async function executeToolCall(
         method: "POST",
         headers: { Authorization: `Bearer ${nylasApiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(eventBody),
+        signal: AbortSignal.timeout(8_000),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -191,6 +198,7 @@ async function executeToolCall(
         method: "PUT",
         headers: { Authorization: `Bearer ${nylasApiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(updateBody),
+        signal: AbortSignal.timeout(8_000),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -206,6 +214,7 @@ async function executeToolCall(
       const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}?calendar_id=primary&notify_participants=${notify}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${nylasApiKey}` },
+        signal: AbortSignal.timeout(8_000),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -250,6 +259,7 @@ async function executeToolCall(
     if (name === "read_email") {
       const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/messages/${args.messageId}`, {
         headers: { Authorization: `Bearer ${nylasApiKey}` },
+        signal: AbortSignal.timeout(8_000),
       });
       if (!res.ok) {
         if (res.status === 401) return { success: false, message: "Email connection expired. Please reconnect via Integrations." };
@@ -282,6 +292,7 @@ async function executeToolCall(
       const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/messages/${args.messageId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${nylasApiKey}` },
+        signal: AbortSignal.timeout(8_000),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -304,7 +315,7 @@ async function executeToolCall(
 
     if (name === "get_inbox") {
       const category = typeof args.category === "string" ? args.category : null;
-      const query = typeof args.query === "string" ? args.query.trim() : null;
+      const query = typeof args.query === "string" ? sanitizeQuery(args.query) : null;
       const limit = Math.min(Number(args.limit) || 10, 20);
 
       let q = adminClient
@@ -370,11 +381,12 @@ async function executeToolCall(
 
     if (name === "search_contacts") {
       if (!args.query) return { success: false, message: "Provide a search query." };
+      const safeQuery = sanitizeQuery(String(args.query));
       const { data, error } = await adminClient
         .from("contacts")
         .select("id, name, email, company, role, phone, is_vip")
         .eq("user_id", userId)
-        .or(`name.ilike.%${args.query}%,email.ilike.%${args.query}%,company.ilike.%${args.query}%`)
+        .or(`name.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,company.ilike.%${safeQuery}%`)
         .order("is_vip", { ascending: false })
         .limit(5);
       if (error) return { success: false, message: error.message };

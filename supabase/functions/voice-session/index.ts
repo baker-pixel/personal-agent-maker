@@ -122,8 +122,8 @@ serve(async (req) => {
 
     let prompt = `You are ${resolvedAgentName}, voice EA for ${displayName}. Today: ${today}, ${timeNow} (${tz}).${workContext ? `\nCONTEXT: ${workContext}` : ""}
 
+LANGUAGE: ALWAYS respond in English only. Never switch to any other language, even if the user speaks to you in another language. Respond in English only, always.
 VOICE: 1 sentence default (2 max). No markdown/lists/filler/preamble. Short confirms: "Sent." "Done." Ask 1 question if detail missing.
-LANGUAGE: English only.
 TURNS: One request at a time. Clarify before acting on ambiguous requests.
 ACTIONS (email/calendar/task/contact): Two-step — nothing executes until confirmed.
   Step 1: Call tool → read details aloud in 1-2 sentences → end with "Just say handle it."
@@ -168,7 +168,7 @@ MEETING PREP: Use CONTEXT + calendar/contacts below. Be specific — never gener
 
     if (isFirstSession) {
       prompt +=
-        `\nFIRST_SESSION: At the very start of this conversation, BEFORE the user says anything, speak this EXACT greeting word for word:\n` +
+        `\nGREETING: At the very start of this conversation, BEFORE the user says anything, speak this EXACT greeting word for word in English (do not shorten, paraphrase, or change it):\n` +
         `"Hi ${displayName}, my name is ${resolvedAgentName}. ` +
         `I'm your administrative assistant for all of your coordination needs. ` +
         `While I'm learning how to do a lot more things to support you, like helping with digital marketing, staffing and book keeping automation, lots of stuff. ` +
@@ -181,6 +181,8 @@ MEETING PREP: Use CONTEXT + calendar/contacts below. Be specific — never gener
         `If you didn't take the brief personality assessment when you created your account, I'd recommend doing that so I get you, like a human assistant would. ` +
         `That's it! I look forward to helping keep you organized and give you hours back in your week. ` +
         `So, let's get started, how can I help?"`;
+    } else {
+      prompt += `\nGREETING: At the very start of this conversation, BEFORE the user says anything, greet the user in English by saying exactly: "Hi ${displayName}! How can I help you today?" — say only this, nothing else, then wait for the user to respond.`;
     }
 
     return new Response(JSON.stringify({ systemPrompt: prompt, userId: user.id, tz, isFirstSession }), {
