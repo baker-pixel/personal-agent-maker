@@ -506,11 +506,13 @@ export default function Settings() {
                   });
                   if (error) throw new Error(error.message);
                   if (data?.already_completed) {
+                    setAssessmentStatus("success");
                     toast({ title: "Assessment already completed", description: "Your personality profile is up to date." });
                     return;
                   }
                   if (data?.error) throw new Error(data.error);
                   if (!data?.assessment_url) throw new Error("No assessment URL returned");
+                  localStorage.setItem("assessment_origin", "settings");
                   window.location.href = data.assessment_url;
                 } catch (err: any) {
                   toast({ title: "Couldn't start assessment", description: err?.message || "Please try again.", variant: "destructive" });

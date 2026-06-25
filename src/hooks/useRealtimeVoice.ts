@@ -46,6 +46,7 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
   const outputBufferActiveRef = useRef(false);
   const greetingTriggeredRef = useRef(false);
   const echoUnmuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [startupStage, setStartupStage] = useState<string | null>(null);
   const [startupElapsedMs, setStartupElapsedMs] = useState(0);
   const startupStartRef = useRef(0);
@@ -137,8 +138,29 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
     });
   }, [callVoiceTools, replyWithToolResult]);
 
+  const stopConversationRef = useRef<() => void>(() => {});
+
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = setTimeout(() => {
+      if (!activeRef.current) return;
+      sendDc({
+        type: "response.create",
+        response: {
+          instructions: "The session is ending due to inactivity. Say a brief friendly goodbye in one sentence, then stop.",
+        },
+      });
+      setTimeout(() => {
+        optsRef.current.onAutoEnd?.();
+        stopConversationRef.current();
+      }, 6000);
+    }, 30_000);
+  }, [sendDc]);
+
   const stopConversation = useCallback(() => {
     activeRef.current = false;
+    localStorage.removeItem("normy_voice_session_active");
+    if (idleTimerRef.current) { clearTimeout(idleTimerRef.current); idleTimerRef.current = null; }
     setConversationActive(false);
     setIsConnecting(false);
     setIsSpeaking(false);
@@ -164,12 +186,14 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
       audioElRef.current = null;
     }
   }, []);
+  stopConversationRef.current = stopConversation;
 
   const startConversation = useCallback(async () => {
     if (activeRef.current || !realtimeEnabled()) return;
     if (Date.now() - lastFailRef.current < 3000) return;
     setError(null);
     activeRef.current = true;
+    localStorage.setItem("normy_voice_session_active", "1");
     const mySessionId = ++sessionIdRef.current;
     setIsConnecting(true);
     startupStartRef.current = Date.now();
@@ -293,6 +317,8 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
           }, 6000);
 
         } else if (t === "response.created") {
+          // Agent is speaking — pause the idle timer so it doesn't fire mid-response.
+          if (idleTimerRef.current) { clearTimeout(idleTimerRef.current); idleTimerRef.current = null; }
           setIsSpeaking(true);
 
         } else if (t === "response.output_item.done") {
@@ -357,6 +383,8 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
         } else if (t === "output_audio_buffer.stopped") {
           outputBufferActiveRef.current = false;
           setIsSpeaking(false); // Audio done — isSpeaking tracks playback, not generation
+          // Agent finished speaking — start 30s idle countdown.
+          resetIdleTimer();
           // Unmute after short delay to let acoustic reverb die down.
           if (echoUnmuteTimerRef.current) clearTimeout(echoUnmuteTimerRef.current);
           echoUnmuteTimerRef.current = setTimeout(() => {
@@ -365,6 +393,8 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
           }, 400);
 
         } else if (t === "input_audio_buffer.speech_started") {
+          // User is speaking — cancel idle timer.
+          if (idleTimerRef.current) { clearTimeout(idleTimerRef.current); idleTimerRef.current = null; }
           setIsSpeaking(false);
 
         } else if (t === "error") {

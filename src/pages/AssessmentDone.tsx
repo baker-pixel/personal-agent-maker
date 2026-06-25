@@ -34,12 +34,18 @@ export default function AssessmentDone() {
 
         setState(status === "success" ? "success" : status === "partial" ? "partial" : "error");
 
+        const origin = localStorage.getItem("assessment_origin");
+        localStorage.removeItem("assessment_origin");
+        const returnPath = origin === "settings" ? "/settings#profile" : "/onboarding?resumeStep=5";
+
         setTimeout(() => {
-          navigate("/onboarding?resumeStep=5", { replace: true });
+          navigate(returnPath, { replace: true });
         }, 2200);
       } catch {
         setState("error");
-        setTimeout(() => navigate("/onboarding?resumeStep=5", { replace: true }), 2500);
+        const origin = localStorage.getItem("assessment_origin");
+        localStorage.removeItem("assessment_origin");
+        setTimeout(() => navigate(origin === "settings" ? "/settings#profile" : "/onboarding?resumeStep=5", { replace: true }), 2500);
       }
     };
 
