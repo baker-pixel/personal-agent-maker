@@ -262,7 +262,9 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
         }
 
         if (t === "session.created") {
-          // Reinforce VAD config client-side. Higher threshold reduces background noise triggers.
+          // Reinforce VAD config client-side — in case session creation used the
+          // fallback (no-VAD) path. idle_timeout_ms omitted: set at creation and
+          // triggers an error in some model versions when sent client-side.
           sendDc({
             type: "session.update",
             session: {
@@ -272,7 +274,6 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
                 prefix_padding_ms: 300,
                 silence_duration_ms: 800,
                 create_response: true,
-                idle_timeout_ms: 30000,
               },
             },
           });
@@ -280,16 +281,16 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
           setStartupStage(null);
           setConversationActive(true);
           setIsConnecting(false);
-
-        } else if (t === "session.updated") {
-          setConversationActive(true);
-          setIsConnecting(false);
-          // Always greet on connect — prompt controls content (full intro vs short Hi).
-          // Fires on session.updated so VAD config is confirmed before agent speaks.
+          // Greet here (not session.updated) so it fires even if session.update errors.
+          // VAD is already configured at session creation, so no need to wait for updated.
           if (!greetingTriggeredRef.current) {
             greetingTriggeredRef.current = true;
             sendDc({ type: "response.create" });
           }
+
+        } else if (t === "session.updated") {
+          setConversationActive(true);
+          setIsConnecting(false);
 
         } else if (t === "input_audio_buffer.timeout_triggered") {
           // Server-side idle timeout fired — user went quiet after assistant finished.
@@ -373,8 +374,14 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
 
         } else if (t === "error") {
           const msg: string = event.error?.message || JSON.stringify(event.error);
+          const code: string = event.error?.code || "";
           console.error("[RealtimeVoice] error event:", event.error);
-          const isFatal = !msg.includes("session.update");
+          // session.update errors are non-fatal — VAD reinforcement is best-effort.
+          const isSessionUpdateErr =
+            msg.includes("session.update") ||
+            code.startsWith("session.update") ||
+            (event.error?.param || "").startsWith("session.");
+          const isFatal = !isSessionUpdateErr;
           if (isFatal) { setError("Voice error — tap the mic to restart."); stopConversation(); }
         }
       };

@@ -140,7 +140,8 @@ serve(async (req) => {
     }
 
     const session = await oaiRes.json();
-    return new Response(JSON.stringify({ client_secret: session.value, isFirstSession }), {
+    const clientSecret = session.value ?? session.client_secret?.value;
+    return new Response(JSON.stringify({ client_secret: clientSecret, isFirstSession }), {
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
 
