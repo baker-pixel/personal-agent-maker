@@ -436,6 +436,75 @@ const TEXT_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "read_email",
+      description: "Fetch and read the full body of a specific email by its message ID. Use when user asks to read, open, or show an email.",
+      parameters: {
+        type: "object",
+        properties: {
+          messageId: { type: "string", description: "Nylas message ID from [msg:...] in inbox data" },
+        },
+        required: ["messageId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_inbox",
+      description: "Fetch fresh emails from the inbox. Use when user asks about recent emails, what came in, or emails not already shown.",
+      parameters: {
+        type: "object",
+        properties: {
+          category: { type: "string", description: "Filter: 'urgent', 'needs_reply', or 'all'. Defaults to urgent+needs_reply." },
+          query: { type: "string", description: "Optional keyword to filter by sender name, address, or subject." },
+          limit: { type: "number", description: "Max emails to return (1–20, default 10)." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_calendar",
+      description: "Fetch fresh calendar events. Use when user asks about upcoming meetings, schedule, or events not already shown.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: { type: "number", description: "How many days ahead to fetch (1–14, default 7)." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_contacts",
+      description: "Search contacts by name, email, or company. Use when the user asks about a person or needs their email and they're not in the contact list.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Name, email, or company to search for." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_tasks",
+      description: "Fetch open tasks and action items. Use when user asks about tasks, to-dos, or follow-ups not already shown.",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", description: "Filter by status: 'open', 'in_progress', or 'completed'. Defaults to open+in_progress." },
+        },
+      },
+    },
+  },
 ];
 
 interface ToolExecutionContext {
@@ -444,6 +513,7 @@ interface ToolExecutionContext {
   nylasApiKey: string;
   adminClient: any;
   tz: string;
+  justCreatedEventIds: Set<string>;
 }
 
 // Offset (ms) of `timeZone` from UTC at instant `ts`
@@ -478,6 +548,12 @@ function parseLocalIsoMs(iso: string, timeZone: string): number {
   return ts;
 }
 
+function sanitizeQuery(q: string): string {
+  return q.replace(/[(),.:*\\]/g, " ").trim();
+}
+
+const NO_GRANT_TOOLS = new Set(["save_contact", "create_task", "delete_contact", "get_inbox", "search_contacts", "get_tasks"]);
+
 async function executeToolCall(
   name: string,
   args: Record<string, any>,
@@ -485,7 +561,7 @@ async function executeToolCall(
 ): Promise<{ success: boolean; message: string; data?: any }> {
   const { userId, grantId, nylasApiKey, adminClient, tz } = ctx;
 
-  if (name !== "save_contact" && !grantId) {
+  if (!NO_GRANT_TOOLS.has(name) && !grantId) {
     return { success: false, message: "Google account not connected. Please reconnect via Integrations." };
   }
 
@@ -579,10 +655,12 @@ async function executeToolCall(
       const inviteNote = validAttendees.length > 0
         ? ` — invites sent to ${validAttendees.map((a: any) => a.name || a.email).join(", ")}`
         : "";
+      const createdId = data.data?.id;
+      if (createdId) ctx.justCreatedEventIds.add(createdId);
       return {
         success: true,
         message: `Event "${args.summary}" created on the calendar${inviteNote}`,
-        data: { eventId: data.data?.id, htmlLink: data.data?.html_link },
+        data: { eventId: createdId, htmlLink: data.data?.html_link },
       };
     }
 
@@ -601,7 +679,10 @@ async function executeToolCall(
         if (valid.length > 0) updateBody.participants = valid.map((a: any) => ({ email: a.email, ...(a.name ? { name: a.name } : {}), status: "noreply" }));
       }
 
-      const notify = args.notifyAttendees !== false ? "true" : "false";
+      // Suppress re-notification if this event was just created in this same loop —
+      // the creation already sent invites; a follow-up update must not re-fire them.
+      const notifyBool = args.notifyAttendees !== false && !ctx.justCreatedEventIds.has(args.eventId);
+      const notify = notifyBool ? "true" : "false";
       const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events/${args.eventId}?calendar_id=primary&notify_participants=${notify}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${nylasApiKey}`, "Content-Type": "application/json" },
@@ -685,6 +766,136 @@ async function executeToolCall(
         .eq("user_id", userId);
       if (error) return { success: false, message: error.message || "Failed to delete contact" };
       return { success: true, message: `Contact "${args.name}" deleted` };
+    }
+
+    if (name === "read_email") {
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/messages/${args.messageId}`, {
+        headers: { Authorization: `Bearer ${nylasApiKey}` },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!res.ok) {
+        if (res.status === 401) return { success: false, message: "Email connection expired. Please reconnect via Integrations." };
+        if (res.status === 404) return { success: false, message: "That email was not found — it may have been deleted." };
+        return { success: false, message: "Could not fetch the email right now." };
+      }
+      const data = await res.json();
+      const msg = data.data || {};
+      const text = String(msg.body || msg.snippet || "")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 4000);
+      const from = (msg.from || [])[0];
+      return {
+        success: true,
+        message: `Email from ${from?.name || from?.email || "unknown"}, subject "${msg.subject || ""}": ${text || "(no readable content)"}`,
+      };
+    }
+
+    if (name === "get_inbox") {
+      const category = typeof args.category === "string" ? args.category : null;
+      const query = typeof args.query === "string" ? sanitizeQuery(args.query) : null;
+      const limit = Math.min(Number(args.limit) || 10, 20);
+
+      let q = adminClient
+        .from("email_metadata")
+        .select("nylas_message_id, from_name, from_address, subject, category, received_at")
+        .eq("user_id", userId)
+        .gte("received_at", new Date(Date.now() - 24 * 3600_000).toISOString())
+        .is("replied_at", null)
+        .order("priority_score", { ascending: false })
+        .limit(limit);
+
+      if (category === "all") {
+        // no category filter
+      } else if (category) {
+        q = q.in("category", [category]);
+      } else {
+        q = q.in("category", ["urgent", "needs_reply"]);
+      }
+
+      if (query) {
+        q = q.or(`subject.ilike.%${query}%,from_name.ilike.%${query}%,from_address.ilike.%${query}%`);
+      }
+
+      const { data, error } = await q;
+      if (error) return { success: false, message: error.message };
+      if (!data || data.length === 0) return { success: true, message: "No emails matching that criteria in the last 24 hours." };
+      const fmt = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" });
+      const list = data.map((m: any) =>
+        `${m.from_name || m.from_address}: "${m.subject}" [${m.category}] at ${fmt.format(new Date(m.received_at))} [msg:${m.nylas_message_id}]`
+      ).join("\n");
+      return { success: true, message: `${data.length} email(s):\n${list}` };
+    }
+
+    if (name === "get_calendar") {
+      if (!grantId) return { success: false, message: "Google account not connected. Please reconnect via Integrations." };
+      const days = Math.min(Number(args.days) || 7, 14);
+      const start = Math.floor(Date.now() / 1000);
+      const end = start + days * 86400;
+      const params = new URLSearchParams({ calendar_id: "primary", start: String(start), end: String(end), limit: "15" });
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(`${NYLAS_BASE}/v3/grants/${grantId}/events?${params}`, {
+        headers: { Authorization: `Bearer ${nylasApiKey}` }, signal: ctrl.signal,
+      });
+      clearTimeout(t);
+      if (!res.ok) {
+        if (res.status === 401) return { success: false, message: "Calendar connection expired. Please reconnect via Integrations." };
+        return { success: false, message: "Could not fetch calendar right now." };
+      }
+      const data = await res.json();
+      const events = data.data || [];
+      if (events.length === 0) return { success: true, message: `Calendar is clear for the next ${days} days.` };
+      const fmt = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+      const list = events.map((ev: any) => {
+        const when = ev.when?.start_time ? fmt.format(new Date(ev.when.start_time * 1000)) : (ev.when?.start_date || "");
+        const attendees = (ev.participants || []).map((p: any) => p.name || p.email).slice(0, 3).join(", ");
+        return `${when}: ${ev.title || "(untitled)"}${attendees ? ` (${attendees})` : ""} [evt:${ev.id}]`;
+      }).join("\n");
+      return { success: true, message: `${events.length} event(s) in the next ${days} days:\n${list}` };
+    }
+
+    if (name === "search_contacts") {
+      if (!args.query) return { success: false, message: "Provide a search query." };
+      const safeQuery = sanitizeQuery(String(args.query));
+      const { data, error } = await adminClient
+        .from("contacts")
+        .select("id, name, email, company, role, phone, is_vip")
+        .eq("user_id", userId)
+        .or(`name.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,company.ilike.%${safeQuery}%`)
+        .order("is_vip", { ascending: false })
+        .limit(5);
+      if (error) return { success: false, message: error.message };
+      if (!data || data.length === 0) return { success: true, message: `No contacts found matching "${args.query}".` };
+      const list = data.map((c: any) =>
+        `${c.name}${c.email ? ` <${c.email}>` : ""}${c.company ? `, ${c.company}` : ""}${c.role ? ` (${c.role})` : ""}${c.phone ? `, ${c.phone}` : ""}${c.is_vip ? " [VIP]" : ""} [cid:${c.id}]`
+      ).join("\n");
+      return { success: true, message: `${data.length} contact(s) matching "${args.query}":\n${list}` };
+    }
+
+    if (name === "get_tasks") {
+      const status = typeof args.status === "string" ? args.status : null;
+      const statuses = status ? [status] : ["open", "in_progress"];
+      const { data, error } = await adminClient
+        .from("action_items")
+        .select("title, priority, due_date, status")
+        .eq("user_id", userId)
+        .in("status", statuses)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .limit(15);
+      if (error) return { success: false, message: error.message };
+      if (!data || data.length === 0) return { success: true, message: "No open tasks found." };
+      const list = data.map((t: any) =>
+        `${t.title}${t.due_date ? ` (due ${t.due_date})` : ""} [${t.priority}] [${t.status}]`
+      ).join("\n");
+      return { success: true, message: `${data.length} task(s):\n${list}` };
     }
 
     return { success: false, message: `Unknown tool: ${name}` };
@@ -1472,7 +1683,9 @@ You have real-time access to the user's:
 Always use this live context to give specific, actionable answers — never say "I don't have access to your data."
 
 ## TOOLS — USE THEM DIRECTLY (NO CONFIRMATION NEEDED)
-You have tools: **send_email**, **delete_email**, **create_calendar_event**, **update_calendar_event**, **delete_calendar_event**, **save_contact**, **delete_contact**, **create_task**.
+You have tools: **send_email**, **delete_email**, **create_calendar_event**, **update_calendar_event**, **delete_calendar_event**, **save_contact**, **delete_contact**, **create_task**, **read_email**, **get_inbox**, **get_calendar**, **search_contacts**, **get_tasks**.
+
+**REFRESH tools (read_email, get_inbox, get_calendar, search_contacts, get_tasks):** Call these immediately and without confirmation when the user asks about emails, contacts, events, or tasks that aren't already shown. No "handle it" needed — just call the tool and show the results.
 
 **CRITICAL: The ONLY way to perform an action is to emit a real tool call.** Writing words like "Done — email sent" does NOT send anything. NEVER claim an action happened unless you called the tool in this conversation turn AND received a success result back. If you did not call the tool, the action did not happen — say so honestly instead of pretending.
 
@@ -1503,6 +1716,7 @@ Only after the tool returns success, confirm in one short sentence ("Done — se
 **update_calendar_event rules:**
 - eventId MUST come from REAL CALENDAR DATA in this prompt. Never invent one.
 - If event not found in REAL CALENDAR DATA, tell user you can't see it.
+- If you just called create_calendar_event in this same turn, do NOT immediately call update_calendar_event — the creation already captured all fields.
 
 **delete_calendar_event rules:**
 - eventId MUST come from REAL CALENDAR DATA. Never invent one.
@@ -1656,6 +1870,7 @@ ${conversationMemoryNote}${realDataContext}`;
         nylasApiKey,
         adminClient: authedAdminClient,
         tz,
+        justCreatedEventIds: new Set<string>(),
       };
 
       const loopMessages: any[] = [
