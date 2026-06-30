@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useAnnieChat } from "@/hooks/useAnnieChat";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, ChevronLeft, ChevronRight, X, Send, Mic, MicOff, Sparkles, Loader2, Calendar, RefreshCw, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, X, Send, Sparkles, Loader2, Calendar, RefreshCw, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { VoiceWaveform } from "@/components/VoiceWaveform";
 
 import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -116,15 +114,10 @@ export default function CalendarView() {
     allDay: false,
   });
   const annieChat = useAnnieChat(agentName);
-  const speech = useSpeechRecognition({
-    onResult: (text) => setAgentInput((prev) => (prev ? prev + " " : "") + text),
-  });
-
   const calendarConnected = isConnected("google-calendar");
 
   const handleAgentSend = () => {
     if (!agentInput.trim()) return;
-    speech.stopListening();
     annieChat.send(agentInput.trim());
     setAgentInput("");
   };
@@ -806,10 +799,6 @@ export default function CalendarView() {
               )}
               <div className="flex gap-2">
                 <Input value={agentInput} onChange={(e) => setAgentInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAgentSend()} placeholder={`Tell ${agentName} what to do...`} className="flex-1" />
-                <VoiceWaveform isActive={speech.isListening} />
-                <Button size="icon" variant="ghost" onClick={speech.toggleListening} className={speech.isListening ? "text-destructive" : ""}>
-                  {speech.isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                </Button>
                 <Button size="icon" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleAgentSend}>
                   <Send className="w-4 h-4" />
                 </Button>

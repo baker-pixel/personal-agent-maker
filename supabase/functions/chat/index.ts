@@ -258,11 +258,11 @@ async function summarizeOlderMessages(older: any[], apiKey: string): Promise<str
     .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${(m.content || "").slice(0, 600)}`)
     .join("\n");
   try {
-    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -921,8 +921,8 @@ serve(async (req) => {
   try {
     const { messages, agentName, clientTimezone, clientNowIso, mode } = await req.json();
     const isVoice = mode === "voice";
-    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
-    if (!GROQ_API_KEY) {
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
       return new Response(
         JSON.stringify({ error: "The AI service is not configured yet. Please contact support.", code: "AI_NOT_CONFIGURED" }),
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -937,7 +937,7 @@ serve(async (req) => {
     if (Array.isArray(messages) && messages.length > SUMMARY_TRIGGER) {
       const older = messages.slice(0, messages.length - RECENT_TURNS_KEEP);
       const recent = messages.slice(messages.length - RECENT_TURNS_KEEP);
-      const summary = await summarizeOlderMessages(older, GROQ_API_KEY);
+      const summary = await summarizeOlderMessages(older, OPENAI_API_KEY);
       if (summary) {
         conversationMemoryNote = `\n\n## Earlier Conversation Summary\n${summary}\n`;
       }
@@ -1393,11 +1393,11 @@ Location: ${e.location || "None"}\n`;
                 const sum = (s.summary || "").slice(0, 300);
                 return `#${idx} id=${s.id}\nTitle: ${s.title || "(untitled)"}\nWho: ${att || "n/a"} | Where: ${s.location || "n/a"} | Topics: ${top || "n/a"}\nSummary: ${sum}\nKey points: ${kp}`;
               }).join("\n---\n");
-              const aiResp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+              const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
                 method: "POST",
-                headers: { Authorization: `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+                headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  model: "llama-3.3-70b-versatile",
+                  model: "gpt-4o-mini",
                   messages: [
                     { role: "system", content: "You score how semantically relevant each meeting session is to the user's recall question. Return a score 0.0-1.0 per session id. Be strict — only sessions plausibly answering the question score above 0.5." },
                     { role: "user", content: `Question: "${latestUser}"\n\nSessions:\n${briefs}` },
@@ -1897,11 +1897,11 @@ ${conversationMemoryNote}${realDataContext}`;
       while (rounds < MAX_ROUNDS) {
         rounds++;
 
-        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        const res = await groqFetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers: { Authorization: `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+          headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",
+            model: "gpt-4o",
             messages: loopMessages,
             tools: TEXT_TOOLS,
             tool_choice: "auto",
@@ -1987,10 +1987,10 @@ ${conversationMemoryNote}${realDataContext}`;
 
       // Helper: return a streaming response with optional voice metrics tee
       const streamingResponse = async (messages: any[]) => {
-        const streamRes = await groqFetch("https://api.groq.com/openai/v1/chat/completions", {
+        const streamRes = await groqFetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers: { Authorization: `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages, stream: true }),
+          headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "gpt-4o", messages, stream: true }),
         });
         if (!streamRes.ok) {
           const errText = await streamRes.text().catch(() => "");

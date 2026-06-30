@@ -1,14 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAgent } from "@/contexts/AgentContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, Loader2, Mic, MicOff, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck, Shield } from "lucide-react";
+import { Send, Loader2, Sun, MailSearch, Clock, CalendarClock, FileText, Users, FileBarChart, CalendarSearch, PenLine, AlertTriangle, BellRing, CalendarCheck, Shield } from "lucide-react";
 import { ChatMessages } from "./chat/ChatMessages";
 import { ChatHero } from "./chat/ChatHero";
 import { QuickActionGrid } from "./chat/QuickActionGrid";
 import { QuickActionPills } from "./chat/QuickActionPills";
 import { DashboardBriefing } from "./chat/DashboardBriefing";
 import { FileAttachmentButton, AttachmentPreview, type Attachment } from "./chat/FileAttachment";
-import { useVoiceInput } from "@/hooks/useVoiceInput";
 import type { Conversation } from "@/hooks/useConversations";
 
 export type Message = { role: "user" | "assistant"; content: string; attachments?: any[] };
@@ -69,16 +68,6 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const [voiceJustFilled, setVoiceJustFilled] = useState(false);
-
-  const handleVoiceResult = useCallback((text: string) => {
-    setInput((prev) => (prev ? prev + " " + text : text));
-    setVoiceJustFilled(true);
-    setTimeout(() => setVoiceJustFilled(false), 2000);
-    // No auto-focus: prevents mobile keyboard from popping up and accidental submission.
-  }, []);
-
-  const { isListening, isSupported: voiceSupported, startListening, stopAndSubmit } = useVoiceInput(handleVoiceResult);
 
   const uploadAttachments = async (files: Attachment[]): Promise<any[]> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -326,24 +315,10 @@ export const OrchestratorChat = ({ conversationId, onConversationCreated, onSave
           <Shield className="w-3 h-3 text-success" />
           <span className="text-[10px] text-success/80 font-medium">Approval required before any action is executed</span>
         </div>
-        <div className={`bg-card border rounded-2xl shadow-sm input-glow transition-all duration-300 ${voiceJustFilled ? "border-primary/60 ring-2 ring-primary/20 bg-primary/5" : "border-border/50"}`}>
+        <div className="bg-card border border-border/50 rounded-2xl shadow-sm input-glow transition-all duration-300">
           <AttachmentPreview attachments={attachments} onRemove={handleRemoveAttachment} />
           <div className="flex items-end gap-1 p-2">
             <FileAttachmentButton onAdd={handleAddFiles} />
-            {voiceSupported && (
-              <button
-                onClick={isListening ? stopAndSubmit : startListening}
-                className={`shrink-0 p-2.5 rounded-xl transition-all duration-200 ${
-                  isListening
-                    ? "text-destructive bg-destructive/10 animate-pulse"
-                    : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/40"
-                }`}
-                title={isListening ? "Tap to stop recording" : "Tap to speak"}
-                type="button"
-              >
-                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              </button>
-            )}
             <textarea
               ref={inputRef}
               value={input}

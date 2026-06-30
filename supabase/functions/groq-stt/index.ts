@@ -1,9 +1,9 @@
-// Groq STT proxy — receives audio blob, returns transcript via whisper-large-v3-turbo
+// STT proxy — receives audio blob, returns transcript via OpenAI Whisper
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 
-const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
 const rateLimitMap = new Map<string, number[]>();
 const RATE_WINDOW_MS = 60_000;
@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
       return json({ error: "Rate limit exceeded — please wait before requesting more transcriptions." }, 429);
     }
 
-    if (!GROQ_API_KEY) return json({ error: "GROQ_API_KEY not configured" }, 500);
+    if (!OPENAI_API_KEY) return json({ error: "OPENAI_API_KEY not configured" }, 500);
 
     const formData = await req.formData();
     const audioFile = formData.get("audio");
@@ -60,28 +60,27 @@ Deno.serve(async (req) => {
 
     const language = formData.get("language")?.toString();
 
-    const groqForm = new FormData();
-    groqForm.append("file", audioFile, audioFile.name || "audio.webm");
-    groqForm.append("model", "whisper-large-v3-turbo");
-    groqForm.append("response_format", "json");
+    const oaiForm = new FormData();
+    oaiForm.append("file", audioFile, audioFile.name || "audio.webm");
+    oaiForm.append("model", "whisper-1");
+    oaiForm.append("response_format", "json");
     if (language && language !== "auto" && language !== "en-US") {
-      // Groq expects ISO 639-1 (e.g. "en" not "en-US")
-      groqForm.append("language", language.split("-")[0]);
+      oaiForm.append("language", language.split("-")[0]);
     }
 
-    const upstream = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    const upstream = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${GROQ_API_KEY}` },
-      body: groqForm,
+      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}` },
+      body: oaiForm,
     });
 
     if (upstream.status === 429) {
-      return json({ error: "Groq rate limit reached — try again shortly." }, 429);
+      return json({ error: "Rate limit reached — try again shortly." }, 429);
     }
 
     if (!upstream.ok) {
       const errText = await upstream.text();
-      console.error("Groq STT error", upstream.status, errText);
+      console.error("STT error", upstream.status, errText);
       return json({ error: errText, status: upstream.status }, 502);
     }
 
