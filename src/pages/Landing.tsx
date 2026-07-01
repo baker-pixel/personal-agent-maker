@@ -93,7 +93,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Two equal pillars: Bintly (personality) + Humanfluency (agents for normies) */}
+      {/* Two equal pillars: Bintly (personality) + Agents for Normies (accessibility) */}
       <section className="py-14 md:py-20">
         <div className="container max-w-5xl px-5">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="text-center mb-10 md:mb-14">
