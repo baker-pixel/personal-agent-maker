@@ -98,8 +98,8 @@ export default function Landing() {
         <div className="container max-w-5xl px-5">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="text-center mb-10 md:mb-14">
             <motion.p variants={fadeUp} custom={0} className="text-accent font-medium text-sm tracking-widest uppercase mb-4">What Normy Is</motion.p>
-            <motion.h2 variants={fadeUp} custom={1} className="font-display text-2xl md:text-5xl font-bold tracking-tight mb-4">Two promises. Equal weight.</motion.h2>
-            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto">Most AI is built by techies, for techies — and it talks like a robot. Normy is the opposite on both counts.</motion.p>
+            <motion.h2 variants={fadeUp} custom={1} className="font-display text-2xl md:text-5xl font-bold tracking-tight mb-4">Two things. Equal weight.</motion.h2>
+            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto">Most AI is built by techies, for techies — and it talks like a robot. Normy is the opposite on both counts: built for normies, and powered by a personality you trust.</motion.p>
           </motion.div>
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-8">
             <motion.div variants={fadeUp} custom={3} className="rounded-2xl border-2 border-accent/20 bg-background p-6 md:p-8 shadow-md">
