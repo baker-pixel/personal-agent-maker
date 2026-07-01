@@ -83,7 +83,7 @@ export default function Landing() {
           </motion.div>
           <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="font-display text-2xl sm:text-4xl md:text-7xl lg:text-8xl font-bold leading-[1.08] tracking-tight mb-4 md:mb-6">An AI agent for normies — that actually feels human</motion.h1>
           <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }} className="text-muted-foreground text-sm sm:text-base md:text-xl max-w-2xl mx-auto mb-7 md:mb-10">
-            Normy is about two things: <span className="text-accent font-semibold">Bintly</span>, an agent trained on your personality — one you actually enjoy talking to and trust — and <span className="text-accent font-semibold">Humanfluency</span>, agents built for non-techies.
+            Normy is about two things: <span className="text-accent font-semibold">Bintly</span>, an agent trained on your personality — one you actually enjoy talking to and trust — and <span className="text-accent font-semibold">Agents for Normies</span>, AI that actually works for non-technical small-business owners.
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.4 }}>
             <Button onClick={goOnboard} size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 text-sm md:text-base px-6 md:px-8 py-5 md:py-6 rounded-xl shadow-lg shadow-accent/20 w-full sm:w-auto">
@@ -93,7 +93,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Two equal pillars: Bintly (personality) + Humanfluency (agents for normies) */}
+      {/* Two equal pillars: Bintly (personality) + Agents for Normies (accessibility) */}
       <section className="py-14 md:py-20">
         <div className="container max-w-5xl px-5">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="text-center mb-10 md:mb-14">
@@ -110,9 +110,9 @@ export default function Landing() {
             </motion.div>
             <motion.div variants={fadeUp} custom={4} className="rounded-2xl border-2 border-accent/20 bg-background p-6 md:p-8 shadow-md">
               <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4"><HeartHandshake className="w-6 h-6 text-accent" /></div>
-              <p className="text-xs font-medium tracking-widest uppercase text-accent mb-2">Pillar 02 — Humanfluency</p>
-              <h3 className="font-display text-xl md:text-3xl font-bold mb-3">Agents for Normies</h3>
-              <p className="text-muted-foreground text-sm md:text-base leading-relaxed">No prompts to learn. No dashboards to navigate. No jargon. Normy is designed for the everyday small-business owner — built <span className="font-semibold text-foreground">by</span> non-techies, <span className="font-semibold text-foreground">for</span> non-techies. Human intelligence made simple.</p>
+              <p className="text-xs font-medium tracking-widest uppercase text-accent mb-2">Pillar 02 — Agents for Normies</p>
+              <h3 className="font-display text-xl md:text-3xl font-bold mb-3">AI for the rest of us</h3>
+              <p className="text-muted-foreground text-sm md:text-base leading-relaxed">No prompts to learn. No dashboards to navigate. No jargon. Normy is designed for the everyday small-business owner — built <span className="font-semibold text-foreground">by</span> non-techies, <span className="font-semibold text-foreground">for</span> non-techies. If you can text a friend, you can run your business with Normy.</p>
             </motion.div>
           </motion.div>
         </div>
