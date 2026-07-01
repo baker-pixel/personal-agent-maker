@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Mail, Calendar, Users, BarChart3, BookOpen, Briefcase, Sparkles, Menu, X } from "lucide-react";
+import { ArrowRight, Mail, Calendar, Users, BarChart3, BookOpen, Briefcase, Sparkles, Menu, X, HeartHandshake, Fingerprint } from "lucide-react";
 import normyLogo from "@/assets/normy-logo.png";
 
 const fadeUp = {
