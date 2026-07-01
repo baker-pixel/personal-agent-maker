@@ -106,7 +106,7 @@ export default function Landing() {
               <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4"><Fingerprint className="w-6 h-6 text-accent" /></div>
               <p className="text-xs font-medium tracking-widest uppercase text-accent mb-2">Pillar 01 — Bintly</p>
               <h3 className="font-display text-xl md:text-3xl font-bold mb-3">Your agent's personality</h3>
-              <p className="text-muted-foreground text-sm md:text-base leading-relaxed">Bintly is the personality of your agent — trained to understand <span className="font-semibold text-foreground">how you communicate</span>, how you decide, and how you think. The result is an assistant you actually enjoy speaking to and can genuinely trust with your inbox, calendar, and relationships.</p>
+              <p className="text-muted-foreground text-sm md:text-base leading-relaxed">We trained your agent on a database of 32M personality profiles, to truly understand <span className="font-semibold text-foreground">you</span>, your personality, your communication preferences, work style, and 29 other aspects of how you like to operate — so it just "gets you." The result is an assistant you actually enjoy speaking to and can genuinely trust with your inbox, calendar, and relationships.</p>
             </motion.div>
             <motion.div variants={fadeUp} custom={4} className="rounded-2xl border-2 border-accent/20 bg-background p-6 md:p-8 shadow-md">
               <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4"><HeartHandshake className="w-6 h-6 text-accent" /></div>
