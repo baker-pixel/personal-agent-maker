@@ -365,7 +365,7 @@ export function useRealtimeVoice(opts: UseRealtimeVoiceOpts = {}) {
               supabase.auth.getUser().then(({ data: { user } }) => {
                 if (user) {
                   supabase.from("user_preferences")
-                    .update({ voice_onboarded: true })
+                    .update({ voice_onboarded: true } as any)
                     .eq("user_id", user.id)
                     .then(() => {});
                 }
