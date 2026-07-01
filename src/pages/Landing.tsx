@@ -110,9 +110,9 @@ export default function Landing() {
             </motion.div>
             <motion.div variants={fadeUp} custom={4} className="rounded-2xl border-2 border-accent/20 bg-background p-6 md:p-8 shadow-md">
               <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4"><HeartHandshake className="w-6 h-6 text-accent" /></div>
-              <p className="text-xs font-medium tracking-widest uppercase text-accent mb-2">Pillar 02 — Humanfluency</p>
-              <h3 className="font-display text-xl md:text-3xl font-bold mb-3">Agents for Normies</h3>
-              <p className="text-muted-foreground text-sm md:text-base leading-relaxed">No prompts to learn. No dashboards to navigate. No jargon. Normy is designed for the everyday small-business owner — built <span className="font-semibold text-foreground">by</span> non-techies, <span className="font-semibold text-foreground">for</span> non-techies. Human intelligence made simple.</p>
+              <p className="text-xs font-medium tracking-widest uppercase text-accent mb-2">Pillar 02 — Agents for Normies</p>
+              <h3 className="font-display text-xl md:text-3xl font-bold mb-3">AI for the rest of us</h3>
+              <p className="text-muted-foreground text-sm md:text-base leading-relaxed">No prompts to learn. No dashboards to navigate. No jargon. Normy is designed for the everyday small-business owner — built <span className="font-semibold text-foreground">by</span> non-techies, <span className="font-semibold text-foreground">for</span> non-techies. If you can text a friend, you can run your business with Normy.</p>
             </motion.div>
           </motion.div>
         </div>
