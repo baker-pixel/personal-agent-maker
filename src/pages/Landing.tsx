@@ -83,7 +83,7 @@ export default function Landing() {
           </motion.div>
           <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="font-display text-2xl sm:text-4xl md:text-7xl lg:text-8xl font-bold leading-[1.08] tracking-tight mb-4 md:mb-6">An AI agent for normies — that actually feels human</motion.h1>
           <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }} className="text-muted-foreground text-sm sm:text-base md:text-xl max-w-2xl mx-auto mb-7 md:mb-10">
-            Normy is about two things: <span className="text-accent font-semibold">Bintly</span>, an agent trained on your personality — one you actually enjoy talking to and trust — and <span className="text-accent font-semibold">Humanfluency</span>, agents built for non-techies.
+            Normy is about two things: <span className="text-accent font-semibold">Bintly</span>, an agent trained on your personality — one you actually enjoy talking to and trust — and <span className="text-accent font-semibold">Agents for Normies</span>, AI that actually works for non-technical small-business owners.
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.4 }}>
             <Button onClick={goOnboard} size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 text-sm md:text-base px-6 md:px-8 py-5 md:py-6 rounded-xl shadow-lg shadow-accent/20 w-full sm:w-auto">
