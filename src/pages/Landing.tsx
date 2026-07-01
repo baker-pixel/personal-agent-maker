@@ -83,7 +83,7 @@ export default function Landing() {
           </motion.div>
           <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="font-display text-2xl sm:text-4xl md:text-7xl lg:text-8xl font-bold leading-[1.08] tracking-tight mb-4 md:mb-6">An AI agent for normies — that actually feels human</motion.h1>
           <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }} className="text-muted-foreground text-sm sm:text-base md:text-xl max-w-2xl mx-auto mb-7 md:mb-10">
-            Normy is about two things: <span className="text-accent font-semibold">agents built for non-techies</span>, and an agent <span className="text-accent font-semibold">trained on your personality</span> — one you actually enjoy talking to and trust.
+            Normy is about two things: <span className="text-accent font-semibold">Bintly</span>, an agent trained on your personality — one you actually enjoy talking to and trust — and <span className="text-accent font-semibold">Humanfluency</span>, agents built for non-techies.
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.4 }}>
             <Button onClick={goOnboard} size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 text-sm md:text-base px-6 md:px-8 py-5 md:py-6 rounded-xl shadow-lg shadow-accent/20 w-full sm:w-auto">
@@ -93,26 +93,26 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Two equal pillars: Agents for Normies + Trained on YOUR personality */}
+      {/* Two equal pillars: Bintly (personality) + Humanfluency (agents for normies) */}
       <section className="py-14 md:py-20">
         <div className="container max-w-5xl px-5">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="text-center mb-10 md:mb-14">
             <motion.p variants={fadeUp} custom={0} className="text-accent font-medium text-sm tracking-widest uppercase mb-4">What Normy Is</motion.p>
-            <motion.h2 variants={fadeUp} custom={1} className="font-display text-2xl md:text-5xl font-bold tracking-tight mb-4">Two promises. Equal weight.</motion.h2>
-            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto">Most AI is built by techies, for techies — and it talks like a robot. Normy is the opposite on both counts.</motion.p>
+            <motion.h2 variants={fadeUp} custom={1} className="font-display text-2xl md:text-5xl font-bold tracking-tight mb-4">Two things. Equal weight.</motion.h2>
+            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto">Most AI is built by techies, for techies — and it talks like a robot. Normy is the opposite on both counts: built for normies, and powered by a personality you trust.</motion.p>
           </motion.div>
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-8">
             <motion.div variants={fadeUp} custom={3} className="rounded-2xl border-2 border-accent/20 bg-background p-6 md:p-8 shadow-md">
-              <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4"><HeartHandshake className="w-6 h-6 text-accent" /></div>
+              <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4"><Fingerprint className="w-6 h-6 text-accent" /></div>
               <p className="text-xs font-medium tracking-widest uppercase text-accent mb-2">Pillar 01 — Bintly</p>
-              <h3 className="font-display text-xl md:text-3xl font-bold mb-3">Agents for Normies</h3>
-              <p className="text-muted-foreground text-sm md:text-base leading-relaxed">No prompts to learn. No dashboards to navigate. No jargon. Normy is designed for the everyday small-business owner — built <span className="font-semibold text-foreground">by</span> non-techies, <span className="font-semibold text-foreground">for</span> non-techies. If you can text a friend, you can run Normy.</p>
+              <h3 className="font-display text-xl md:text-3xl font-bold mb-3">Your agent's personality</h3>
+              <p className="text-muted-foreground text-sm md:text-base leading-relaxed">Bintly is the personality of your agent — trained to understand <span className="font-semibold text-foreground">how you communicate</span>, how you decide, and how you think. The result is an assistant you actually enjoy speaking to and can genuinely trust with your inbox, calendar, and relationships.</p>
             </motion.div>
             <motion.div variants={fadeUp} custom={4} className="rounded-2xl border-2 border-accent/20 bg-background p-6 md:p-8 shadow-md">
-              <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4"><Fingerprint className="w-6 h-6 text-accent" /></div>
+              <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4"><HeartHandshake className="w-6 h-6 text-accent" /></div>
               <p className="text-xs font-medium tracking-widest uppercase text-accent mb-2">Pillar 02 — Humanfluency</p>
-              <h3 className="font-display text-xl md:text-3xl font-bold mb-3">Trained on your personality</h3>
-              <p className="text-muted-foreground text-sm md:text-base leading-relaxed">Normy is the first AI agent trained to understand <span className="font-semibold text-foreground">how you communicate</span> — your tone, your decision style, your judgment. The result is an assistant you actually enjoy speaking to and can genuinely trust with your inbox, calendar, and relationships.</p>
+              <h3 className="font-display text-xl md:text-3xl font-bold mb-3">Agents for Normies</h3>
+              <p className="text-muted-foreground text-sm md:text-base leading-relaxed">No prompts to learn. No dashboards to navigate. No jargon. Normy is designed for the everyday small-business owner — built <span className="font-semibold text-foreground">by</span> non-techies, <span className="font-semibold text-foreground">for</span> non-techies. Human intelligence made simple.</p>
             </motion.div>
           </motion.div>
         </div>
