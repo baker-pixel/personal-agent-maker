@@ -150,6 +150,8 @@ const App = () => {
                       <Route path="/assessment-done" element={<AssessmentDone />} />
                       <Route path="/done" element={<AssessmentDone />} />
                       <Route path="/mvp-checklist" element={<MvpChecklist />} />
+                      <Route path="/pre-register" element={<PreRegister />} />
+                      <Route path="/preregister" element={<Navigate to="/pre-register" replace />} />
 
                       {/* ── Onboarding ────────────────────────────────────── */}
                       <Route
