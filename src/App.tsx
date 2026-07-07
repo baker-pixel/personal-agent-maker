@@ -49,6 +49,7 @@ import TermsOfService from "./pages/TermsOfService";
 import AssessmentDone from "./pages/AssessmentDone";
 import MvpChecklist from "./pages/MvpChecklist";
 import PreRegister from "./pages/PreRegister";
+import PreRegisterConfirmation from "./pages/PreRegisterConfirmation";
 
 const queryClient = new QueryClient();
 
@@ -151,6 +152,7 @@ const App = () => {
                       <Route path="/done" element={<AssessmentDone />} />
                       <Route path="/mvp-checklist" element={<MvpChecklist />} />
                       <Route path="/pre-register" element={<PreRegister />} />
+                      <Route path="/pre-register/confirmation" element={<PreRegisterConfirmation />} />
                       <Route path="/preregister" element={<Navigate to="/pre-register" replace />} />
 
                       {/* ── Onboarding ────────────────────────────────────── */}

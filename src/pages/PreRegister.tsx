@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +26,9 @@ const paragraphs: (string | { h: string })[] = [
 ];
 
 export default function PreRegister() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(false);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -45,7 +46,7 @@ export default function PreRegister() {
       toast({ title: "Something went wrong", description: error.message, variant: "destructive" });
       return;
     }
-    setDone(true);
+    navigate("/pre-register/confirmation", { replace: true });
   };
 
   useEffect(() => {
@@ -95,30 +96,23 @@ export default function PreRegister() {
               Pre-register today and we'll let you know the moment NormyAgent opens up.
             </p>
 
-            {done ? (
-              <div className="rounded-lg bg-background border border-accent/40 p-5 text-center">
-                <p className="text-xl mb-1" style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400 }}>You're on the list.</p>
-                <p className="text-sm text-muted-foreground">We'll be in touch at <strong>{email}</strong>.</p>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
-                <Input
-                  type="email"
-                  required
-                  placeholder="you@yourbusiness.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 text-base flex-1"
-                />
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="h-12 px-6 bg-accent text-accent-foreground hover:bg-accent/90 font-medium"
-                >
-                  {loading ? "Adding…" : "Pre-register"}
-                </Button>
-              </form>
-            )}
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+              <Input
+                type="email"
+                required
+                placeholder="you@yourbusiness.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-12 text-base flex-1"
+              />
+              <Button
+                type="submit"
+                disabled={loading}
+                className="h-12 px-6 bg-accent text-accent-foreground hover:bg-accent/90 font-medium"
+              >
+                {loading ? "Adding…" : "Pre-register"}
+              </Button>
+            </form>
           </div>
 
           <footer className="mt-16 text-center text-sm text-muted-foreground">
