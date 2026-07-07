@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +26,9 @@ const paragraphs: (string | { h: string })[] = [
 ];
 
 export default function PreRegister() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(false);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -45,7 +46,7 @@ export default function PreRegister() {
       toast({ title: "Something went wrong", description: error.message, variant: "destructive" });
       return;
     }
-    setDone(true);
+    navigate("/pre-register/confirmation", { replace: true });
   };
 
   useEffect(() => {
