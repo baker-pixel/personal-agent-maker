@@ -48,14 +48,13 @@ export default function PreRegister() {
     setDone(true);
   };
 
+  useEffect(() => {
+    document.title = "The Model T Problem — Pre-register for NormyAgent";
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Helmet>
-        <title>The Model T Problem — Pre-register for NormyAgent</title>
-        <meta name="description" content="Agentic AI for the normies of the world. Pre-register today and be first in line for the first non-tech tech." />
-        <meta property="og:title" content="The Model T Problem — Pre-register for NormyAgent" />
-        <meta property="og:description" content="Agentic AI for the normies. Pre-register today." />
-      </Helmet>
+
 
       <header className="max-w-3xl mx-auto px-6 pt-10 pb-6 flex items-center justify-between">
         <a href="/" className="flex items-center gap-2">
