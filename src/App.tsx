@@ -48,6 +48,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import AssessmentDone from "./pages/AssessmentDone";
 import MvpChecklist from "./pages/MvpChecklist";
+import PreRegister from "./pages/PreRegister";
 
 const queryClient = new QueryClient();
 
