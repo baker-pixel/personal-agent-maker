@@ -71,7 +71,7 @@ export default function PreRegister() {
           className="pt-8"
         >
           <p className="text-xs uppercase tracking-[0.25em] text-accent mb-4">A manifesto</p>
-          <h1 className="font-display text-5xl md:text-7xl font-bold leading-[1.05] tracking-tight mb-10">
+          <h1 className="text-5xl md:text-7xl leading-[1.0] tracking-tight mb-10" style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400 }}>
             The Model T Problem
           </h1>
 
@@ -80,7 +80,7 @@ export default function PreRegister() {
               typeof p === "string" ? (
                 <p key={i}>{p}</p>
               ) : (
-                <h2 key={i} className="font-display text-2xl md:text-3xl font-semibold text-foreground pt-4">
+                <h2 key={i} className="text-2xl md:text-3xl text-foreground pt-4" style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400 }}>
                   {p.h}
                 </h2>
               )
@@ -88,7 +88,7 @@ export default function PreRegister() {
           </div>
 
           <div id="register" className="mt-16 rounded-2xl border border-accent/30 bg-accent/5 p-8 md:p-10">
-            <h3 className="font-display text-3xl md:text-4xl font-semibold leading-tight mb-3">
+            <h3 className="text-3xl md:text-4xl leading-tight mb-3" style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400 }}>
               Be first in line for the first non-tech tech.
             </h3>
             <p className="text-base md:text-lg text-foreground/75 mb-6">
@@ -97,7 +97,7 @@ export default function PreRegister() {
 
             {done ? (
               <div className="rounded-lg bg-background border border-accent/40 p-5 text-center">
-                <p className="font-display text-xl font-semibold mb-1">You're on the list.</p>
+                <p className="text-xl mb-1" style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400 }}>You're on the list.</p>
                 <p className="text-sm text-muted-foreground">We'll be in touch at <strong>{email}</strong>.</p>
               </div>
             ) : (
