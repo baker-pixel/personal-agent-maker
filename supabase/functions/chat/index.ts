@@ -5,6 +5,30 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 const NYLAS_BASE = "https://api.us.nylas.com";
 
+// --- Embeddings (built-in gte-small model, 384 dims) ---
+// Supabase.ai is a global in the Supabase Edge Runtime; guard so the function
+// still boots if the runtime ever lacks it (memory degrades, chat keeps working).
+const embedSession = (() => {
+  try {
+    const SB = (globalThis as any).Supabase;
+    return SB?.ai?.Session ? new SB.ai.Session("gte-small") : null;
+  } catch {
+    return null;
+  }
+})();
+
+async function generateEmbedding(text: string): Promise<number[] | null> {
+  const input = (text || "").trim();
+  if (!embedSession || !input) return null;
+  try {
+    const out = await embedSession.run(input.slice(0, 2000), { mean_pool: true, normalize: true });
+    return Array.from(out as number[]);
+  } catch (err: any) {
+    console.error("[chat] embedding failed:", err?.message ?? err);
+    return null;
+  }
+}
+
 function formatAddress(people: Array<{ name?: string; email: string }>): string {
   if (!people?.length) return "";
   return people.map(p => p.name ? `${p.name} <${p.email}>` : p.email).join(", ");
@@ -389,6 +413,21 @@ const TEXT_TOOLS = [
   {
     type: "function",
     function: {
+      name: "save_memory",
+      description: "Save a lasting fact, preference, or piece of context about the user to long-term memory so it persists across conversations. Use for preferences, people details, projects, and standing instructions. Do NOT save transient info like today's schedule or one-off requests.",
+      parameters: {
+        type: "object",
+        properties: {
+          content: { type: "string", description: "The fact to remember, written as one standalone sentence, e.g. \"User prefers meetings after 2pm\"" },
+          category: { type: "string", enum: ["preference", "fact", "person", "project", "instruction"], description: "Type of memory (default fact)" },
+        },
+        required: ["content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "save_contact",
       description: "Save a new contact to the user's contact list.",
       parameters: {
@@ -552,7 +591,7 @@ function sanitizeQuery(q: string): string {
   return q.replace(/[(),.:*\\]/g, " ").trim();
 }
 
-const NO_GRANT_TOOLS = new Set(["save_contact", "create_task", "delete_contact", "get_inbox", "search_contacts", "get_tasks"]);
+const NO_GRANT_TOOLS = new Set(["save_contact", "create_task", "delete_contact", "get_inbox", "search_contacts", "get_tasks", "save_memory"]);
 
 async function executeToolCall(
   name: string,
@@ -726,6 +765,21 @@ async function executeToolCall(
       if (error) return { success: false, message: error.message || "Failed to create task" };
       const due = args.due_date ? ` due ${args.due_date}` : "";
       return { success: true, message: `Task "${args.title}" created${due}` };
+    }
+
+    if (name === "save_memory") {
+      const content = String(args.content || "").trim();
+      if (!content) return { success: false, message: "Memory content is empty" };
+      const embedding = await generateEmbedding(content);
+      const { error } = await adminClient.from("agent_memories").insert({
+        user_id: userId,
+        content,
+        category: args.category || "fact",
+        source: "chat",
+        embedding,
+      });
+      if (error) return { success: false, message: error.message || "Failed to save memory" };
+      return { success: true, message: `Remembered: "${content}"` };
     }
 
     if (name === "save_contact") {
@@ -1011,6 +1065,7 @@ serve(async (req) => {
           pendingDraftsRes,
           followUpRes,
           userPrefsRes,
+          memoriesRes,
         ] = await Promise.all([
           canFetchNylas && nylasGrants.length > 0
             ? Promise.all(nylasGrants.map((g) => fetchRecentEmails(g.grantId, nylasApiKey, 8, g.email)))
@@ -1091,6 +1146,37 @@ serve(async (req) => {
             .select("user_display_name, agent_name")
             .eq("user_id", user.id)
             .maybeSingle(),
+          // Long-term memory: semantic recall on the latest user message,
+          // merged with the most recent facts so brand-new memories always surface.
+          (async () => {
+            const latestUserMsg = (effectiveMessages || []).filter((m: any) => m.role === "user").slice(-1)[0]?.content || "";
+            const recentQuery = adminForContacts
+              .from("agent_memories")
+              .select("id, content, category, created_at")
+              .eq("user_id", user.id)
+              .order("created_at", { ascending: false })
+              .limit(5);
+            const queryEmbedding = await generateEmbedding(String(latestUserMsg));
+            const [recent, matched] = await Promise.all([
+              recentQuery,
+              queryEmbedding
+                ? adminForContacts.rpc("match_agent_memories", {
+                    query_embedding: queryEmbedding,
+                    filter_user_id: user.id,
+                    match_threshold: 0.55,
+                    match_count: 8,
+                  })
+                : Promise.resolve({ data: [] }),
+            ]);
+            if ((recent as any)?.error) console.error("[chat] memories fetch failed:", (recent as any).error.message);
+            if ((matched as any)?.error) console.error("[chat] memory match failed:", (matched as any).error.message);
+            const seen = new Set<string>();
+            const merged: any[] = [];
+            for (const m of [...((matched as any)?.data || []), ...((recent as any)?.data || [])]) {
+              if (m?.id && !seen.has(m.id)) { seen.add(m.id); merged.push(m); }
+            }
+            return { data: merged };
+          })(),
         ]);
 
         // Helper: load the archived transcript .txt from storage
@@ -1320,6 +1406,16 @@ Location: ${e.location || "None"}\n`;
             realDataContext += `• You replied to ${e.from_name || e.from_address} about "${e.subject}" ${daysAgo} day${daysAgo === 1 ? "" : "s"} ago — no response yet\n`;
           });
           realDataContext += "--- END FOLLOW-UPS ---\n";
+        }
+
+        const memories = (memoriesRes as any)?.data || [];
+        if (memories.length > 0) {
+          realDataContext += "\n\n--- WHAT YOU KNOW ABOUT THE USER (long-term memory) ---\n";
+          realDataContext += "Facts you saved in past conversations via save_memory. Treat as background truth. If the user contradicts one, trust the user and call save_memory with the corrected fact.\n";
+          memories.forEach((m: any) => {
+            realDataContext += `• [${m.category}] ${m.content}\n`;
+          });
+          realDataContext += "--- END MEMORY ---\n";
         }
 
         if (reminders.length > 0) {
@@ -1683,7 +1779,13 @@ You have real-time access to the user's:
 Always use this live context to give specific, actionable answers — never say "I don't have access to your data."
 
 ## TOOLS — USE THEM DIRECTLY (NO CONFIRMATION NEEDED)
-You have tools: **send_email**, **delete_email**, **create_calendar_event**, **update_calendar_event**, **delete_calendar_event**, **save_contact**, **delete_contact**, **create_task**, **read_email**, **get_inbox**, **get_calendar**, **search_contacts**, **get_tasks**.
+You have tools: **send_email**, **delete_email**, **create_calendar_event**, **update_calendar_event**, **delete_calendar_event**, **save_contact**, **delete_contact**, **create_task**, **save_memory**, **read_email**, **get_inbox**, **get_calendar**, **search_contacts**, **get_tasks**.
+
+**save_memory rules:**
+- When the user states a lasting preference, personal fact, relationship, project, or standing instruction ("I prefer...", "my wife's name is...", "always CC Priya on invoices", "we're rebranding to X") — call save_memory immediately, no confirmation needed. It's silent bookkeeping, not an action to propose.
+- Write content as ONE standalone sentence that makes sense without conversation context.
+- Do NOT save transient info: today's schedule, one-off requests, anything already in your live data (inbox, calendar, tasks, contacts).
+- If the user contradicts a fact in WHAT YOU KNOW ABOUT THE USER, save the corrected version.
 
 **REFRESH tools (read_email, get_inbox, get_calendar, search_contacts, get_tasks):** Call these immediately and without confirmation when the user asks about emails, contacts, events, or tasks that aren't already shown. No "handle it" needed — just call the tool and show the results.
 

@@ -38,14 +38,6 @@
           "key": "Expires",
           "value": "0"
         },
-        {
-          "key": "X-Powered-By",
-          "value": ""
-        },
-        {
-          "key": "Server",
-          "value": ""
-        },
         { "key": "Access-Control-Allow-Origin", "value": "https://normyagent.com" }
       ]
     },

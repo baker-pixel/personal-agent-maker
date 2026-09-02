@@ -9,6 +9,30 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 const NYLAS_BASE = "https://api.us.nylas.com";
 
+// --- Embeddings (built-in gte-small model, 384 dims) ---
+// Supabase.ai is a global in the Supabase Edge Runtime; guard so the function
+// still boots if the runtime ever lacks it (memory degrades, tools keep working).
+const embedSession = (() => {
+  try {
+    const SB = (globalThis as any).Supabase;
+    return SB?.ai?.Session ? new SB.ai.Session("gte-small") : null;
+  } catch {
+    return null;
+  }
+})();
+
+async function generateEmbedding(text: string): Promise<number[] | null> {
+  const input = (text || "").trim();
+  if (!embedSession || !input) return null;
+  try {
+    const out = await embedSession.run(input.slice(0, 2000), { mean_pool: true, normalize: true });
+    return Array.from(out as number[]);
+  } catch (err: any) {
+    console.error("[voice-tools] embedding failed:", err?.message ?? err);
+    return null;
+  }
+}
+
 // Strip PostgREST filter-syntax characters to prevent filter injection via LLM-supplied queries.
 function sanitizeQuery(q: string): string {
   return q.replace(/[(),.:*\\]/g, " ").trim();
@@ -63,7 +87,7 @@ interface ToolExecutionContext {
 }
 
 function requiresGoogleGrant(name: string): boolean {
-  return !["save_contact", "create_task", "delete_contact", "get_inbox", "search_contacts", "get_tasks"].includes(name);
+  return !["save_contact", "create_task", "delete_contact", "get_inbox", "search_contacts", "get_tasks", "save_memory"].includes(name);
 }
 
 async function executeToolCall(
@@ -239,6 +263,21 @@ async function executeToolCall(
       if (error) return { success: false, message: error.message || "Failed to create task" };
       const due = args.due_date ? ` due ${args.due_date}` : "";
       return { success: true, message: `Task "${args.title}" created${due}` };
+    }
+
+    if (name === "save_memory") {
+      const content = String(args.content || "").trim();
+      if (!content) return { success: false, message: "Memory content is empty" };
+      const embedding = await generateEmbedding(content);
+      const { error } = await adminClient.from("agent_memories").insert({
+        user_id: userId,
+        content,
+        category: args.category || "fact",
+        source: "voice",
+        embedding,
+      });
+      if (error) return { success: false, message: error.message || "Failed to save memory" };
+      return { success: true, message: `Remembered: "${content}"` };
     }
 
     if (name === "save_contact") {
